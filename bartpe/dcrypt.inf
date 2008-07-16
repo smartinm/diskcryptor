@@ -1,0 +1,41 @@
+[Version]
+Signature= "$Windows NT$"
+
+[PEBuilder]
+Name="DiskCryptor 0.3"
+Enable=1
+
+[WinntDirectories]
+a="Programs\dcrypt",2
+
+[SourceDisksFiles]
+dcrypt.sys=4,,1
+dcrypt.exe=a,,3
+dccon.exe=a,,3
+dcapi.dll=a,,3
+diskspeed.exe=a,,3
+
+[Software.AddReg]
+0x2,"Sherpya\XPEinit\Programs","DiskCryptor","%SystemDrive%\Programs\dcrypt\dcrypt.exe"
+
+[Append]
+nu2menu.xml, dcrypt.xml
+
+[SetupReg.AddReg]
+0x1, "ControlSet001\Services\dcrypt","group","System Bus Extender"
+0x4, "ControlSet001\Services\dcrypt","ErrorControl", 0x00000003
+0x2, "ControlSet001\Services\dcrypt","ImagePath","System32\drivers\dcrypt.sys"
+0x4, "ControlSet001\Services\dcrypt","Start", 0x00000000
+0x4, "ControlSet001\Services\dcrypt","Type", 0x00000001
+0x3, "ControlSet001\Services\dcrypt","Hotkeys", 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+0x4, "ControlSet001\Services\dcrypt","Flags", 0x00000000
+0x7, "ControlSet001\Control\Class\{71A27CDD-812A-11D0-BEC7-08002BE2092F}","LowerFilters","dcrypt"
+0x2, "ControlSet001\Control\Session Manager\Environment","Path",\
+   "%SystemRoot%;%SystemRoot%\System32;%SystemDrive%\bin;%SystemDrive%\Programs\dcrypt"
+
+[SetValue]
+"txtsetup.sif", "BusExtenders.Load", "dcrypt", "dcrypt.sys"
+"txtsetup.sif", "HardwareIdsDatabase", "STORAGE\Volume", """Volume"",{71A27CDD-812A-11D0-BEC7-08002BE2092F}"
+"txtsetup.sif", "SourceDisksFiles", "dcrypt.sys", "100,,,,,,4_,4,0,0,,1,4"
+
+

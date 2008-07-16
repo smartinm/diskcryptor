@@ -1,0 +1,5 @@
+<NU2MENU>
+	<MENU ID="Programs">	   		
+		<MITEM TYPE="ITEM" DISABLED="@Not(@FileExists(@GetProgramDrive()\Programs\dcrypt\dcrypt.exe))" CMD="RUN" FUNC="@GetProgramDrive()\Programs\dcrypt\dcrypt.exe">DiskCryptor</MITEM>
+	</MENU>
+</NU2MENU>
