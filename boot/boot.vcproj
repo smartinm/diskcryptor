@@ -23,7 +23,7 @@
 			ConfigurationType="1"
 			UseOfMFC="2"
 			CharacterSet="2"
-			WholeProgramOptimization="1"
+			WholeProgramOptimization="0"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
 			>
 			<Tool
@@ -48,8 +48,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\boot"
+				AdditionalIncludeDirectories="..\include;..\include\boot;..\include\crypto"
 				PreprocessorDefinitions="BOOT_LDR"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
@@ -82,127 +81,13 @@
 				IgnoreImportLibrary="false"
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
-				AdditionalOptions="/STUB:stub.bin "
+				AdditionalOptions="/STUB:stub.bin"
 				OutputFile="bin\$(ProjectName).dll"
 				LinkIncremental="1"
 				GenerateManifest="false"
 				ManifestFile=""
 				IgnoreAllDefaultLibraries="true"
 				GenerateDebugInformation="false"
-				SubSystem="2"
-				Driver="0"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
-				EntryPointSymbol="bios_main"
-				SetChecksum="false"
-				BaseAddress=""
-				RandomizedBaseAddress="0"
-				FixedBaseAddress="1"
-				DataExecutionPrevention="0"
-				MergeSections=""
-				TargetMachine="1"
-				CLRImageType="0"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
-				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-				CommandLine="copy /B bin\stage1.bin+bin\boot.dll bin\dcldr"
-			/>
-		</Configuration>
-		<Configuration
-			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\boot"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="1"
-			UseOfMFC="2"
-			CharacterSet="2"
-			WholeProgramOptimization="1"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-				CommandLine=""
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				Optimization="1"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\boot"
-				PreprocessorDefinitions="BOOT_LDR"
-				ExceptionHandling="0"
-				RuntimeLibrary="2"
-				StructMemberAlignment="1"
-				BufferSecurityCheck="false"
-				TreatWChar_tAsBuiltInType="true"
-				UsePrecompiledHeader="0"
-				AssemblerOutput="0"
-				AssemblerListingLocation=""
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				XMLDocumentationFileName=""
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="3"
-				CallingConvention="2"
-				CompileAs="1"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				IgnoreImportLibrary="false"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="bin\gf128mul.obj /STUB:stub.bin "
-				OutputFile="bin\$(ProjectName).dll"
-				LinkIncremental="1"
-				GenerateManifest="false"
-				ManifestFile=""
-				IgnoreAllDefaultLibraries="true"
-				GenerateDebugInformation="true"
 				SubSystem="2"
 				Driver="0"
 				OptimizeReferences="2"
@@ -262,10 +147,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\crypto.c"
-				>
-			</File>
-			<File
 				RelativePath=".\hdd.c"
 				>
 			</File>
@@ -278,51 +159,13 @@
 				>
 			</File>
 			<File
-				RelativePath=".\mini_aes.c"
-				>
-			</File>
-			<File
 				RelativePath=".\misc.c"
-				>
-			</File>
-			<File
-				RelativePath=".\pkcs5.c"
-				>
-			</File>
-			<File
-				RelativePath=".\sha1.c"
 				>
 			</File>
 			<Filter
 				Name="i386"
 				Filter="asm"
 				>
-				<File
-					RelativePath=".\asm\fat_boot.asm"
-					>
-					<FileConfiguration
-						Name="Release|Win32"
-						>
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; bin\$(InputName).bin&#x0D;&#x0A;"
-							Outputs="bin\$(InputName).bin"
-						/>
-					</FileConfiguration>
-				</File>
-				<File
-					RelativePath=".\asm\gf128mul.asm"
-					>
-					<FileConfiguration
-						Name="Release|Win32"
-						>
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-							Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-						/>
-					</FileConfiguration>
-				</File>
 				<File
 					RelativePath=".\asm\mbr_boot.asm"
 					>
@@ -349,6 +192,81 @@
 						/>
 					</FileConfiguration>
 				</File>
+				<File
+					RelativePath=".\asm\vc_llshl.asm"
+					>
+					<FileConfiguration
+						Name="Release|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+							Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="crypto"
+				>
+				<File
+					RelativePath="..\crypto\aes.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crc32.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crypto.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\gf128mul.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\pkcs5.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\serpent.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\sha1.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\sha512.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\tests.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\twofish.c"
+					>
+				</File>
+				<Filter
+					Name="i386"
+					Filter="asm"
+					>
+					<File
+						RelativePath="..\crypto\i386\gf128mul_mini.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
 			</Filter>
 		</Filter>
 		<Filter
@@ -389,23 +307,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\boot\mini_aes.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\boot\mini_aes_tab.h"
-				>
-			</File>
-			<File
 				RelativePath="..\include\boot\misc.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\boot\pkcs5.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\boot\sha1.h"
 				>
 			</File>
 			<Filter
@@ -413,7 +315,7 @@
 				Filter="inc"
 				>
 				<File
-					RelativePath=".\asm\fatboot.inc"
+					RelativePath=".\asm\a20.inc"
 					>
 				</File>
 				<File
@@ -426,6 +328,54 @@
 				</File>
 				<File
 					RelativePath=".\asm\struct.inc"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="crypto"
+				>
+				<File
+					RelativePath="..\include\crypto\aes.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\aes_tab.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crc32.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crypto.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\gf128mul.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\pkcs5.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\serpent.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\sha1.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\sha512.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\tests.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\twofish.h"
 					>
 				</File>
 			</Filter>

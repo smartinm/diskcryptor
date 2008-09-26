@@ -36,7 +36,8 @@ typedef struct _prt_inf {
 	list_entry entry_hdd;
 	list_entry entry_glb;
 	hdd_inf   *hdd;
-	aes_key   *d_key;
+	dc_key    *d_key;
+	dc_key    *o_key;
 	u8         active;
 	u8         extend;
 	u64        begin;

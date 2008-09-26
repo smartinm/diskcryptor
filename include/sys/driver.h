@@ -3,17 +3,12 @@
 
 #include "defines.h"
 #include "version.h"
+#include "volume.h"
 
-#ifdef KMDF_MAJOR_VERSION
+#ifdef IS_DRIVER
  #include <ntdddisk.h>
  #include <ntddstor.h>
  #include <ntddvol.h>
- #include "crypto.h"
- #include "speed_test.h"
-#endif
-
-#ifndef _WCHAR_T_DEFINED 
- typedef short wchar_t;
 #endif
 
 #define DC_GET_VERSION       CTL_CODE(FILE_DEVICE_UNKNOWN, 0,  METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -28,57 +23,31 @@
 #define DC_CTL_CHANGE_PASS   CTL_CODE(FILE_DEVICE_UNKNOWN, 9,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_ENCRYPT_START CTL_CODE(FILE_DEVICE_UNKNOWN, 10, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_DECRYPT_START CTL_CODE(FILE_DEVICE_UNKNOWN, 11, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_ENCRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 12, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_DECRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 13, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SYNC_STATE    CTL_CODE(FILE_DEVICE_UNKNOWN, 14, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_RESOLVE       CTL_CODE(FILE_DEVICE_UNKNOWN, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_UPDATE_VOLUME CTL_CODE(FILE_DEVICE_UNKNOWN, 16, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SET_SHRINK    CTL_CODE(FILE_DEVICE_UNKNOWN, 17, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_GET_RAND      CTL_CODE(FILE_DEVICE_UNKNOWN, 18, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SPEED_TEST    CTL_CODE(FILE_DEVICE_UNKNOWN, 19, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_BSOD          CTL_CODE(FILE_DEVICE_UNKNOWN, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_GET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 22, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_LOCK_MEM      CTL_CODE(FILE_DEVICE_UNKNOWN, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_UNLOCK_MEM    CTL_CODE(FILE_DEVICE_UNKNOWN, 24, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_RE_ENC_START  CTL_CODE(FILE_DEVICE_UNKNOWN, 12, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_ENCRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 13, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_DECRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 14, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_SYNC_STATE    CTL_CODE(FILE_DEVICE_UNKNOWN, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_RESOLVE       CTL_CODE(FILE_DEVICE_UNKNOWN, 16, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_UPDATE_VOLUME CTL_CODE(FILE_DEVICE_UNKNOWN, 17, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_SET_SHRINK    CTL_CODE(FILE_DEVICE_UNKNOWN, 18, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_GET_RAND      CTL_CODE(FILE_DEVICE_UNKNOWN, 19, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_BENCHMARK     CTL_CODE(FILE_DEVICE_UNKNOWN, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_BSOD          CTL_CODE(FILE_DEVICE_UNKNOWN, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_GET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 22, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_SET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_LOCK_MEM      CTL_CODE(FILE_DEVICE_UNKNOWN, 24, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_UNLOCK_MEM    CTL_CODE(FILE_DEVICE_UNKNOWN, 25, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_FORMAT_START      CTL_CODE(FILE_DEVICE_UNKNOWN, 26, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_FORMAT_STEP       CTL_CODE(FILE_DEVICE_UNKNOWN, 27, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_FORMAT_DONE       CTL_CODE(FILE_DEVICE_UNKNOWN, 28, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_BACKUP_HEADER     CTL_CODE(FILE_DEVICE_UNKNOWN, 29, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_RESTORE_HEADER    CTL_CODE(FILE_DEVICE_UNKNOWN, 30, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define FSCTL_LOCK_VOLUME               CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  6, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_UNLOCK_VOLUME             CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  7, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define FSCTL_DISMOUNT_VOLUME           CTL_CODE(FILE_DEVICE_FILE_SYSTEM,  8, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-#define DC_TRUE_SIGN 0x45555254
-#define DC_DTMP_SIGN 0x504D5444
-
-// Header key derivation
-#define PKCS5_SALT_SIZE			64
-
-// Master key + secondary key (LRW mode)
-#define DISKKEY_SIZE			256
-#define DISK_IV_SIZE			32
-
-// Volume header byte offsets
-#define	HEADER_USERKEY_SALT		0
-#define HEADER_ENCRYPTEDDATA	PKCS5_SALT_SIZE
-#define	HEADER_DISKKEY			256
-
-// Volume header sizes
-#define HEADER_SIZE					512
-#define HEADER_ENCRYPTEDDATASIZE	(HEADER_SIZE - HEADER_ENCRYPTEDDATA)
-
-#define SECTOR_SIZE                 512
-#define HIDDEN_VOL_HEADER_OFFSET	(HEADER_SIZE + SECTOR_SIZE * 2)	
-
-#define MIN_PASSWORD			1		// Minimum password length
-#define MAX_PASSWORD			64		// Maximum password length
-
 #define MAX_DEVICE              64 // maximum device name length
-
-#define MAX_KEY_SIZE            120
-#define DC_RESERVED_SIZE        (15 * SECTOR_SIZE)
-#define DC_BACKUP_OFFSET(hook)  ((hook)->dsk_size - (SECTOR_SIZE * 2))
-
-#define TC_VOL_REQ_PROG_VERSION			0x0500
-#define TC_VOLUME_HEADER_VERSION		0x0003 
 
 #define DC_DEVICE_NAME L"\\Device\\TcWde"
 #define DC_LINK_NAME   L"\\DosDevices\\TcWde"
@@ -86,18 +55,34 @@
 
 #pragma pack (push, 1)
 
+typedef struct _crypt_info {
+	u8 prf_id;     /* pkcs 5.2 prf id */
+	u8 cipher_id;  /* cipher id */
+	u8 mode_id;    /* encryption mode id */
+	u8 wp_mode;    /* data wipe mode (for encryption) */
+
+} crypt_info;
+
+#ifndef BOOT_LDR
+
 typedef struct _dc_ioctl {
-	u8  passw1[MAX_PASSWORD + 1]; /* password                         */
-	u8  passw2[MAX_PASSWORD + 1]; /* new password (for changing pass) */
-	u16 device[MAX_DEVICE + 1];
-	int force;   /* dismount flags                  */
-	int status;  /* operation status code           */
-	int wp_mode; /* data wipe mode (for encryption) */
-	int n_mount; /* number of mounted devices       */
-	u16 shrink_off;
-	u32 shrink_val;
+	u8         passw1[MAX_PASSWORD + 1]; /* password                         */
+	u8         passw2[MAX_PASSWORD + 1]; /* new password (for changing pass) */
+	u16        device[MAX_DEVICE + 1];
+	int        force;   /* dismount flags                  */
+	int        status;  /* operation status code           */
+	int        n_mount; /* number of mounted devices       */
+	u16        shrink_off;
+	u32        shrink_val;
+	crypt_info crypt;
 
 } dc_ioctl;
+
+typedef struct _dc_hdd_query {
+	HANDLE  h_device;
+	wchar_t name[MAX_PATH];
+
+} dc_hdd_query;
 
 typedef struct _dc_lock_ctl {
 	void *data;
@@ -106,16 +91,27 @@ typedef struct _dc_lock_ctl {
 
 } dc_lock_ctl;
 
+typedef struct _dc_backup_ctl {
+	u16        device[MAX_DEVICE + 1];
+	u8         passw1[MAX_PASSWORD + 1];
+	u8         backup[SECTOR_SIZE];
+	int        status;
+
+} dc_backup_ctl;
+
 /* hook control flags */
-#define F_NONE           0x00
-#define F_ENABLED        0x01 /* device mounted                   */
-#define F_SYNC           0x02 /* syncronous IRP processing mode   */
-#define F_SYSTEM         0x04 /* this is a system device          */
-#define F_REMOVABLE      0x08 /* this is removable device         */
-#define F_HIBERNATE      0x10 /* this device used for hibernation */
-#define F_UNSUPRT        0x20 /* device unsupported */
-#define F_DISABLE        0x40 /* device temporary disabled */
-#define F_SHRINK_PENDING 0x80
+#define F_NONE           0x000
+#define F_ENABLED        0x001 /* device mounted                   */
+#define F_SYNC           0x002 /* syncronous IRP processing mode   */
+#define F_SYSTEM         0x004 /* this is a system device          */
+#define F_REMOVABLE      0x008 /* this is removable device         */
+#define F_HIBERNATE      0x010 /* this device used for hibernation */
+#define F_UNSUPRT        0x020 /* device unsupported */
+#define F_DISABLE        0x040 /* device temporary disabled */
+#define F_SHRINK_PENDING 0x080
+#define F_REENCRYPT      0x100
+#define F_FORMATTING     0x200
+#define F_NO_AUTO_MOUNT  0x400
 
 /* unmount flags */
 #define UM_FORCE    0x01 /* unmount volume if FSCTL_LOCK_VOLUME fail */
@@ -176,6 +172,7 @@ typedef struct _dc_lock_ctl {
 #define WP_DOD_E   1 /* US DoD 5220.22-M (8-306. / E)          */
 #define WP_DOD     2 /* US DoD 5220.22-M (8-306. / E, C and E) */
 #define WP_GUTMANN 3 /* Gutmann   */
+#define WP_NUM     4
 
 /* registry config flags */
 #define CONF_FORCE_DISMOUNT   0x01
@@ -184,19 +181,26 @@ typedef struct _dc_lock_ctl {
 #define CONF_WIPEPAS_LOGOFF   0x08
 #define CONF_DISMOUNT_LOGOFF  0x10
 #define CONF_AUTO_START       0x20
-#define CONF_QUEUE_IO         0x40
+#define CONF_DEPRECATED       0x40
 
 typedef struct _dc_status {
-	u64     dsk_size;
-	u64     tmp_size;
-	u32     flags;
-	u32     disk_id;
-	s32     paging_count;	
-	int     wp_mode;
-	u16     vf_version;   /* volume format version */
-	wchar_t mnt_point[MAX_PATH];
+	u64        dsk_size;
+	u64        tmp_size;
+	u32        flags;
+	u32        disk_id;
+	s32        paging_count;	
+	crypt_info crypt;
+	u16        vf_version;   /* volume format version */
+	wchar_t    mnt_point[MAX_PATH];
 
 } dc_status;
+
+typedef struct _dc_bench {
+	u32 data_size;
+	u64 enc_time;
+	u64 cpu_freq;
+
+} dc_bench;
 
 typedef struct _dc_conf {
 	u32 conf_flags;
@@ -207,35 +211,7 @@ typedef struct _dc_conf {
 #define IS_UNMOUNTABLE(d) ( !((d)->flags & (F_SYSTEM | F_HIBERNATE)) && \
                              ((d)->paging_count == 0) )
 
-
-typedef struct _dc_header {
-	u8  salt[64];
-	u32 sign;
-	u16 version;
-	u16 req_ver;
-	u32 key_crc;
-	u8  reserved1[16];
-	u64 hidden_size;  /* hidden volume size */
-	u64 vol_size;     /* volume size */
-	u64 enc_start;    /* encrypted area start (for TC compatible, not used) */
-	u64 enc_size;     /* encrypted area size (for TC compatible, not used)  */
-
-	u32 disk_id;      
-	u8  flags;        /* volume flags */
-	u8  tmp_wp_mode;  /* data wipe mode */
-	u64 tmp_size;     /* size of encrypted area */
-	u64 tmp_save_off; /* temporary buffer saving offset */
-	u16 shrink_off;   /* offset in FS header    */
-	u32 shrink_val;   /* new value in FS header */
-
-	u8  reserved2[104];
-	u8  key_data[256];
-
-} dc_header;
-
-#define VF_NONE           0x00
-#define VF_TMP_MODE       0x01 /* temporary encryption mode */
-#define VF_SHRINK_PENDING 0x02 /* volume can be shrinked at next mount */
+#endif
 
 #pragma pack (pop)
 
@@ -243,7 +219,10 @@ typedef struct _dc_header {
 #define OS_WIN2K 1
 #define OS_VISTA 2
 
-#ifdef KMDF_MAJOR_VERSION
+#define DC_MEM_RETRY_TIME    10
+#define DC_MEM_RETRY_TIMEOUT (1000 * 30)
+
+#ifdef IS_DRIVER
  extern PDEVICE_OBJECT dc_device;
  extern PDRIVER_OBJECT dc_driver;
  extern u32            dc_os_type; 

@@ -2,7 +2,7 @@
 Signature= "$Windows NT$"
 
 [PEBuilder]
-Name="DiskCryptor 0.3"
+Name="DiskCryptor 0.4"
 Enable=1
 
 [WinntDirectories]

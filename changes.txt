@@ -1,3 +1,18 @@
+[27.09.2008] - 0.4
+  + Added Twofish, Serpent ciphers and cipher chains.
+  + Added XTS encryption mode.
+  + Added HMAC-SHA-512 Pkcs5.2 PRF function.
+  + Added partition re-encrypt operation.
+  + Added partition formatting with encryption.
+  + Added backup/restore volume header operations.
+  + Added mount point management when mounting/unmounting.
+  + Added key '-p' to console version for entering password from command-line.
+  + Improved multi-cpu parallelized encryption.
+  + Improved embedded benchmark.
+  + Improved compatibility with buggy and stupid BIOSes.
+  -  Removed floppy bootloaders support.
+  + Fixed many bugs.
+
 [17.07.2008] - 0.3
   + Security improvement: added data wiping option in encryption process.
   + Security improvement: added clearing BIOS keyboard buffer to prevent password leakage (see http://www.ouah.org/Bios_Information_Leakage.txt for more details).

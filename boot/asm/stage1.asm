@@ -25,11 +25,10 @@ include 'pe.inc'
 include 'struct.inc'
 
 use16
- jmp	boot_done
  nop
- include 'fatboot.inc'
-
-boot_done:
+ nop
+ nop
+ nop
  ; all bootloader data are loaded to memory
  ; setup real mode segment registers
  cli
@@ -40,22 +39,22 @@ boot_done:
  mov	es, bx
  mov	fs, bx
  mov	ss, bx
- ; setup initial stack
- mov	sp, 7A00h
+ ; setup initial realmode stack
+ mov	sp, 4000h
  sti
  ; save boot disk
  push	dx
  ; setup data area pointer
- mov	di, 7B00h
+ mov	di, 5000h
  ; get system memory map
  xor	ebx, ebx
  xor	ebp, ebp
 smap_get:
  mov	eax, 0000E820h
  mov	edx, 534D4150h
- mov	ecx, 24
- int	15h
- jc	smap_done
+ mov	ecx, 24 
+ int	15h 
+ jc	    smap_done
  cmp	eax, 0x534D4150
  jnz	smap_done
  ; find memory higher 1mb
@@ -95,7 +94,7 @@ smap_nxt:
  jnz	smap_get
 smap_done:
  ; display error
- call	error_msg
+ call	e_msg_1
  db 'not enough extended memory',13,10,0
 smap_found:
  ; regusters here:
@@ -126,38 +125,13 @@ next:
  ; push return address
  lea	ax, [bx+pm_loader]
  push	ax
- ; enable A20 gate
- call	enable_a20
- ; jump to pmode
+ ; jump to resident block
  push	es
  xor	ax, ax
  push	ax
  retf
 
-
-
-empty_8042:
- jmp	$+2 ; wait
- jmp	$+2 ; wait
- in	    al, 064h
- cmp	al, 0FFh ; legacy-free machine without keyboard
- jz	    @F
- test	al, 02h
- jnz	empty_8042
-@@:
- ret
-
-enable_a20:
- call	empty_8042
- mov	al, 0D1h  ; command write
- out	064h, al
- call	empty_8042
- mov	al, 0DFh  ; A20 on
- out	060h, al
- call	empty_8042
- ret
-
-error_msg:
+e_msg_1:
  pop	si
 @@:
  lodsb
@@ -177,7 +151,7 @@ use32
  ;  edi - memory chunk size
  ;  ecx - real mode block
  push	ecx
- ; get embeded PE image address
+ ; get embedded PE image address
  call	next2
 next2:
  pop	esi
@@ -186,16 +160,21 @@ next2:
  mov	edx, [esi+IMAGE_DOS_HEADER.e_lfanew]
  add	edx, esi
  mov	ecx, [edx+IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage]
+ ; add 4k for stack and align size to 4k
+ add	ecx, 4096 + 4095
+ and	ecx, 0FFFFF000h 
  ; setup new image location
  add	ebp, edi
  sub	ebp, ecx
  ; GRUB compatibility hack
- mov    eax, ebp
- and    eax, 0FFF00000h
- cmp    eax, 03FF00000h
- jnz    @F
- sub    ebp, 1024 * 1024 
+ mov	eax, ebp
+ and	eax, 0FFF00000h
+ cmp	eax, 03FF00000h
+ jnz	@F
+ sub	ebp, 1024 * 1024 
 @@: 
+ ; align image base to 4k
+ and	ebp, 0FFFFF000h 
  ; save image location to rbb
  mov	[fs:rbb.pm_base], ebp
  mov	[fs:rbb.pm_size], ecx
@@ -225,7 +204,7 @@ next2:
  rep movsb
  pop	ecx
  pop	edi
- ; zero old section data to prevent embeded password leak
+ ; zero old section data to prevent embedded password leak
  xor	eax, eax
  rep stosb
  add	edx, sizeof.IMAGE_SECTION_HEADER
@@ -274,7 +253,15 @@ rel_done:
  ; get image entry point
  mov	ebx, [edi+IMAGE_NT_HEADERS.OptionalHeader.AddressOfEntryPoint]
  add	ebx, ebp  ; ebx - entry point
- ; jump to entry point (pbb pointer is already pushed to stack)
+ ; get rbb pointer
+ pop	ecx
+ ; switch to new stack
+ mov	eax, [fs:rbb.pm_base]
+ add	eax, [fs:rbb.pm_size]
+ mov	esp, eax
+ ; push rbb to new stack
+ push	ecx
+ ; jump to entry point 
  call	ebx
  jmp	$
 
@@ -342,33 +329,34 @@ use16
  pop	[cs:rbb.rmc.es]
  ret
 
-call_to_rm:
+call_rm:
 use32
  pushad
  ; switch to RM
  call	jump_to_rm
 use16
- ; save DS because buggy BIOSes change it
- push	ds
  ; load registers
  call	regs_load
- ; prepare call stack
  pushf
- push	cs		; return segment
- push	cb_ret		; return offset
- push	[cs:rbb.segoff] ; call seg/off
- ; jump to called function
- retf
-cb_ret:
+ cli
+ call	far [cs:rbb.segoff]
  ; save changed registers
  call	regs_save
- ; restore DS
- pop	ds
  ; return to pmode
  call	jump_to_pm
 use32
  popad
  ret
+
+jump_rm:
+use32
+ ; switch to RM
+ call	jump_to_rm
+use16
+ ; load registers
+ call	regs_load
+ ; jump to RM code
+ jmp	far [cs:rbb.segoff]
 
 hook_ints:
 use32
@@ -376,7 +364,6 @@ use32
  call	jump_to_rm
 use16
  ; nook int15
- cli
  xor	ax, ax
  mov	fs, ax
  ; hook int13
@@ -389,7 +376,6 @@ use16
  mov	[rbb.old_int15], eax
  mov	word [fs:54h], new_int15
  mov	word [fs:56h], cs
- sti
  ; return to pmode
  call	jump_to_pm
 use32
@@ -420,10 +406,10 @@ use16
  push	gs
  ; save registers
  call	regs_save
- ; load DS
- mov	ax, cs
- mov	ds, ax
- ; switch to PM
+ ; save flags
+ mov	bp, sp
+ push	word [ss:bp+8]
+ pop	word [cs:rbb.push_fl]
  call	jump_to_pm
 use32
  ; call to PM callback
@@ -439,7 +425,6 @@ use16
  retf	2
 
 
-
 pm_enable:
 use16
  ; save boot disk
@@ -453,15 +438,10 @@ use16
  mov	ds, cx
  ; get rb_block offset
  shl	ecx, 4
- mov	[rbb.rb_code], ecx
- ; setup 4kb PM stack
- ; 1kb skipped because code runned in VMware is very slow
- ; if stack lie between 9F000-9F300
- lea	eax, [ecx-1024]
- mov	[rbb.esp_32], eax
- lea	eax, [ecx-1024*pm_stk]	; get low memory base
- mov	[rbb.rb_base], eax
- mov	[rbb.rb_size], (rb_kbs + pm_stk) * 1024
+ mov	[rbb.rb_base], ecx
+ ; setup temporary PM stack to 5000h
+ mov	[rbb.esp_32], 5000h
+ mov	[rbb.rb_size], rb_kbs * 1024
  ; inverse real mode block signature in runtime
  ; to prevent finding it in false location
  not	[rbb.sign1]
@@ -476,8 +456,10 @@ use16
  add	[pm_jump], ecx
  mov	word [rm_jump], cs
  ; setup callback pointers
- lea	eax, [ecx+call_to_rm]
+ lea	eax, [ecx+call_rm]
  mov	[rbb.call_rm], eax
+ lea	eax, [ecx+jump_rm]
+ mov	[rbb.jump_rm], eax
  lea	eax, [ecx+hook_ints]
  mov	[rbb.hook_ints], eax
  ; calculate pmode return address
@@ -492,16 +474,44 @@ use32
  ; return to caller
  jmp	[fs:rbb.segoff]
 
+include 'a20.inc'
+
+e_msg_2:
+use16
+ pop	si
+@@:
+ mov	al, [cs:si]
+ inc	si
+ test	al, al
+ jz	$
+ mov	ah, 0Eh
+ xor	bx, bx
+ int	10h
+ jmp	@B
+
 jump_to_pm:
 use16
+ ; disable interrupts
  cli
+ ; test a20 gate
+ call	a20_test_fast
+ jnz	@F
+ ; enable A20 gate
+ call	enable_a20
+ jnc	@F
+ call	e_msg_2
+ db 'a20 gate is not enabled',13,10,0
+@@:
  ; get return address
  pop	ax
  movzx	eax, ax
- mov	[rbb.ret_32], eax
+ mov	[cs:rbb.ret_32], eax
  ; save real mode stack
- mov	[rbb.esp_16], esp
- mov	[rbb.ss_16],  ss
+ mov	[cs:rbb.sp_16], sp
+ mov	[cs:rbb.ss_16], ss
+ ; setup ds
+ mov	ax, cs
+ mov	ds, ax
  ; load GDTR
  lgdt	[gdtr]
  ; switch to protected mode
@@ -525,7 +535,7 @@ use32
  mov	esp, [fs:rbb.esp_32]
  ; return to caller
  mov	eax, [fs:rbb.ret_32]
- add	eax, [fs:rbb.rb_code]
+ add	eax, [fs:rbb.rb_base]
  push	eax
  ret
 
@@ -548,7 +558,7 @@ pm16_start:
 use16
  ; clear PM bit in cr0
  mov	eax, cr0
- and	eax, 0FFFFFFFEh
+ and	eax, 0FFFFFFFEh 
  mov	cr0, eax
  ; jump to real mode
 rm_jump = $+3
@@ -561,20 +571,17 @@ rm_start:
  mov	fs, ax
  mov	gs, ax
  ; load RM stack
- mov	ss,  [rbb.ss_16]
- mov	esp, [rbb.esp_16]
- ; enable interrupts
- sti
+ xor	esp, esp
+ mov	ss, [rbb.ss_16]
+ mov	sp, [rbb.sp_16]
  ; return to caller
  mov	eax, [rbb.ret_32]
- sub	eax, [rbb.rb_code]
+ sub	eax, [rbb.rb_base]
  push	ax
  ret
 
-
 rb_size = $
 rb_kbs	= (rb_size / 1024) + 1
-pm_stk	= 5 ; reserve 5kbs for PM stack
 
 repeat	512-(($+rb_block) mod 512)
  db 0

@@ -29,12 +29,6 @@
 #include "ntdll.h"
 #include "iso_fs.h"
 
-typedef int (WINAPI fmt_callback) (int unk1, int unk2, int unk3);
-
-typedef void (WINAPI *PFORMAT) (
-	 wchar_t *root_path, u32 unk1, wchar_t *fs_type, wchar_t *label, u32 unk2, fmt_callback callback
-	 );
-
 #define OLD_SIGN      0x69EADBF4
 #define NEW_SIGN      0x20B60251
 #define DC_ISO_SIZE   1835008
@@ -167,7 +161,7 @@ int dc_make_iso(wchar_t *file)
 			http://www.phoenix.com/NR/rdonlyres/98D3219C-9CC9-4DF5-B496-A286D893E36A/0/specscdrom.pdf
 		*/
 
-		zeromem(isobuf, DC_ISO_SIZE);
+		zeroauto(isobuf, DC_ISO_SIZE);
 		pd = addof(isobuf, 0x8000);
 		bd = addof(isobuf, 0x8800);
 		td = addof(isobuf, 0x9000);
@@ -233,9 +227,9 @@ int dc_make_iso(wchar_t *file)
 		ie->sector_count[0] = 1;
 		ie->load_rba[0] = 26; /* sector number */
 		/* copy boot sector */
-		memcpy(isobuf + 0xD000, boot, SECTOR_SIZE);
+		autocpy(isobuf + 0xD000, boot, SECTOR_SIZE);
 		/* copy bootloader */
-		memcpy(isobuf + 0xD200, loader, ldrsz);
+		mincpy(isobuf + 0xD200, loader, ldrsz);
 
 		/* write image to file */
 		resl = save_file(file, isobuf, DC_ISO_SIZE);
@@ -298,10 +292,6 @@ int dc_get_boot_disk(int *dsk_num)
 	return resl;
 }
 
-static int WINAPI dc_format_callback(int unk1, int unk2, int unk3) {
-	return 1;
-}
-
 static int dc_format_media_and_set_boot(
 			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg
 			 )
@@ -314,10 +304,8 @@ static int dc_format_media_and_set_boot(
 	int                       resl, succs;
 	int                       locked;
 	u8                        mbr_sec[SECTOR_SIZE];
-	HMODULE                   fmifs;
-	PFORMAT                   Format;
 	
-	locked = 0; fmifs = NULL;
+	locked = 0;
 	do
 	{
 		d_size = (u64)dg->Cylinders.QuadPart * (u64)dg->SectorsPerTrack * 
@@ -341,8 +329,8 @@ static int dc_format_media_and_set_boot(
 			h_device, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &bytes, NULL
 			);
 
-		zeromem(mbr_sec, sizeof(mbr_sec));
-		zeromem(buff, sizeof(buff));
+		zeroauto(mbr_sec, sizeof(mbr_sec));
+		zeroauto(buff, sizeof(buff));
 
 		resl = dc_disk_write(
 			h_device, mbr_sec, sizeof(mbr_sec), 0
@@ -383,24 +371,14 @@ static int dc_format_media_and_set_boot(
 			locked = 0;
 		}
 
-		if ( (fmifs = LoadLibrary(L"fmifs")) == NULL ) {
-			resl = ST_ERROR; break;
-		}
-
-		if ( (Format = pv(GetProcAddress(fmifs, "Format"))) == NULL ) {
-			resl = ST_ERROR; break;
-		}
-
 		CloseHandle(h_device); h_device = NULL;
 
-		Format(root, 0, L"FAT32", L"", 1, dc_format_callback);		
-
+		if ( (resl = dc_format_fs(root, L"FAT32")) != ST_OK ) {
+			break;
+		}
+		
 		resl = dc_set_mbr(dsk_num, 1);		
 	} while(0);
-
-	if (fmifs != NULL) {
-		FreeLibrary(fmifs);
-	}
 
 	if (locked != 0) 
 	{
@@ -448,13 +426,7 @@ static int dc_is_mbr_present(int dsk_num)
 
 int dc_set_boot(wchar_t *root, int format)
 {
-	dc_boot               boot;
-	u8                    readd[SECTOR_SIZE];
-	dc_boot              *old_boot = pv(readd); 
-	void                 *data;
-	int                   size;
 	wchar_t               disk[MAX_PATH];
-	wchar_t               file[MAX_PATH];
 	HANDLE                hdisk   = NULL;
 	int                   resl, succs;
 	u32                   bytes;	
@@ -490,7 +462,7 @@ int dc_set_boot(wchar_t *root, int format)
 			resl = ST_ERROR; break;
 		}
 
-		if (dg.MediaType == FixedMedia) {
+		if (dg.MediaType != RemovableMedia) {
 			resl = ST_INV_MEDIA_TYPE; break;
 		}
 
@@ -498,73 +470,31 @@ int dc_set_boot(wchar_t *root, int format)
 			resl = ST_INV_SECT; break;
 		}
 
-		if (dg.MediaType == RemovableMedia) 
-		{
-			succs = DeviceIoControl(
-				hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &d_num, sizeof(d_num), &bytes, NULL
-				);
-
-			if (succs == 0) {
-				resl = ST_ERROR; break;
-			}
-
-			if (format == 0) 
-			{
-				if (dc_is_mbr_present(d_num.DeviceNumber) != ST_OK) {
-					resl = ST_FORMAT_NEEDED; break;
-				}
-
-				if ( (resl = dc_set_mbr(d_num.DeviceNumber, 1)) == ST_NF_SPACE )
-				{
-					if ( (resl = dc_set_mbr(d_num.DeviceNumber, 0)) == ST_NF_SPACE ) {
-						resl = ST_FORMAT_NEEDED;
-					}
-				}
-			} else
-			{
-				resl  = dc_format_media_and_set_boot(
-					hdisk, disk, d_num.DeviceNumber, &dg
-					);
-				hdisk = NULL;
-			}			
-			break;
-		}		
-
-		if (data = dc_extract_rsrc(&size, IDR_FATBOOT)) {			
-			memcpy(&boot, data, sizeof(boot));
-		} else {		
-			resl = ST_ERROR; break;
-		}
-
-		/* read first sector */
-		if ( (resl = dc_disk_read(hdisk, readd, sizeof(readd), 0)) != ST_OK ) {
-			break;
-		}
-
-		/* determine FS type */
-		if (dc_fs_type(readd) != FS_FAT12) {			
-			resl = ST_UNK_FS; break;
-		}
-
-		/* Update the BPB in the new boot sector */
-		memcpy(boot.sys_id, old_boot->sys_id, 59); /*fat BPB length*/;
-		/* copy new boot sector */
-		memcpy(readd, &boot, sizeof(boot));		
-
-		/* write changed sector to HDD */
-		if ( (resl = dc_disk_write(hdisk, readd, sizeof(readd), 0)) != ST_OK ) {
-			break;
-		}
-
-		if ( (data = dc_extract_rsrc(&size, IDR_DCLDR)) == NULL ) {
-			resl = ST_ERROR; break;
-		}
-
-		_snwprintf(
-			file, sizeof_w(file), L"%s\\dcldr", disk
+		succs = DeviceIoControl(
+			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &d_num, sizeof(d_num), &bytes, NULL
 			);
 
-		resl = save_file(file, data, size);
+		if (succs == 0) {
+			resl = ST_ERROR; break;
+		}
+
+		if (format == 0) 
+		{
+			if (dc_is_mbr_present(d_num.DeviceNumber) != ST_OK) {
+				resl = ST_FORMAT_NEEDED; break;
+			}
+
+			if ( (resl = dc_set_mbr(d_num.DeviceNumber, 1)) == ST_NF_SPACE )
+			{
+				if ( (resl = dc_set_mbr(d_num.DeviceNumber, 0)) == ST_NF_SPACE ) {
+					resl = ST_FORMAT_NEEDED;
+				}
+			}
+		} else
+		{
+			resl  = dc_format_media_and_set_boot(hdisk, disk, d_num.DeviceNumber, &dg);
+			hdisk = NULL;
+		}	
 	} while (0);
 
 	if (hdisk != NULL) {
@@ -605,7 +535,7 @@ int dc_set_mbr(int dsk_num, int begin)
 		}
 
 		if (data = dc_extract_rsrc(&size, IDR_MBR)) {
-			memcpy(&mbr, data, sizeof(mbr));
+			autocpy(&mbr, data, sizeof(mbr));
 		} else {
 			resl = ST_ERROR; break;
 		}
@@ -640,8 +570,8 @@ int dc_set_mbr(int dsk_num, int begin)
 		min_str = 64; max_end = 0;
 		for (i = 0, max_end = 0; i < 4; i++) 
 		{
-			if ( (pt = &old_mbr.pt[i])->os == 0 ) {
-				break;
+			if ( (pt = &old_mbr.pt[i])->prt_size == 0 ) {
+				continue;
 			}
 
 			min_str = min(min_str, pt->start_sect);
@@ -667,10 +597,10 @@ int dc_set_mbr(int dsk_num, int begin)
 		}		
 
 		/* save old MBR */
-		memcpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
+		autocpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
 
 		/* prepare new MBR */
-		memcpy(mbr.data2, old_mbr.data2, sizeof(mbr.data2));
+		autocpy(mbr.data2, old_mbr.data2, sizeof(mbr.data2));
 
 		mbr.set.sector = ldr_off / SECTOR_SIZE;
 		mbr.set.numb   = size / SECTOR_SIZE;
@@ -805,7 +735,7 @@ int dc_get_mbr_config(
 
 		if ( (file != NULL) || (mbr.sign == NEW_SIGN) ) 
 		{
-			memcpy(conf, cnf, sizeof(ldr_config));
+			autocpy(conf, cnf, sizeof(ldr_config));
 
 			if (conf->ldr_ver < 32) { /* timeout field been added in 32 version */
 				conf->timeout = 0;
@@ -823,7 +753,7 @@ int dc_get_mbr_config(
 			}
 
 			/* combine old and default config */
-			memcpy(conf, def, sizeof(ldr_config));
+			autocpy(conf, def, sizeof(ldr_config));
 			strcpy(conf->eps_msg, cnf->eps_msg);
 			strcpy(conf->err_msg, cnf->err_msg);
 			conf->ldr_ver = cnf->ldr_ver;
@@ -928,7 +858,7 @@ int dc_set_mbr_config(
 		}
 
 		/* copy new values to config */
-		memcpy(cnf, conf, sizeof(ldr_config));
+		autocpy(cnf, conf, sizeof(ldr_config));
 		/* set unchangeable fields to default */
 		cnf->sign1 = CFG_SIGN1; cnf->sign2 = CFG_SIGN2;
 		cnf->sign3 = CFG_SIGN3; cnf->sign4 = CFG_SIGN4;
@@ -978,8 +908,7 @@ int dc_mbr_config_by_partition(
 	drive_inf     info;
 	int           resl, succs;
 	u32           bytes;
-	wchar_t      *p_file;
-
+	
 	if (root[0] != L'\\')
 	{
 		_snwprintf(
@@ -989,7 +918,7 @@ int dc_mbr_config_by_partition(
 		wcsncpy(name, root, sizeof_w(name));
 	}
 
-	p_file = NULL; info.dsk_num = 0;
+	info.dsk_num = 0;
 	do
 	{
 		/* open partition */
@@ -1015,19 +944,14 @@ int dc_mbr_config_by_partition(
 			if ( (resl = dc_get_drive_info(name, &info)) != ST_OK ) {
 				break;
 			}
-		} else 
-		{
-			_snwprintf(
-				name, sizeof_w(name), L"%c:\\dcldr", root[0]
-				);
-
-			p_file = name;
+		} else  {
+			resl = ST_INV_MEDIA_TYPE; break;		
 		}
 
 		if (set_conf != 0) {
-			resl = dc_set_mbr_config(info.disks[0].number, p_file, conf);
+			resl = dc_set_mbr_config(info.disks[0].number, NULL, conf);
 		} else {
-			resl = dc_get_mbr_config(info.disks[0].number, p_file, conf);
+			resl = dc_get_mbr_config(info.disks[0].number, NULL, conf);
 		}
 	} while (0);
 
@@ -1086,10 +1010,10 @@ int dc_unset_mbr(int dsk_num)
 			}
 
 			/* copy saved old MBR */
-			memcpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
+			autocpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
 
 			/* copy new partition table to old MBR */
-			memcpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
+			autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
 
 			/* write new MBR */
 			if ( (resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {				
@@ -1097,7 +1021,7 @@ int dc_unset_mbr(int dsk_num)
 			}
 
 			/* zero bootloader sectors */
-			zeromem(&mbr, sizeof(mbr));
+			zeroauto(&mbr, sizeof(mbr));
 			
 			for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
 				dc_disk_write(hdisk, &mbr, sizeof(mbr), offs);
@@ -1113,7 +1037,7 @@ int dc_unset_mbr(int dsk_num)
 			}
 
 			/* copy new partition table to old MBR */
-			memcpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
+			autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
 
 			/* write new MBR */
 			if ( (resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {
@@ -1121,7 +1045,7 @@ int dc_unset_mbr(int dsk_num)
 			}
 
 			/* zero bootloader sectors */
-			zeromem(&mbr, sizeof(mbr));
+			zeroauto(&mbr, sizeof(mbr));
 			
 			for (; size; size -= SECTOR_SIZE ) {
 				dc_disk_write(hdisk, &mbr, sizeof(mbr), size);
@@ -1192,7 +1116,7 @@ int dc_get_drive_info(
 	int                      succs;
 	HANDLE                   hdisk;
 
-	zeromem(info, sizeof(drive_inf));
+	zeroauto(info, sizeof(drive_inf));
 	
 	do
 	{

@@ -15,7 +15,7 @@ int io_fs_control(
 HANDLE io_open_volume(wchar_t *dev_name);
 
 NTSTATUS io_device_rw_block(
-			dev_hook *hook, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
+			PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
 			);
 
 int io_verify_hook_device(dev_hook *hook);
@@ -44,9 +44,8 @@ int dc_get_mount_point(
       dev_hook *hook, wchar_t *buffer, u16 length
 	  );
 
-#ifdef DBG_COM
- void dc_com_dbg_init();
- void com_print(char *format, ...);
-#endif
+void *dc_map_mdl_with_retry(PMDL mdl);
+PMDL  dc_allocate_mdl_with_retry(void *data, u32 size);
+
 
 #endif

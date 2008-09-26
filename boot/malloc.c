@@ -22,8 +22,9 @@
 #include "boot.h"
 #include "bios.h"
 #include "malloc.h"
+#include "crypto.h"
 
-static u8  mem_buff[MEM_MAX];
+static u8  mem_buff[206 * 1024]; /* reserve 206k for bootloader memory */
 static u8 *mem_base = mem_buff;
 
 void *malloc(int size)

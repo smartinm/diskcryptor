@@ -8,11 +8,9 @@ void dc_add_password(char *pass);
 void dc_clean_pass_cache();
 void dc_clean_keys();
 
-aes_key *dc_init_hdr_key(dc_header *header, char *password);
-aes_key *dc_decrypt_header(dc_header *header, char *password);
+dc_key *dc_init_hdr_key(crypt_info *crypt, dc_header *header, char *password);
 
-int dc_mount_device(wchar_t *dev_name, char *passwod);
-
+int dc_mount_device(wchar_t *dev_name, char *password);
 int dc_process_unmount(dev_hook *hook, int opt);
 
 void dc_process_unmount_async(
@@ -22,6 +20,10 @@ void dc_process_unmount_async(
 int dc_write_header(
 	  dev_hook *hook, dc_header *header, u64 offset, char *password
 	  );
+
+dc_key *dc_dec_known_header(
+		  dc_header *header, crypt_info *crypt, char *password
+		  );
 
 int dc_unmount_device(wchar_t *dev_name, int force);
 

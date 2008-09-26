@@ -18,9 +18,9 @@ typedef aligned struct _dev_hook
 	IO_REMOVE_LOCK remv_lock;
 	LIST_ENTRY     hooks_list;
 
-	WCHAR          dev_name[128];
+	wchar_t        dev_name[MAX_DEVICE + 1];
 
-	aes_key        dsk_key;
+	dc_key         dsk_key;
 
 	u32            flags;
 	u32            disk_id;
@@ -34,12 +34,15 @@ typedef aligned struct _dev_hook
 	int            mnt_probed;
 	int            mnt_probe_cnt;
 
-	int            wp_mode;
+	crypt_info     crypt;
 	wipe_ctx       wp_ctx;
+	rnd_ctx       *fmt_rnd;
 
 	u8            *tmp_buff;
-	aes_key       *hdr_key;
+	dc_key        *hdr_key;
+	dc_key        *tmp_key;
 	dc_header      tmp_header;
+    dc_header      old_header;
 	char           tmp_pass[MAX_PASSWORD + 1];
 
 	u64            tmp_size;
@@ -47,7 +50,7 @@ typedef aligned struct _dev_hook
 	u64            use_size;
 	u64            tmp_save_off;
 
-	int            busy_lock;
+	KMUTEX         busy_lock;
 
 	int            sync_init_type;
 	int            sync_init_status; /* sync mode init status */
@@ -60,9 +63,6 @@ typedef aligned struct _dev_hook
 	KEVENT         sync_enter_event;
 
 } dev_hook;
-
-#define hook_lock_acquire(hook,lock) ( (*(lock) = lock_xchg(&(hook)->busy_lock, 1)) == 0 )
-#define hook_lock_release(hook,lock) { if ((lock) == 0) { (hook)->busy_lock = 0; } }
 
 dev_hook *dc_find_hook(wchar_t *dev_name);
 

@@ -34,6 +34,12 @@ typedef struct _sec_mem {
 
 } sec_mem;
 
+typedef int (WINAPI fmt_callback) (int unk1, int unk2, int unk3);
+
+typedef void (WINAPI *PFORMAT) (
+	 wchar_t *root_path, u32 unk1, wchar_t *fs_type, wchar_t *label, u32 unk2, fmt_callback callback
+	 );
+
 #define KB ((u64)1024)
 #define MB (KB*KB)
 #define GB (KB*KB*KB)
@@ -329,7 +335,7 @@ int dc_get_hdd_name(
 		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
 			resl = ST_ACCESS_DENIED; break;
 		}
-		
+
 		succs = DeviceIoControl(
 			hdisk, IOCTL_SCSI_GET_INQUIRY_DATA, NULL, 0, &bi, sizeof(bi), &bytes, NULL
 			);
@@ -361,10 +367,10 @@ int dc_get_hdd_name(
 			{
 				data = addof(&bi, bi[0].BusData[0].InquiryDataOffset);
 
-				zeromem(c_name, sizeof(c_name));
+				zeroauto(c_name, sizeof(c_name));
 
 				if (data->InquiryDataLength > 8) {
-					memcpy(c_name, data->InquiryData + 8, min(data->InquiryDataLength - 8, 0x16));
+					mincpy(c_name, data->InquiryData + 8, min(data->InquiryDataLength - 8, 0x16));
 				}
 				mbstowcs(name, c_name, max_name);
 			} else {
@@ -391,15 +397,6 @@ int is_win_vista()
 	return (osv.dwMajorVersion >= 6);
 }
 
-
-int is_win_2000()
-{
-	OSVERSIONINFO osv;
-
-	osv.dwOSVersionInfoSize = sizeof(osv);
-	GetVersionEx(&osv);
-	return (osv.dwMajorVersion == 5) && (osv.dwMinorVersion == 0);
-}
 
 /* this function grabbed from ReactOS sources */
 void dc_format_byte_size(
@@ -440,4 +437,71 @@ void dc_format_byte_size(
 			wc_buf, wc_size, format, d_bytes, b_formats[i].prefix
 			);		
 	}
+}
+
+wchar_t *dc_get_cipher_name(int cipher_id)
+{
+	static wchar_t *cp_names[] = {
+		L"AES",
+		L"Twofish",
+		L"Serpent",
+		L"AES-Twofish",
+		L"Twofish-Serpent",
+		L"Serpent-AES",
+		L"AES-Twofish-Serpent"
+	};
+
+	return cp_names[cipher_id];
+}
+
+wchar_t *dc_get_mode_name(int mode_id)
+{
+	static wchar_t *md_names[] = {
+		L"XTS",
+		L"LRW"
+	};
+
+	return md_names[mode_id];
+}
+
+wchar_t *dc_get_prf_name(int prf_id)
+{
+	static wchar_t *prf_names[] = {
+		L"HMAC-SHA-512",
+		L"HMAC-SHA-1"
+	};
+
+	return prf_names[prf_id];
+}
+
+
+static int WINAPI dc_format_callback(int unk1, int unk2, int unk3) {
+	return 1;
+}
+
+int dc_format_fs(wchar_t *root, wchar_t *fs)
+{
+	HMODULE fmifs;
+	PFORMAT Format;
+	int     resl;
+
+	do
+	{
+		if ( (fmifs = LoadLibrary(L"fmifs")) == NULL ) {
+			resl = ST_ERROR; break;
+		}
+
+		if ( (Format = pv(GetProcAddress(fmifs, "Format"))) == NULL ) {
+			resl = ST_ERROR; break;
+		}
+
+		Format(root, 0, fs, L"", 1, dc_format_callback);
+		resl = ST_OK;
+	} while (0);
+
+	if (fmifs != NULL) {
+		FreeLibrary(fmifs);
+	}
+
+	return resl;
 }

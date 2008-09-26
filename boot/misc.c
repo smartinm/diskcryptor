@@ -23,7 +23,7 @@
 #include "boot.h"
 #include "bios.h"
 
-#define bcd2int(bcd) (((bcd & 0xf0) >> 4) * 10 + (bcd &0x0f))
+#define bcd2int(bcd) (((bcd & 0xf0) >> 4) * 10 + (bcd & 0x0f))
 
 u32 get_rtc_time()
 {
@@ -31,7 +31,7 @@ u32 get_rtc_time()
 	u32    hrs, mins;
 	u32    sec;
 
-	ctx.ah = 2;
+	set_ctx(0x0200, &ctx);
 	bios_call(0x1A, &ctx);
 	hrs  = bcd2int(ctx.ch);
 	mins = bcd2int(ctx.cl);
@@ -48,36 +48,30 @@ void _putch(char ch)
 		_putch('\r');
 	}
 
-	ctx.ax = (0x0E << 8) | ch;
-	ctx.bx = 0; 
+	set_ctx(0x0E00 | ch, &ctx);	
 	bios_call(0x10, &ctx);
-}
-
-void setchar(char ch)
-{
-	rm_ctx ctx;
-
-	ctx.ax = (0x0A << 8) | ch;
-	ctx.bx = 0; 
-	ctx.cx = 1;
-
-	bios_call(0x10, &ctx);
-}
-
-char _getch()
-{
-	rm_ctx ctx;
-	ctx.ah = 0x10;
-	bios_call(0x16, &ctx);
-	return ctx.al;
 }
 
 int _kbhit() 
 {
 	rm_ctx ctx;
-	ctx.ah = 1;
+	set_ctx(0x0100, &ctx);	
 	bios_call(0x16, &ctx);
 	return (ctx.efl & FL_ZF) == 0;
+}
+
+char _getch()
+{
+	rm_ctx ctx;
+
+	/* work around for Apple BIOS bug
+	   check the keyboard buffer, until there is a keypress.
+	*/
+	do { } while (_kbhit() == 0);
+	/* read character from keyboard */
+	set_ctx(0, &ctx);	
+	bios_call(0x16, &ctx);
+	return ctx.al;
 }
 
 
@@ -339,6 +333,12 @@ void printf (const char *fmt, ...)
 	    break;
 	  }
 	}
+  }
+
+  /* delay one second */
+  {
+	  u32 t = get_rtc_time();
+	  while (get_rtc_time() - t < 1);
   }
 
   va_end(args);

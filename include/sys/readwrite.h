@@ -27,6 +27,5 @@ NTSTATUS
 	 IN PIRP           irp
 	 );
 
-int dc_setup_io_queue(u32 conf_flags);
 
 #endif

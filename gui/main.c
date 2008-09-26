@@ -1,5 +1,4 @@
-/*
-    *
+/*  *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2007 
 	* ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
@@ -45,6 +44,8 @@
 #include "hotkeys.h"
 #include "rand.h"
 #include "subs.h"
+#include "crypto\pkcs5.h"
+#include "crypto\crypto.h"
 
 #pragma warning(disable : 4995)
 
@@ -53,8 +54,8 @@ int _tmr_elapse[ ] = {
 	100,   // PROC_TIMER
 	3000,  // RAND_TIMER
 	500,   // HIDE_TIMER
-	500    // SHRN_TIMER
-
+	500,   // SHRN_TIMER
+	500    // POST_TIMER
 };
 
 ////////////////
@@ -70,6 +71,94 @@ list_entry __drives;
 CRITICAL_SECTION crit_sect;
 
 ///////////
+int _finish_formating(_dnode *node)
+{
+	int rlt = dc_done_format(node->mnt.info.device);
+	if (rlt == ST_OK) {
+
+		if (wcscmp(node->dlg.fs_name, L"RAW") != 0) {
+			rlt = dc_format_fs(node->mnt.info.w32_device, node->dlg.fs_name);
+		}
+	}
+	if (rlt != ST_OK) {
+		_error_s(__dlg, L"Error formatting volume [%s]", rlt, node->mnt.info.status.mnt_point);
+	}
+	return rlt;
+
+}
+
+
+char *_get_pass(
+		HWND hwnd,
+		int edit_pass
+	)
+{
+	char *pass = NULL;
+
+	if (pass = secure_alloc(MAX_PASSWORD + 1)) {	
+		GetWindowTextA(GetDlgItem(hwnd, edit_pass), pass, MAX_PASSWORD + 1);		
+	}
+	return pass;
+
+}
+
+
+void _wipe_pass_control(
+		HWND hwnd,
+		int edit_pass
+	)
+{
+	wchar_t wipe[MAX_PASSWORD + 1];
+
+	wipe[MAX_PASSWORD] = 0;
+	memset(wipe, '#', MAX_PASSWORD*sizeof(wchar_t));
+
+	SetWindowText(GetDlgItem(hwnd, edit_pass), wipe);
+	
+}
+
+
+static int dc_bench_cmp(const bench_item *arg1, const bench_item *arg2)
+{
+	if (arg1->speed > arg2->speed) {
+		return -1;
+	} else {
+		return (arg1->speed < arg2->speed);
+	}
+}
+
+
+int _benchmark(
+		bench_item *bench,
+		int mode		
+	)
+{
+	dc_bench   info;
+	crypt_info crypt;
+	int        i, n = 0;			
+
+	for (i = 0; i < CF_CIPHERS_NUM; i++)
+	{
+		crypt.cipher_id = i;
+		crypt.mode_id   = mode; 
+
+		if (dc_benchmark(&crypt, &info) != ST_OK) {
+			break;
+		}
+
+		bench[n].alg   = dc_get_cipher_name(i);
+		bench[n].mode  = dc_get_mode_name(mode);
+		bench[n].speed = (double)info.data_size / 
+			( (double)info.enc_time / (double)info.cpu_freq) / 1024 / 1024;
+		n++;
+
+	}
+	qsort(bench, n, sizeof(bench[0]), dc_bench_cmp);
+	return n;
+
+}
+
+
 void _set_device_item(
 		HWND hlist,
 		int lvcount,
@@ -128,7 +217,7 @@ void _list_devices(
 	ldr_config conf;
 	_dnode *root = malloc(sizeof(_dnode));
 
-	memset(root, '\0', sizeof(_dnode));
+	zeroauto(root, sizeof(_dnode));
 	root->is_root = TRUE;
 
 	_init_list_headers(hlist, _boot_headers);
@@ -136,19 +225,6 @@ void _list_devices(
 
 	dc_get_boot_disk(&boot_disk);
 	if (!fixed) {
-
-		for ( ; k < 2; k++ ) {
-			wchar_t name[MAX_PATH];
-
-			_snwprintf(name, sizeof_w(name), L"%c:", 'A'+k);
-			if (GetDriveType(name) == DRIVE_REMOVABLE) {
-
-				_list_insert_item(hlist, lvcount, 0, name, 0);
-				_list_set_item(hlist, lvcount, 1, L"--");
-				_list_set_item(hlist, lvcount++, 2, L"--");
-
-			}
-		}
 
 		for ( node = __drives.flink;
 					node != &__drives;
@@ -173,7 +249,7 @@ void _list_devices(
 						drv->root.dsk_num == sel ? root : NULL,
 						FALSE,
 						dc_get_mbr_config(drv->root.dsk_num, NULL, &conf) == ST_OK,
-						drv->root.dsk_num == boot_disk			
+						drv->root.dsk_num == boot_disk
 
 					);
 				}
@@ -193,7 +269,7 @@ void _list_devices(
 						k == sel ? root : NULL,
 						TRUE,
 						dc_get_mbr_config(k, NULL, &conf) == ST_OK,
-						k == boot_disk			
+						k == boot_disk
 
 					);
 				}
@@ -203,6 +279,13 @@ void _list_devices(
 	ListView_SetBkColor(hlist, GetSysColor(COLOR_BTNFACE));
 	ListView_SetTextBkColor(hlist, GetSysColor(COLOR_BTNFACE));
 	ListView_SetExtendedListViewStyle(hlist, LVS_EX_FLATSB | LVS_EX_FULLROWSELECT);
+
+	if (ListView_GetItemCount(hlist) == 0) {
+
+		_list_insert_item(hlist, 0, 0, L"Volumes not found", 0);
+		EnableWindow(hlist, FALSE);
+
+	}
 
 }
 
@@ -295,7 +378,7 @@ static void _add_drive_node(
 		exist_node : malloc(sizeof(_dnode));
 
 	mnt->exists = TRUE;
-	memcpy(&mnt->mnt.info, vol, sizeof(vol_inf));
+	autocpy(&mnt->mnt.info, vol, sizeof(vol_inf));
 
 	_snwprintf(path, sizeof_w(path), L"%s\\", vol->status.mnt_point);
 	GetVolumeInformation(path, label, sizeof_w(label), 0, 0, 0, fs, sizeof_w(fs));
@@ -325,15 +408,15 @@ static void _add_drive_node(
 		}
 
 		mnt->is_root = FALSE;
-		memcpy(&mnt->root.info, new_drv, sizeof(drive_inf));
+		autocpy(&mnt->root.info, new_drv, sizeof(drive_inf));
 
 		if (!root_exists) {
 
 			root = malloc(sizeof(_dnode));	
 			root->is_root = TRUE;
 
-			memcpy(&root->mnt.info, vol, sizeof(vol_inf));
-			memcpy(&root->root.info, new_drv, sizeof(drive_inf));
+			autocpy(&root->mnt.info, vol, sizeof(vol_inf));
+			autocpy(&root->root.info, new_drv, sizeof(drive_inf));
 
 			wcscpy(root->root.dsk_name, drvname);
 			root->root.dsk_num = new_drv->disks[index].number;	
@@ -450,36 +533,40 @@ int _list_volumes(
 }
 
 
-BOOL _is_active_item(
-		LPARAM lparam
+BOOL _is_warning_item(LPARAM lparam) {
+	_dnode *info = pv(lparam);
+
+	if (info && (
+		/*info->mnt.info.status.flags & F_REENCRYPT || */
+		info->mnt.info.status.flags & F_FORMATTING)
 	)
-{
+	return TRUE;
+	return FALSE;
+
+}
+
+
+BOOL _is_active_item(LPARAM lparam) {
 	_dnode *info = pv(lparam);
 
 	if (info &&
-			!info->is_root && 
-		   info->mnt.info.status.flags & F_UNSUPRT)
-			 
-			 return FALSE;
+	  !info->is_root && 
+		 info->mnt.info.status.flags & F_UNSUPRT
+	)			 
+	return FALSE;
 	return TRUE;
 
 }
 
 
-BOOL _is_root_item(
-		LPARAM lparam
-	)
-{
+BOOL _is_root_item(LPARAM lparam) {
 	_dnode *info = pv(lparam);
 	return info ? info->is_root : FALSE;
 
 }
 
 
-BOOL _is_enabled_item(
-		LPARAM lparam
-	)
-{
+BOOL _is_enabled_item(LPARAM lparam) {
 	_dnode *info = pv(lparam);
 
 	return info ? info->mnt.info.status.flags & 
@@ -487,10 +574,7 @@ BOOL _is_enabled_item(
 
 }
 
-BOOL _is_marked_item(
-		LPARAM lparam
-	)
-{
+BOOL _is_marked_item(LPARAM lparam) {
 	_dnode *info = pv(lparam);
 
 	return info ? info->is_root && 
@@ -499,20 +583,14 @@ BOOL _is_marked_item(
 }
 
 
-BOOL _is_splited_item(
-		LPARAM lparam
-	)
-{
+BOOL _is_splited_item(LPARAM lparam) {
 	_dnode *info = pv(lparam);
 	return info ? info->root.info.dsk_num>1 : FALSE;
 
 }
 
 
-BOOL _is_curr_in_group(
-		HWND hwnd
-	)
-{
+BOOL _is_curr_in_group(HWND hwnd) {
 	_tab_data *tab;
 
 	tab = wnd_get_long(GetParent(hwnd), GWL_USERDATA);
@@ -521,10 +599,7 @@ BOOL _is_curr_in_group(
 }
 
 
-BOOL _is_simple_list(
-		HWND hwnd
-	)
-{
+BOOL _is_simple_list(HWND hwnd) {
 	WINDOWINFO winfo = { sizeof(winfo) };
 
 	GetWindowInfo(hwnd, &winfo);
@@ -533,10 +608,7 @@ BOOL _is_simple_list(
 }
 
 
-BOOL _is_boot_device(
-		vol_inf *vol
-	)
-{
+BOOL _is_boot_device(vol_inf *vol) {
 	wchar_t boot_dev[MAX_PATH];
 	dc_get_boot_device(boot_dev);
 
@@ -583,6 +655,7 @@ void _load_diskdrives(
 
 	BOOL boot_enc = TRUE;
 	int count;
+
 	wchar_t display[MAX_PATH] = { 0 };
 	wchar_t boot_dev[MAX_PATH];
 
@@ -638,14 +711,18 @@ void _load_diskdrives(
 					lvitem.lParam = (LPARAM)mnt;
 					lvitem.iSubItem = 0;
 
-					if (!wcsstr(mnt->mnt.info.status.mnt_point, L"\\\\?\\")) {
+					if (wcsstr(mnt->mnt.info.status.mnt_point, L"\\\\?\\") == 0) {
 						_snwprintf(
 							display, sizeof_w(display), L"&%s", mnt->mnt.info.status.mnt_point);
 
 					} else {
-						_snwprintf(
-							display, sizeof_w(display), L"&%s", wcsrchr(mnt->mnt.info.device, 'V'));
 
+						wchar_t *vol_name = wcsrchr(mnt->mnt.info.device, 'V');						
+						if (!vol_name) vol_name = wcsrchr(mnt->mnt.info.device, '\\')+1;	
+
+						if ((int)vol_name > 1) {
+							_snwprintf(display, sizeof_w(display), L"&%s", vol_name);
+						}
 					}
 
 					if (!count) {
@@ -748,25 +825,35 @@ void _refresh_menu( )
 
 	BOOL decrypt = FALSE;
 	BOOL encrypt = FALSE;
-	BOOL chpass = FALSE;
+
+	BOOL backup = FALSE;
+	BOOL enabled = TRUE;
+
+	BOOL wizard = FALSE;
+	BOOL del_mntpoint = FALSE;
 
 	if (node &&	ListView_GetSelectedCount(hlist) && 
 		!_is_root_item((LPARAM)node) &&
 	 	 _is_active_item((LPARAM)node)) 
 	{
 		int flags = node->mnt.info.status.flags;
+	
+		del_mntpoint = wcsstr(node->mnt.info.status.mnt_point, L"\\\\?\\") == 0;
+		backup = !(flags & F_SYNC);
+
 		if (flags & F_ENABLED) {
 
 			if (IS_UNMOUNTABLE(&node->mnt.info.status)) unmount = TRUE;
-			chpass = TRUE;
-
 			if (!(act && act->status == ACT_RUNNING)) {
 
-				decrypt = TRUE;
+				if (!(flags & F_REENCRYPT)) decrypt = TRUE;
 				if (flags & F_SYNC)	encrypt = TRUE;
 
 			}
 		} else {
+
+			enabled = FALSE;
+
 			if (*node->mnt.fs == '\0') mount = TRUE;							
 			else encrypt = TRUE;
 		}
@@ -778,13 +865,87 @@ void _refresh_menu( )
 	EnableWindow(GetDlgItem(__dlg, IDC_BTN_ENCRYPT_), encrypt);
 	EnableWindow(GetDlgItem(__dlg, IDC_BTN_DECRYPT_), decrypt);
 
+	//EnableWindow(GetDlgItem(__dlg, IDC_BTN_WIZARD), encrypt && !enabled);
+
 	EnableMenuItem(menu, ID_VOLUMES_MOUNT, _menu_onoff(mount));
 	EnableMenuItem(menu, ID_VOLUMES_ENCRYPT, _menu_onoff(encrypt));
 
 	EnableMenuItem(menu, ID_VOLUMES_DISMOUNT, _menu_onoff(unmount));
 	EnableMenuItem(menu, ID_VOLUMES_DECRYPT, _menu_onoff(decrypt));
 
-	EnableMenuItem(menu, ID_VOLUMES_CHANGEPASS, _menu_onoff(chpass));
+	EnableMenuItem(menu, ID_VOLUMES_BACKUPHEADER, _menu_onoff(backup));	
+	EnableMenuItem(menu, ID_VOLUMES_RESTOREHEADER, _menu_onoff(!enabled));
+
+	EnableMenuItem(menu, ID_VOLUMES_CHANGEPASS, _menu_onoff(enabled));	
+	EnableMenuItem(menu, ID_VOLUMES_DELETE_MNTPOINT, _menu_onoff(del_mntpoint));	
+
+	EnableMenuItem(menu, ID_VOLUMES_FORMAT, _menu_onoff(!enabled));
+	EnableMenuItem(menu, ID_VOLUMES_REENCRYPT, _menu_onoff(!encrypt && enabled));
+
+}
+
+
+int _menu_update_loader(
+		HWND hwnd,
+		wchar_t *vol,
+		int dsk_num
+	)
+{
+	int rlt = ST_ERROR;
+
+	if ((rlt = dc_update_boot(dsk_num)) == ST_OK) {
+		_msg_i(hwnd, L"Bootloader on [%s] successfully updated\n", vol);							
+	} else {
+		_error_s(hwnd, L"Error updated bootloader\n", rlt);
+	}
+	return rlt;
+
+}
+
+
+int _menu_unset_loader_mbr(
+		HWND hwnd,
+		wchar_t *vol,
+		int dsk_num,
+		int type
+	)
+{
+	int rlt = ST_ERROR;
+	if (type == CTL_LDR_STICK) {
+
+		wchar_t dev[MAX_PATH];
+		drive_inf inf;
+
+		_snwprintf(dev, sizeof_w(dev), L"\\\\.\\%s", vol);
+		rlt = dc_get_drive_info(dev, &inf);
+
+		if (rlt == ST_OK) {
+
+			if (inf.dsk_num == 1) {
+				dsk_num = inf.disks[0].number;
+
+			} else {
+				__msg_w(L"One volume on two disks\nIt's very strange..", hwnd);
+				return rlt;
+			}								
+		}
+	}
+	if (_msg_q(
+				hwnd, 
+				L"Are you sure you want to remove bootloader\n"
+				L"from [%s]?", vol)
+			)
+	{
+		rlt = dc_unset_mbr(dsk_num);
+
+		if (rlt == ST_OK) {
+			_msg_i(hwnd, L"Bootloader successfully removed from [%s]\n", vol);
+		} else {
+			_error_s(hwnd, L"Error removing bootloader\n", rlt);
+		}
+		return rlt;
+	} else
+		return ST_CANCEL;
 
 }
 
@@ -792,13 +953,14 @@ void _refresh_menu( )
 int _menu_set_loader_vol(
 		HWND hwnd,
 		wchar_t *vol,
-		int dsk_num
+		int dsk_num,
+		int type
 	)
 {
 	ldr_config conf;
 	int rlt = ST_ERROR;
 
-	if (dsk_num == -1) {
+	if (type == CTL_LDR_STICK) {
 
 		if ((rlt = dc_set_boot(vol, FALSE)) == ST_FORMAT_NEEDED) {
 			if (_msg_q(
@@ -842,39 +1004,27 @@ int _menu_set_loader_file(
 {
 	ldr_config conf;
 
-	BOOL create = TRUE;
 	int rlt = ST_ERROR;
+	wchar_t *s_img = iso ? L"ISO" : L"PXE";
 
-	if (PathFileExists(path)) {
+	rlt = iso ? dc_make_iso(path) : dc_make_pxe(path);
 
-		create = _msg_q(
-			hwnd,
-			L"File \"%s\" is exists\n\n"
-			L"Press [Yes] for create new bootloader\n"
-			L"Press [No] for change config",
-			path
-		);
+	if (rlt == ST_OK) {
+		if ((rlt = dc_get_mbr_config(0, path, &conf)) == ST_OK) {
+
+			conf.options = OP_EXTERNAL;
+			conf.boot_type = BT_MBR_FIRST;
+
+			rlt = dc_set_mbr_config(0, path, &conf);
+
+		}			
 	}
-	if (create) {
+	if (ST_OK == rlt) {
+		_msg_i(hwnd, L"Bootloader %s image file \"%s\" successfully create", s_img, path);							
+	} else {
+		_error_s(hwnd, L"Error creating %s image", rlt, s_img);
+	}
 
-		rlt = iso ? 
-			dc_make_iso(path) : dc_make_pxe(path);
-
-		if (rlt == ST_OK) {
-			if ((rlt = dc_get_mbr_config(0, path, &conf)) == ST_OK) {
-
-				conf.options = OP_EXTERNAL;
-				conf.boot_type = BT_MBR_FIRST;
-
-				rlt = dc_set_mbr_config(0, path, &conf);
-
-			}			
-		}
-		if (rlt != ST_OK) {
-			_error_s(hwnd, L"Error create bootloader %s image", 
-				rlt, iso ? L".iso" : L"PXE");
-		}
-	} else rlt = ST_OK;
 	return rlt;
 
 }
@@ -884,7 +1034,7 @@ void _menu_decrypt(
 		_dnode *node
 	)
 {
-	dlgpass dlg_info = { NULL, NULL, QR_MOUNT, node };
+	dlgpass dlg_info = { node, NULL, NULL, NULL };
 
 	int rlt;
 	if (!_create_act_thread(node, -1, -1)) {
@@ -956,6 +1106,77 @@ int _set_boot_loader(
 
 DWORD 
 WINAPI 
+_thread_format_proc(
+		LPVOID lparam
+	)
+{
+	int i = 0;
+	int rlt, wp_mode;
+
+	wchar_t device[MAX_PATH];
+	_dnode *node;
+	_dact *act;
+
+	dc_open_device( );
+	EnterCriticalSection(&crit_sect);
+
+	node = pv(lparam);
+	act = _create_act_thread(node, -1, -1);
+	if (!node || !act) return 0L;
+
+	wcscpy(device, act->device);
+
+	do {
+		if (act->status != ACT_RUNNING) break;
+		if (i-- == 0) {
+
+			dc_sync_enc_state(device); 
+			i = 20;
+
+		}
+		wp_mode = act->wp_mode;
+		LeaveCriticalSection(&crit_sect);
+
+		rlt = dc_format_step(device, wp_mode);
+		
+		EnterCriticalSection(&crit_sect);
+		if (rlt == ST_FINISHED) {
+
+			act->status = ACT_STOPPED;
+			break;
+
+		}
+		if ((rlt != ST_OK) && (rlt != ST_RW_ERR))
+		{
+			dc_status st;
+			dc_get_device_status(device, &st);
+
+			_error_s(
+					HWND_DESKTOP,
+					L"Format error on volume [%s]", 
+					rlt,
+					st.mnt_point
+				);
+			
+			act->status = ACT_STOPPED;
+			break;
+		}
+	} while (1);
+
+	if (rlt != ST_FINISHED) {
+		_finish_formating(node);
+	}
+
+	LeaveCriticalSection(&crit_sect);
+	dc_close_device( );
+
+	return 1L;
+
+}
+
+
+DWORD 
+WINAPI 
 _thread_enc_dec_proc(
 		LPVOID lparam
 	)
@@ -985,7 +1206,7 @@ _thread_enc_dec_proc(
 			i = 20;
 
 		}
-		encrypting = act->act == ACT_ENCRYPT;
+		encrypting = act->act != ACT_DECRYPT;
 		wp_mode = act->wp_mode;
 
 		LeaveCriticalSection(&crit_sect);
@@ -1005,14 +1226,19 @@ _thread_enc_dec_proc(
 		if ((rlt != ST_OK) && (rlt != ST_RW_ERR))
 		{
 			dc_status st;
-			dc_get_device_status(device, &st);
+			wchar_t *act_name;
 
+			dc_get_device_status(device, &st);
+			switch (act->act) {
+
+				case ACT_ENCRYPT: act_name = L"Encryption"; break;
+				case ACT_DECRYPT: act_name = L"Decryption"; break;
+				case ACT_REENCRYPT: act_name = L"Reencryption"; break;
+			}
 			_error_s(
 					HWND_DESKTOP,
 					L"%s error on volume [%s]", 
-					rlt,
-					act->act == ACT_ENCRYPT ? L"Encryption" : L"Decryption", 
-					st.mnt_point
+					rlt, act_name, st.mnt_point
 				);
 			
 			act->status = ACT_STOPPED;
@@ -1027,6 +1253,7 @@ _thread_enc_dec_proc(
 	return 1L;
 
 }
+
 
 void _clear_act_list( )
 {
@@ -1097,7 +1324,7 @@ _dact *_create_act_thread(
 			
 			act = malloc(sizeof(_dact));
 
-			act->wp_mode = node->mnt.info.status.wp_mode;
+			act->wp_mode = node->mnt.info.status.crypt.wp_mode;
 			act->last_size = node->mnt.info.status.tmp_size;
 			wcsncpy(act->device, node->mnt.info.device, MAX_PATH);
 
@@ -1114,9 +1341,17 @@ _dact *_create_act_thread(
 
 		if (ACT_RUNNING == act_status) 
 		{
+			void *proc;
 
+			switch (act_type) {
+				case ACT_REENCRYPT:
+				case ACT_ENCRYPT:
+				case ACT_DECRYPT:   proc = _thread_enc_dec_proc; break;
+				case ACT_FORMAT:    proc = _thread_format_proc;  break;
+				
+			}
 			act->thread = CreateThread(NULL, 0, 
-				_thread_enc_dec_proc, pv(node), CREATE_SUSPENDED, NULL);
+				proc, pv(node), CREATE_SUSPENDED, NULL);
 
 			SetThreadPriority(act->thread, THREAD_PRIORITY_LOWEST);
 			resume = ResumeThread(act->thread);
@@ -1140,28 +1375,139 @@ _dact *_create_act_thread(
 
 void _menu_encrypt(_dnode *node)
 {
-	int resl;
+	int rlt;
 
 	if (_create_act_thread(node, -1, -1) == 0)
 	{
-		resl = (int)DialogBoxParam(
-			__hinst, MAKEINTRESOURCE(IDD_WIZARD_ENCRYPT), __dlg, pv(_wizard_encrypt_dlg_proc), (LPARAM)node
-			);
+		node->dlg.act_type = ACT_ENCRYPT;
+
+		DialogBoxParam(__hinst, 
+			MAKEINTRESOURCE(IDD_WIZARD_ENCRYPT), __dlg, pv(_wizard_encrypt_dlg_proc), (LPARAM)node);
+
+		rlt = node->dlg.rlt;
+
 	} else {
-		resl = ST_OK;
+		rlt = ST_OK;
 	}
 	
-	if (resl == ST_CANCEL) {
-		return;
-	}
+	if (rlt == ST_CANCEL) return;
 
-	if (resl != ST_OK) {
-		_error_s(__dlg, L"Error start encrypt volume [%s]", resl, node->mnt.info.status.mnt_point);
+	if (rlt != ST_OK) {
+		_error_s(__dlg, L"Error start encrypt volume [%s]", rlt, node->mnt.info.status.mnt_point);
+
 	} else 
 	{
 		_create_act_thread(node, ACT_ENCRYPT, ACT_RUNNING);
 		SendMessage(GetDlgItem(__dlg, IDB_MAIN_ACTION), WM_LBUTTONDOWN, 0, 0);
 	}
+}
+
+
+void _menu_wizard(_dnode *node)
+{
+	wchar_t *s_act;
+	int rlt;
+
+	if (_create_act_thread(node, -1, -1) == 0)
+	{
+		node->dlg.act_type = -1;
+
+		DialogBoxParam(__hinst, 
+			MAKEINTRESOURCE(IDD_WIZARD_ENCRYPT), __dlg, pv(_wizard_encrypt_dlg_proc), (LPARAM)node);
+
+		rlt = node->dlg.rlt;
+
+	} else {
+		rlt = ST_OK;
+	}
+	
+	if (rlt == ST_CANCEL) return;
+
+	if (rlt != ST_OK) {
+		switch (node->dlg.act_type) {
+
+			case ACT_REENCRYPT: s_act = L"reencrypt"; break;
+			case ACT_ENCRYPT:   s_act = L"encrypt";   break;
+			case ACT_FORMAT:    s_act = L"format";    break;
+
+		};
+		_error_s(__dlg, L"Error start %s volume [%s]", rlt, s_act, node->mnt.info.status.mnt_point);
+
+	} else 
+	{
+		_create_act_thread(node, node->dlg.act_type, ACT_RUNNING);
+		SendMessage(GetDlgItem(__dlg, IDB_MAIN_ACTION), WM_LBUTTONDOWN, 0, 0);
+	}
+}
+
+
+void _menu_reencrypt(_dnode *node)
+{
+	int rlt;
+	node->dlg.act_type = ACT_REENCRYPT;
+
+	if (_create_act_thread(node, -1, -1) == 0 && 
+		!(node->mnt.info.status.flags & F_REENCRYPT))
+	{
+		DialogBoxParam(__hinst, 
+			MAKEINTRESOURCE(IDD_WIZARD_ENCRYPT), __dlg, pv(_wizard_encrypt_dlg_proc), (LPARAM)node);
+
+		rlt = node->dlg.rlt;
+
+	} else {
+		rlt = ST_OK;
+	}
+	
+	if (rlt == ST_CANCEL) return;
+
+	if (rlt != ST_OK) {
+		_error_s(__dlg, L"Error start reencrypt volume [%s]", rlt, node->mnt.info.status.mnt_point);
+
+	} else 
+	{
+		_create_act_thread(node, ACT_REENCRYPT, ACT_RUNNING);
+		SendMessage(GetDlgItem(__dlg, IDB_MAIN_ACTION), WM_LBUTTONDOWN, 0, 0);
+	}
+
+}
+
+
+void _menu_format(_dnode *node)
+{
+	int rlt;
+
+	node->dlg.act_type = ACT_FORMAT;
+	node->dlg.q_format = FALSE;
+
+	node->dlg.fs_name  = L"FAT32";
+
+	if (_create_act_thread(node, -1, -1) == 0 && 
+		!(node->mnt.info.status.flags & F_FORMATTING))
+	{
+		DialogBoxParam(__hinst, 
+			MAKEINTRESOURCE(IDD_WIZARD_ENCRYPT), __dlg, pv(_wizard_encrypt_dlg_proc), (LPARAM)node);
+
+		rlt = node->dlg.rlt;
+
+	} else {
+		rlt = ST_OK;
+	}
+	
+	if (rlt == ST_CANCEL) return;
+
+	if (rlt != ST_OK) {
+		_error_s(__dlg, L"Error start format volume [%s]", rlt, node->mnt.info.status.mnt_point);
+
+	} else 
+	{
+		if (node->dlg.q_format) _finish_formating(node);
+		else
+		{
+			_create_act_thread(node, ACT_FORMAT, ACT_RUNNING);
+			SendMessage(GetDlgItem(__dlg, IDB_MAIN_ACTION), WM_LBUTTONDOWN, 0, 0);
+		}
+	}
+
 }
 
 
@@ -1203,25 +1549,42 @@ void _menu_unmount(_dnode *node)
 
 void _menu_mount(_dnode *node)
 {
-	dlgpass dlg_info = { NULL, NULL, QR_MOUNT, node };
-	int     resl;
+	wchar_t mnt_point[MAX_PATH] = { 0 };
+	wchar_t vol[MAX_PATH];
 
-	resl = dc_mount_volume(node->mnt.info.device, "");
+	dlgpass dlg_info = { node, NULL, NULL, mnt_point };
 
-	if (resl != ST_OK) 
+	int rlt;
+	rlt = dc_mount_volume(node->mnt.info.device, "");
+
+	if (rlt != ST_OK) 
 	{
 		if (_dlg_get_pass(__dlg, &dlg_info) == ST_OK) 
 		{
-			resl = dc_mount_volume(node->mnt.info.device, dlg_info.pass);
+			rlt = dc_mount_volume(node->mnt.info.device, dlg_info.pass);
 			secure_free(dlg_info.pass);
 
-			if (resl != ST_OK) {
-				_error_s(__dlg, L"Error mount volume [%s]", resl, node->mnt.info.status.mnt_point);
+			if (rlt == ST_OK)
+			{						
+				if (mnt_point[0] != 0)
+				{
+					_snwprintf(vol, sizeof_w(vol), L"%s\\", node->mnt.info.w32_device);
+					_trailing_slash(mnt_point);
+
+					if (SetVolumeMountPoint(mnt_point, vol) == 0) {
+						_error_s(__dlg, L"Error when adding mount point", rlt);
+
+					}
+				}
+			} else 
+			{
+				_error_s(__dlg, L"Error mount volume [%s]", rlt, 
+					node->mnt.info.status.mnt_point);
 			}
 		}
 	}
 
-	if ( (resl == ST_OK) && (__config.conf_flags & CONF_EXPLORER_MOUNT) ) {
+	if ( (rlt == ST_OK) && (__config.conf_flags & CONF_EXPLORER_MOUNT) ) {
 		__execute(node->mnt.info.status.mnt_point);
 	}
 }
@@ -1229,18 +1592,19 @@ void _menu_mount(_dnode *node)
 
 void _menu_mountall()
 {
-	dlgpass dlg_info  = { NULL, NULL, QR_MOUNT, NULL };
+	dlgpass dlg_info  = { NULL, NULL, NULL, NULL };
 	int     mount_cnt = 0;	
 
-	dc_mount_all(NULL, &mount_cnt);
-
+	dc_mount_all(NULL, &mount_cnt); 
 	if (mount_cnt == 0) 
 	{
 		if (_dlg_get_pass(__dlg, &dlg_info) == ST_OK) 
 		{
 			dc_mount_all(dlg_info.pass, &mount_cnt);
 			secure_free(dlg_info.pass);
+
 			_msg_i(__dlg, L"Mounted devices: %d", mount_cnt);
+
 		}
 	}
 }
@@ -1263,13 +1627,13 @@ void _menu_unmountall()
 
 void _menu_change_pass(_dnode *node)
 {
-	dlgpass dlg_info = { NULL, NULL, QR_CHANGE_PASS, node };
+	dlgpass dlg_info = { node, NULL, NULL, NULL };
 	int     resl     = ST_ERROR;
 
-	if (_dlg_get_pass(__dlg, &dlg_info) == ST_OK) 
+	if (_dlg_change_pass(__dlg, &dlg_info) == ST_OK) 
 	{
 		resl = dc_change_password(
-			node->mnt.info.device, dlg_info.pass, dlg_info.new_pass
+			node->mnt.info.device, dlg_info.pass, dlg_info.new_pass, node->mnt.info.status.crypt.prf_id
 			);
 
 		secure_free(dlg_info.pass);
@@ -1294,7 +1658,7 @@ void _menu_clear_cache( )
 
 void _menu_update_volume(_dnode *node)
 {
-	dlgpass dlg_info = { NULL, NULL, QR_MOUNT, node };
+	dlgpass dlg_info = { node, NULL, NULL, NULL };
 	sh_data shd;
 	int     resl;
 	
@@ -1313,6 +1677,90 @@ void _menu_update_volume(_dnode *node)
 		} else {
 			_msg_i(__dlg, L"Volume [%s] successfully updated\n", node->mnt.info.status.mnt_point);
 		}
+	}
+}
+
+void _menu_backup_header(_dnode *node)
+{
+	dlgpass dlg_info = { node, NULL, NULL, NULL };
+	BYTE backup[SECTOR_SIZE];
+
+	wchar_t path[MAX_PATH];
+	int rlt = _dlg_get_pass(__dlg, &dlg_info);
+
+	if (rlt == ST_OK) {
+
+		rlt = dc_backup_header(node->mnt.info.device, dlg_info.pass, backup);
+		secure_free(dlg_info.pass);
+
+		if (rlt == ST_OK) {
+
+			OPENFILENAME ofn = { sizeof(ofn), __dlg };
+			_snwprintf(path, sizeof_w(path), L"%s.bin", wcsrchr(node->mnt.info.device, '\\')+1);
+
+			ofn.lpstrFile = path;
+			ofn.nMaxFile = sizeof_w(path);
+
+			ofn.lpstrTitle = L"Save backup volume header to file";
+			ofn.FlagsEx = OFN_EX_NOPLACESBAR;
+
+			if (GetSaveFileName(&ofn)) {
+				rlt = save_file(path, backup, sizeof(backup));
+
+			} else return;
+		}
+	} else return;
+	if (rlt == ST_OK) {
+
+		_msg_i(__dlg, L"Volume header backup successfully saved to\n\"%s\"", path);
+	} else {
+		_error_s(__dlg, L"Error save volume header backup", rlt);
+	}
+}
+
+
+void _menu_restore_header(_dnode *node)
+{
+	dlgpass dlg_info = { node, NULL, NULL, NULL };
+
+	BYTE backup[SECTOR_SIZE];
+	HANDLE hfile;
+
+	wchar_t path[MAX_PATH] = { 0 };
+	int rlt = ST_ERROR;
+	int bytes;
+
+	OPENFILENAME ofn = { sizeof(ofn), __dlg };
+
+	ofn.lpstrFile = path;
+	ofn.nMaxFile = sizeof_w(path);
+
+	ofn.lpstrTitle = L"Open backup volume header";
+	ofn.FlagsEx = OFN_EX_NOPLACESBAR;
+
+	if (GetOpenFileName(&ofn)) {
+		
+		hfile = CreateFile(path, GENERIC_READ, 
+			FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+
+		if (hfile != INVALID_HANDLE_VALUE) {
+
+			ReadFile(hfile, backup, sizeof(backup), &bytes, NULL);
+			CloseHandle(hfile);
+
+			if (_dlg_get_pass(__dlg, &dlg_info) == ST_OK) {
+
+				rlt = dc_restore_header(node->mnt.info.device, dlg_info.pass, backup);
+				secure_free(dlg_info.pass);
+
+			} else return;
+		} else rlt = ST_NF_FILE;
+	} else return;
+
+	if (rlt == ST_OK) {
+		_msg_i(__dlg, L"Volume header successfully restored from\n\"%s\"", path);
+	} else {
+		_error_s(__dlg, L"Error restore volume header from backup", rlt);
 	}
 }
 
@@ -1389,7 +1837,7 @@ int _drv_action(
 					up_atom, sizeof_w(up_atom), L"DC_UPD_%d", version
 					);
 
-				if (GlobalFindAtom(up_atom) != 0) 
+				if (GlobalFindAtom(up_atom) != 0)
 				{
 					if (_msg_q(HWND_DESKTOP, restart_confirm)) _reboot( );
 					resl = ST_OK; break;

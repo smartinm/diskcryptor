@@ -22,48 +22,11 @@
 #include <ntifs.h>
 #include <ntdddisk.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include "defines.h"
 #include "driver.h"
 #include "misc.h"
 #include "devhook.h"
 #include "fastmem.h"
-
-#ifdef DBG_COM
-
-#define   DEFAULT_BAUD_RATE    115200
-#define   SER_RBR(x)   ((x)+0)
-#define   SER_THR(x)   ((x)+0)
-#define   SER_DLL(x)   ((x)+0)
-#define   SER_IER(x)   ((x)+1)
-#define   SER_DLM(x)   ((x)+1)
-#define   SER_IIR(x)   ((x)+2)
-#define   SER_LCR(x)   ((x)+3)
-#define   SR_LCR_CS5 0x00
-#define   SR_LCR_CS6 0x01
-#define   SR_LCR_CS7 0x02
-#define   SR_LCR_CS8 0x03
-#define   SR_LCR_ST1 0x00
-#define   SR_LCR_ST2 0x04
-#define   SR_LCR_PNO 0x00
-#define   SR_LCR_POD 0x08
-#define   SR_LCR_PEV 0x18
-#define   SR_LCR_PMK 0x28
-#define   SR_LCR_PSP 0x38
-#define   SR_LCR_BRK 0x40
-#define   SR_LCR_DLAB 0x80
-#define   SER_MCR(x)   ((x)+4)
-#define   SR_MCR_DTR 0x01
-#define   SR_MCR_RTS 0x02
-#define   SER_LSR(x)   ((x)+5)
-#define   SR_LSR_DR  0x01
-#define   SR_LSR_TBE 0x20
-#define   SER_MSR(x)   ((x)+6)
-#define   SR_MSR_CTS 0x10
-#define   SR_MSR_DSR 0x20
-#define   SER_SCR(x)   ((x)+7)
-#define   COM_BASE (0x3F8)
-#endif
 
 NTSTATUS 
   io_device_control(
@@ -172,9 +135,7 @@ HANDLE io_open_volume(wchar_t *dev_name)
 	HANDLE            handle;
 	NTSTATUS          status;
 
-	RtlInitUnicodeString(
-		&u_name, dev_name
-		);
+	RtlInitUnicodeString(&u_name, dev_name);
 
 	InitializeObjectAttributes(
 		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL
@@ -215,7 +176,7 @@ int io_verify_hook_device(dev_hook *hook)
 }
 
 NTSTATUS io_device_rw_block(
-			dev_hook *hook, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
+			PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
 			)
 {
 	IO_STATUS_BLOCK io_status;
@@ -223,13 +184,14 @@ NTSTATUS io_device_rw_block(
 	PIRP            irp;
 	KEVENT          sync_event;
 	void           *new_buf;
+	LARGE_INTEGER   time;
+	u32             timeout;
 	
 	new_buf = NULL;
 	do
 	{
 		KeInitializeEvent(
-			&sync_event, NotificationEvent,  FALSE
-			);
+			&sync_event, NotificationEvent,  FALSE);
 
 		/* process IO with new memory buffer because 
 		   IoBuildSynchronousFsdRequest fails for some system buffers   
@@ -242,9 +204,20 @@ NTSTATUS io_device_rw_block(
 			fastcpy(new_buf, buff, size);
 		}
 
-		irp = IoBuildSynchronousFsdRequest(
-			func, hook->orig_dev, new_buf, size, pv(&offset), &sync_event, &io_status
-			);
+		time.QuadPart = DC_MEM_RETRY_TIME * -10000;
+		timeout       = DC_MEM_RETRY_TIMEOUT;
+		do
+		{
+			irp = IoBuildSynchronousFsdRequest(
+				func, device, new_buf, size, pv(&offset), &sync_event, &io_status);
+
+			if (irp != NULL) {
+				break;
+			}
+
+			KeDelayExecutionThread(KernelMode, FALSE, &time);
+			timeout -= DC_MEM_RETRY_TIME;
+		} while (timeout != 0);
 
 		if (irp == NULL) {
 			status = STATUS_INSUFFICIENT_RESOURCES; break;
@@ -252,7 +225,7 @@ NTSTATUS io_device_rw_block(
 
 		IoGetNextIrpStackLocation(irp)->Flags |= io_flags;
 
-		status = IoCallDriver(hook->orig_dev, irp);
+		status = IoCallDriver(device, irp);
 
 		if (status == STATUS_PENDING) {
 			wait_object_infinity(&sync_event);
@@ -307,7 +280,7 @@ int dc_device_rw(
 		blen = min(size, max_trans);
 		
 		status = io_device_rw_block(
-			hook, function, buff, blen, offset, 0
+			hook->orig_dev, function, buff, blen, offset, 0
 			);
 
 		if (NT_SUCCESS(status) == FALSE)
@@ -326,7 +299,7 @@ int dc_device_rw(
 				}
 				
 				status = io_device_rw_block(
-					hook, function, buff, blen, offset, SL_OVERRIDE_VERIFY_VOLUME
+					hook->orig_dev, function, buff, blen, offset, SL_OVERRIDE_VERIFY_VOLUME
 					);
 
 				if (NT_SUCCESS(status) == FALSE) {				
@@ -574,7 +547,7 @@ int dc_get_mount_point(
 	if (NT_SUCCESS(status) != FALSE) 
 	{
 		if (name.Length < length) {
-			memcpy(buffer, name.Buffer, name.Length);
+			mincpy(buffer, name.Buffer, name.Length);
 			buffer[name.Length >> 1] = 0; 
 			resl = ST_OK;
 		} 
@@ -584,65 +557,45 @@ int dc_get_mount_point(
 	return resl;
 }
 
-#ifdef DBG_COM
-
-void dc_com_dbg_init()
+void *dc_map_mdl_with_retry(PMDL mdl)
 {
-	u32 divisor;
-	u8  lcr;
-	
-	/* set baud rate and data format (8N1) */
+	LARGE_INTEGER time;
+	void         *mem;
+	u32           timeout;
 
-	/*  turn on DTR and RTS  */
-    WRITE_PORT_UCHAR(pv(SER_MCR(COM_BASE)), SR_MCR_DTR | SR_MCR_RTS);
+	time.QuadPart = DC_MEM_RETRY_TIME * -10000; 
+	timeout       = DC_MEM_RETRY_TIMEOUT;
+	do
+	{
+		if (mem = MmGetSystemAddressForMdlSafe(mdl, HighPagePriority)) {
+			break;
+		}
 
-	/* set DLAB */
-    lcr = READ_PORT_UCHAR(pv(SER_LCR(COM_BASE))) | SR_LCR_DLAB;
-    WRITE_PORT_UCHAR(pv(SER_LCR(COM_BASE)), lcr);
+		KeDelayExecutionThread(KernelMode, FALSE, &time);
+		timeout -= DC_MEM_RETRY_TIME;
+	} while (timeout != 0);
 
-	/* set baud rate */
-    divisor = 115200 / DEFAULT_BAUD_RATE;
-    WRITE_PORT_UCHAR(pv(SER_DLL(COM_BASE)), divisor & 0xff);
-    WRITE_PORT_UCHAR(pv(SER_DLM(COM_BASE)), (divisor >> 8) & 0xff);
-
-	/* reset DLAB and set 8N1 format */
-    WRITE_PORT_UCHAR(pv(SER_LCR(COM_BASE)), 
-		SR_LCR_CS8 | SR_LCR_ST1 | SR_LCR_PNO);
-
-	/* read junk out of the RBR */
-	READ_PORT_UCHAR(pv(SER_RBR(COM_BASE)));
+	return mem;
 }
 
-void com_putchar(char ch) 
+PMDL dc_allocate_mdl_with_retry(void *data, u32 size)
 {
-	if (ch == '\n') {
-		com_putchar('\r');
-	}
+	LARGE_INTEGER time;
+	PMDL          mdl;
+	u32           timeout;
 
-	while ((READ_PORT_UCHAR (pv(SER_LSR(COM_BASE))) & SR_LSR_TBE) == 0);
+	time.QuadPart = DC_MEM_RETRY_TIME * -10000; 
+	timeout       = DC_MEM_RETRY_TIMEOUT;
 
-	WRITE_PORT_UCHAR(pv(SER_THR(COM_BASE)), ch);
+	do
+	{
+		if (mdl = IoAllocateMdl(data, size, FALSE, FALSE, NULL)) {
+			break;
+		}
+
+		KeDelayExecutionThread(KernelMode, FALSE, &time);
+		timeout -= DC_MEM_RETRY_TIME;
+	} while (timeout != 0);
+
+	return mdl;
 }
-
-void com_print(char *format, ...)
-{
-	char    dbg_msg[MAX_PATH];
-	char   *msg = dbg_msg;
-	va_list args;
-
-	va_start(args, format);
-
-	_vsnprintf(
-		dbg_msg, 
-		sizeof(dbg_msg), 
-		format, 
-		args
-		);
-
-	va_end(args);
-
-	while (*msg) {
-		com_putchar(*msg++);
-	}	
-}
-#endif

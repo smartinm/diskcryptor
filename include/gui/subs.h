@@ -38,8 +38,7 @@ void *_extract_rsrc(
 		int *size
 	);
 
-void _no_trailing_slash(char *path);
-
+void _trailing_slash(wchar_t *path);
 void _reboot( );
 
 #endif

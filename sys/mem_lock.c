@@ -42,7 +42,9 @@ int dc_lock_mem(void *mem, u32 size, void *f_obj)
 		{
 			MmProbeAndLockPages(mdl, UserMode, IoModifyAccess);
 			locked = 1;
-			k_map  = MmMapLockedPages(mdl, KernelMode);			
+			k_map  = MmMapLockedPagesSpecifyCache(
+				mdl, KernelMode, MmNonCached, NULL, FALSE, HighPagePriority
+				);
 		} 
 		__except(EXCEPTION_EXECUTE_HANDLER) {
 			k_map = NULL;

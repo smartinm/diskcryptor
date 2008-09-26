@@ -4,7 +4,6 @@
 //
 #define IDR_MBR                         139
 #define IDR_DCLDR                       140
-#define IDR_FATBOOT                     141
 
 // Next default values for new objects
 // 

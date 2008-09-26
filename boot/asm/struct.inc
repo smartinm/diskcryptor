@@ -49,19 +49,26 @@ struct rm_ctx
   es	 dw ?
 ends
 
+struct ldr_info
+ password  rb 65  ; bootauth password
+ends
+
 struct rb_data
   sign1     dd 0FE0AC0AAh ; 01F53F55h
   sign2     dd 061BC9E1Bh ; 9E4361E4h
+  sign3     dd 013B3F73Dh
+  rb_base   dd ?     ; real mode block base
+  rb_size   dd ?     ; real mode block size (including 4kb for stack)
+  pm_base   dd ?     ; pmode image base
+  pm_size   dd ?     ; pmode image size
+  info	    ldr_info
+  ; volatile data
   ret_32    dd ?   ; return address for RM <-> PM jump
-  esp_16    dd ?   ; real mode stack
+  sp_16     dw ?   ; real mode stack
   ss_16     dw ?   ; real mode ss
   esp_32    dd ?   ; pmode stack
-  rb_base   dd ?   ; real mode block base
-  rb_size   dd ?   ; real mode block size (including 4kb for stack)
-  rb_code   dd ?   ; real mode block code area
-  pm_base   dd ?   ; pmode image base
-  pm_size   dd ?   ; pmode image size
   segoff    dd ?   ; real mode call seg/off
+  jump_rm   dd ?   ; real mode jump proc
   call_rm   dd ?   ; real mode call proc
   hook_ints dd ?   ; hook interrupts proc
   int_cbk   dd ?   ; protected mode callback
@@ -70,4 +77,6 @@ struct rb_data
   old_int15 dd ?   ; old int15 handler
   old_int13 dd ?   ; old int13 handler
   rmc	    rm_ctx ; real mode call context
+  push_fl   dw ?   ; flags pushed to stack
+  buff	    rb 32  ; 32 bytes buffer
 ends

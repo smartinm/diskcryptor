@@ -22,6 +22,14 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dcrypt", "gui\gui.vcproj", 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "diskspeed", "diskspeed\diskspeed.vcproj", "{8582099F-E68B-4321-8A2D-A0D5297D79D7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "includes", "includes", "{25A1B58C-D283-4D72-B793-1B883D48D756}"
+	ProjectSection(SolutionItems) = preProject
+		include\cryptodef.h = include\cryptodef.h
+		include\defines.h = include\defines.h
+		include\version.h = include\version.h
+		include\volume.h = include\volume.h
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,15 +39,14 @@ Global
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Debug|Win32.ActiveCfg = Debug|Win32
-		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Debug|Win32.Build.0 = Debug|Win32
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Debug|x64.ActiveCfg = Debug|x64
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Debug|x64.Build.0 = Debug|x64
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Release|Win32.ActiveCfg = Release|Win32
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Release|Win32.Build.0 = Release|Win32
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Release|x64.ActiveCfg = Release|x64
 		{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}.Release|x64.Build.0 = Release|x64
-		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|Win32.ActiveCfg = Debug|Win32
-		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|Win32.Build.0 = Debug|Win32
+		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|Win32.ActiveCfg = Release|Win32
+		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|Win32.Build.0 = Release|Win32
 		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|x64.ActiveCfg = Release|Win32
 		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Debug|x64.Build.0 = Release|Win32
 		{D3C7A4A4-64B2-4642-86DB-D9782F78CC1A}.Release|Win32.ActiveCfg = Release|Win32

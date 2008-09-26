@@ -39,7 +39,7 @@ start:
  xor   ax, ax
  mov   ds, ax
  mov   ss, ax
- mov   sp, 7BF0h
+ mov   sp, 4000h
  sti
  ; read stage1 code to 2000:0
  call  read_sectors

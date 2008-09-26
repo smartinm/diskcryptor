@@ -10,12 +10,18 @@
 #define IDS_ENCRYPT			   L"Encrypt"
 #define IDS_DECRYPT			   L"Decrypt"
 
-#define IDS_CHPASS			   L"Change Pasword"
+#define IDS_FORMAT         L"Format"
+#define IDS_REENCRYPT      L"Reencrypt"
+
+#define IDS_CHPASS			   L"Change Password"
 #define IDS_UPD_VOL        L"Update to last volume format"
 
-#define IDS_BOOTINSTALL    L"Install Bootloader"
-#define IDS_BOOTREMOVE     L"Remove Bootloader"
-#define IDS_BOOTUPDATE     L"Update Bootloader"
+#define IDS_BOOTINSTALL    L"Install Loader"
+#define IDS_BOOTREMOVE     L"Remove Loader"
+#define IDS_BOOTCREATE     L"Create Loader"
+#define IDS_SAVECHANGES    L"Save Changes"
+
+#define IDS_BOOTUPDATE     L"Update Loader"
 #define IDS_BOOTCHANGECGF  L"Change Config"
 
 #define IDS_MOUNTALL       L"Mount All"
@@ -41,7 +47,6 @@
 #define WM_APP_TRAY           1
 #define WM_APP_SHOW           2
 #define WM_APP_FILE           3
-#define WM_APP_CHANGE_CONFIG  4 
 
 #define MAX_PASS		          64
 #define WM_THEMECHANGED       794
@@ -52,6 +57,10 @@
 #define CL_BLUE               RGB(0,0,255)
 #define CL_GREEN              RGB(0,255,0)
 #define CL_RED                RGB(255,0,0)
+
+#define CL_WARNING            RGB(218,18,18)
+#define CL_WARNING_BG         RGB(255,170,160)
+#define CL_WARNING_BG_LT      RGB(255,215,215)
 
 #define PRG_STEP				      9000
 
@@ -81,22 +90,27 @@ typedef struct __wnd_data {
 	BOOL state;
 	UINT vk;
 	HWND dlg;
+	void *data;
+
 } _wnd_data, *_pwnd_data;
 
 typedef struct __tab_data {
 	HWND curr;
 	HWND active;
+
 } _tab_data;
 
 typedef struct __static_view {	
 	int id;
 	HWND hwnd;
 	COLORREF color;
+
 } _static_view;
 
 typedef struct __combo_list {
 	int val;
 	wchar_t *display;
+
 } _combo_list;
 
 typedef struct __ctl_init {
@@ -105,9 +119,28 @@ typedef struct __ctl_init {
 	int val;
 } _ctl_init;
 
+typedef struct __wz_sheets {
+	int id;
+	HWND hwnd;
+	BOOL show;
+} _wz_sheets;
+
+#define WPAGE_ENC_TYPE      0x0000
+#define WPAGE_ENC_FRMT      0x0001
+#define WPAGE_ENC_CONF      0x0002
+#define WPAGE_ENC_BOOT      0x0003
+#define WPAGE_ENC_PASS      0x0004
+
+#define CTL_LDR_MBR         0x0000
+#define CTL_LDR_STICK       0x0001
+#define CTL_LDR_ISO         0x0002
+#define CTL_LDR_PXE         0x0003
+
 extern colinfo _main_headers[ ];
 extern colinfo _boot_headers[ ];
+
 extern colinfo _part_by_id_headers[ ];
+extern colinfo _benchmark_headers[ ];
 
 extern _combo_list wipe_modes[ ];
 extern _combo_list kb_layouts[ ];
@@ -120,6 +153,12 @@ extern _combo_list auth_tmount[ ];
 
 extern _combo_list bad_pass_act[ ];
 extern _combo_list auth_type[ ];
+
+extern _combo_list cipher_names[ ];
+extern _combo_list mode_names[ ];
+
+extern _combo_list prf_names[ ];
+extern _combo_list loader_type[ ];
 
 extern wchar_t *_info_table_items[ ];
 extern wchar_t *_act_table_items[ ];
@@ -158,6 +197,10 @@ BOOL _list_insert_col(
 		int cx
 	);
 
+void _init_mount_points(
+		HWND hwnd
+	);
+
 LPARAM _get_item_index(
 		HWND hlist,
 		int index
@@ -171,10 +214,28 @@ BOOL _ui_init(HINSTANCE hinst);
 void __unsub_class(HWND hwnd);
 void _draw_static(LPDRAWITEMSTRUCT itst);
 
+BOOL _folder_choice(
+		HWND hwnd, 
+		wchar_t *path, 
+		wchar_t *title
+	);
+
 char *_get_item (
 		HWND hlist,
 		DWORD item,
 		DWORD subitem
+	);
+
+void _relative_move(
+		HWND h_anchor,
+		HWND h_child,
+		int dy,
+		int dx
+	);
+
+void _relative_rect(
+		HWND hwnd,
+		RECT *rc
 	);
 
 BOOL _input_verify(
@@ -291,10 +352,8 @@ void _init_list_headers(
 		colinfo *cols
 	);
 
-int _get_combo_val(
-		HWND hwnd, 
-		_combo_list *list
-	);
+int _get_combo_val(HWND hwnd, _combo_list *list);
+wchar_t *_get_text_name(int val, _combo_list *list);
 
 extern HINSTANCE __hinst;
 
@@ -304,6 +363,7 @@ extern HFONT __font_small;
 
 extern HCURSOR __cur_hand;
 extern HCURSOR __cur_arrow;
+extern HCURSOR __cur_wait;
 
 extern HIMAGELIST __img;
 extern HIMAGELIST __dsk_img;

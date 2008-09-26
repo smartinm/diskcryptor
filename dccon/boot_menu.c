@@ -22,11 +22,11 @@
 #include <stdio.h>
 #include <conio.h>
 #include "defines.h"
-#include "..\sys\driver.h"
-#include "..\boot\boot.h"
 #include "main.h"
-#include "misc.h"
-#include "mbrinst.h"
+#include "sys\driver.h"
+#include "boot\boot.h"
+#include "dcapi\misc.h"
+#include "dcapi\mbrinst.h"
 
 static int onoff_req()
 {
@@ -130,7 +130,7 @@ static void menu_0_1(ldr_config *conf)
 				set_flag(conf->logon_type, LT_GET_PASS, 0);
 				secure_free(pass);
 			} else {
-				zeromem(conf->pass_buf, sizeof(conf->pass_buf));
+				zeroauto(conf->pass_buf, sizeof(conf->pass_buf));
 				set_flag(conf->logon_type, LT_GET_PASS, 1);
 			}
 		}

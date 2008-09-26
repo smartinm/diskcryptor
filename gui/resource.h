@@ -6,7 +6,7 @@
 #define IDOK3                           2
 #define IDB_                            2
 #define IDOK2                           3
-#define DC_MINOR_VER                    3
+#define DC_MINOR_VER                    4
 #define IDCANCEL2                       4
 #define IDC_BTN_MOUNTALL                4
 #define IDB_MAIN_ACTION                 4
@@ -21,12 +21,14 @@
 #define IDC_BTN_MOUNTALL_               8
 #define IDC_BTN_ENCRYPT4                9
 #define IDC_BTN_UNMOUNTALL_             9
+#define DC_BOOT_VER                     69
 #define IDD_MAIN_DLG                    101
 #define IDS_STRING102                   102
 #define IDC_DISKDRIVES                  104
 #define IDC_DISKDRIVES_                 105
 #define IDR_MENU                        106
 #define IDD_DIALOG_PASS                 107
+#define IDD_DIALOG_CHANGE_PASS          108
 #define IDD_DIALOG1                     111
 #define IDB_CHECK                       116
 #define IDB_CHECK_MASK                  117
@@ -69,6 +71,9 @@
 #define DLG_BOOT_CONF_LOGON             164
 #define DLG_BOOT_CONF_BADPASS           165
 #define IDD_DIALOG_ABOUT                166
+#define IDD_DIALOG_BENCHMARK            167
+#define DLG_WIZ_TYPE                    170
+#define DLG_WIZ_FORMAT                  171
 #define IDC_DRIVER_VER                  206
 #define IDB_PREF_GENERAL                305
 #define IDB_PREF_HOTKEYS                306
@@ -100,6 +105,7 @@
 #define IDC_PAGE1                       332
 #define IDC_GR_ALL                      333
 #define IDC_HEAD_RATING                 334
+#define IDC_HEAD_MNT_POINT              335
 #define IDC_EDIT1                       1010
 #define IDC_EDIT_NOTICE                 1010
 #define IDC_LIST3                       1011
@@ -119,9 +125,12 @@
 #define IDC_NEW_PASS                    1025
 #define IDC_PASS                        1026
 #define IDC_STATIC_SECTOR               1027
+#define IDC_PASS2                       1027
+#define IDC_MNT_POINT                   1027
 #define IDC_STATIC_CONFIRM              1028
 #define IDC_NEW_CONFIRM                 1029
 #define IDC_EDIT_PASS                   1030
+#define IDC_NEW_CONFIRM2                1030
 #define IDC_EDIT_CONFIRM                1031
 #define IDE_PASS                        1032
 #define IDC_CHECK_SHOW                  1033
@@ -140,6 +149,7 @@
 #define IDC_BTN_MOUNT                   1046
 #define IDB_MAIN_INFO                   1047
 #define IDC_BTN_MOUNT2                  1048
+#define IDC_BTN_INSTALL                 1048
 #define IDC_CHECK1                      1049
 #define IDC_CHECK2                      1050
 #define IDC_CHECK3                      1051
@@ -159,8 +169,11 @@
 #define IDC_STATIC_KEY_WIPE             1078
 #define IDC_STATIC_KEY_BSOD             1079
 #define IDC_RADIO1                      1081
+#define IDC_RADIO_ENCRYPT               1081
 #define IDC_NEXT                        1082
+#define IDC_RADIO_REENCRYPT             1082
 #define IDC_BACK                        1083
+#define IDC_RADIO_FORMAT                1083
 #define IDC_BACK2                       1084
 #define IDC_LT_MESSAGE                  1085
 #define IDC_BT_LIST                     1088
@@ -175,6 +188,7 @@
 #define IDC_COMBO_MODE2                 1098
 #define IDC_STATIC_SELECT_PART          1099
 #define IDC_HEAD_CURRENT                1100
+#define IDC_HEAD_PASS                   1100
 #define IDC_HEAD_NEW                    1101
 #define IDC_COMBO_BOOT_INST             1102
 #define IDC_BOOT_DEVS                   1103
@@ -188,6 +202,7 @@
 #define IDC_PE_NONE                     1115
 #define IDE_CONFIRM                     1116
 #define IDC_LAUOUTS_LIST                1117
+#define IDC_LAYOUTS_LIST                1117
 #define IDC_GR_CAPS                     1118
 #define IDC_GR_SMALL                    1119
 #define IDC_GR_DIGITS                   1120
@@ -234,6 +249,7 @@
 #define IDC_CNT_BOOTMSG2                1163
 #define IDC_CNT_ERRMSG                  1163
 #define IDC_HEAD1                       1164
+#define IDC_BTN_WIZARD                  1164
 #define IDC_HEAD2                       1165
 #define IDC_ICON_MAIN                   1165
 #define IDC_HEAD3                       1166
@@ -244,6 +260,18 @@
 #define IDC_SPEED                       1170
 #define IDC_DRIVES_HEAD                 1171
 #define IDC_BT_ACTION_NOPASS            1172
+#define IDC_LIST_BENCHMARK              1173
+#define IDB_REFRESH_TEST                1174
+#define IDC_PAGE0                       1176
+#define IDC_PAGE0_                      1177
+#define IDC_COMBO_FS_LIST               1178
+#define IDC_CHECK_QUICK_FORMAT          1179
+#define IDC_HEAD                        1180
+#define IDC_COMBO_MNPOINT               1181
+#define IDC_CHECK_MNT_SET               1184
+#define IDC_COMBO_PRF                   1185
+#define IDC_BTN_CHANGE_CONF             1187
+#define IDC_BTN_UPDATE                  1188
 #define ID_FILE_EXIT                    40001
 #define ID_VOLUMES_ENCRYPT              40002
 #define ID_VOLUMES_DECRYPT              40003
@@ -303,14 +331,24 @@
 #define ID_POPUP_UPDATETOLASTVOLUMEFORMAT 40059
 #define ID_VOL_UPDATETOLASTVOLUMEFORMAT 40060
 #define ID_VOLUMES_UPDATE               40061
+#define ID_TOOLS_DF                     40062
+#define ID_TOOLS_BENCHMARK              40063
+#define ID_VOLUMES_FORMATVOLUME         40064
+#define ID_VOLUMES_FORMAT               40065
+#define ID_VOLUMES_REENCRYPTVOLUME      40066
+#define ID_VOLUMES_REENCRYPT            40067
+#define ID_VOLUMES_ADDMOUNTPOINT        40068
+#define ID_VOLUMES_ADDMOUNTPOINT40069   40069
+#define ID_VOLUMES_DELETE_MNTPOINT      40070
+#define ID_VOLUMES_ADD_MNTPOINT         40071
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        170
-#define _APS_NEXT_COMMAND_VALUE         40062
-#define _APS_NEXT_CONTROL_VALUE         1173
+#define _APS_NEXT_RESOURCE_VALUE        172
+#define _APS_NEXT_COMMAND_VALUE         40072
+#define _APS_NEXT_CONTROL_VALUE         1189
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

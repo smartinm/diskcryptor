@@ -524,10 +524,6 @@
 			>
 		</File>
 		<File
-			RelativePath="..\boot\bin\fat_boot.bin"
-			>
-		</File>
-		<File
 			RelativePath="..\boot\bin\mbr_boot.bin"
 			>
 		</File>

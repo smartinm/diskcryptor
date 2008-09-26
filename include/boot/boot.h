@@ -1,18 +1,12 @@
 #ifndef _BOOT_
 #define _BOOT_
 
-#ifndef _M_X64
- #pragma warning(disable:4142)
- typedef unsigned long size_t;
- #pragma warning(default:4142)
-#endif
-
 #include "defines.h"
 #include "version.h"
-#include "..\sys\driver.h"
+#include "volume.h"
 #include "bios.h"
 
-#define MEM_MAX 1024 * 16 /* maximum bootloader memory */
+#define MAX_MOUNT 16
 
 #define LT_GET_PASS  1 /* entering password needed       */
 #define LT_MESSAGE   2 /* display enter password message */

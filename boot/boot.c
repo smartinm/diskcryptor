@@ -43,7 +43,7 @@ ldr_config conf = {
 	0 /* timeout */
 };
 
-u8 boot_dsk;
+u8  boot_dsk;
 
 int on_int13(rm_ctx *ctx)
 {
@@ -94,7 +94,7 @@ int on_int13(rm_ctx *ctx)
 			if (lba != NULL) {
 				lba->numb = numb;
 			} else {
-				ctx->al = (u8)numb;
+				ctx->al = d8(numb);
 			}
 		} else {
 			ctx->efl |= FL_CF;
@@ -158,14 +158,10 @@ static int dc_get_password()
 			if (pos > 0) 
 			{
 				if (conf.logon_type & LT_DSP_PASS) {
-					_putch(8);
+					puts("\x8 \x8");
 				}
 				conf.pass_buf[--pos] = 0;
-			}
-
-			if (conf.logon_type & LT_DSP_PASS) { 
-				setchar(' ');
-			}
+			}			
 			continue;
 		}
 
@@ -195,70 +191,27 @@ ep_exit:;
 
 	/* clear BIOS keyboard buffer to prevent password leakage */
 	/* see http://www.ouah.org/Bios_Information_Leakage.txt for more details */
-	zeromem(pv(0x41E), 32);
+	zeroauto(pv(0x41E), 32);
 
 	return (pos != 0);
 }
 
-static int dc_decrypt_header(
-			  dc_header *header, s8 *pass
-			  )
-{
-	dc_header hcopy;
-	u8        dk[DISKKEY_SIZE];
-	aes_key   hdr_key;
-	int       succs  = 0;
-	
-	/* copy header to temp buffer */
-	memcpy(&hcopy, header, sizeof(dc_header));
-
-	/* try to decrypt header */
-	sha1_pkcs5_2(
-		pass, strlen(pass), 
-		hcopy.salt,
-		PKCS5_SALT_SIZE, 
-		2000, dk, 
-		DISK_IV_SIZE + MAX_KEY_SIZE
-		);
-		
-	aes_lrw_init_key(
-		&hdr_key, dk + DISK_IV_SIZE, dk
-		);
-
-	aes_lrw_decrypt(
-		pv(&hcopy.sign),
-		pv(&hcopy.sign),
-		HEADER_ENCRYPTEDDATASIZE,
-		0, &hdr_key
-		);
-
-	/* Magic 'TRUE' */
-	if ( (hcopy.sign == DC_TRUE_SIGN) || (hcopy.sign == DC_DTMP_SIGN) ) {
-		/* copy decrypted header to out */
-		memcpy(header, &hcopy, sizeof(dc_header));
-		succs = 1;
-	}
-	
-	/* prevent leaks */
-	zeromem(dk,       sizeof(dk));
-	zeromem(&hcopy,   sizeof(hcopy));
-	zeromem(&hdr_key, sizeof(hdr_key));
-
-	return succs;
-}
 
 static int dc_mount_parts()
 {
-	dc_header   header;
-	list_entry *entry;
-	prt_inf    *prt;
-	int         n_mount;
+	dc_header    *header  = pv(0x5000); /* free memory location */
+	dc_key       *hdr_key = pv(0x5000 + sizeof(dc_header));
+	crypt_info    crypt;
+	list_entry   *entry;
+	prt_inf      *prt;
+	dc_key       *d_key, *o_key;
+	int           n_mount;
 
 	/* mount partitions on all disks */
 	n_mount = 0;
 	entry   = prt_head.flink;
 
-	while (entry != &prt_head)
+	while ( (entry != &prt_head) && (n_mount < MAX_MOUNT) )
 	{
 		prt   = contain_record(entry, prt_inf, entry_glb);
 		entry = entry->flink;
@@ -266,42 +219,62 @@ static int dc_mount_parts()
 		do
 		{
 			/* read volume header */
-			if (dc_partition_io(prt, &header, 1, 0, 1) == 0) {					
+			if (dc_partition_io(prt, header, 1, 0, 1) == 0) {					
 				break;
-			}	
+			}
 
-			if (dc_decrypt_header(&header, conf.pass_buf) == 0) 
+			if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) 
 			{
 				/* probe mount volume with backup header */
-				if (dc_partition_io(prt, &header, 1, prt->size - 2, 1) == 0) {					
+				if (dc_partition_io(prt, header, 1, prt->size - 2, 1) == 0) {					
 					break;
 				}
 
-				if (dc_decrypt_header(&header, conf.pass_buf) == 0) {
+				if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) {
 					break;
 				}
 			}
 
-			if ( (prt->flags = header.flags) & VF_TMP_MODE )
-			{
-				prt->tmp_size     = header.tmp_size / SECTOR_SIZE;
-				prt->tmp_save_off = header.tmp_save_off / SECTOR_SIZE;
+			prt->disk_id = header->disk_id; 
+			prt->flags   = header->flags;
+
+			if ( prt->flags & VF_TMP_MODE ) {
+				prt->tmp_size     = header->tmp_size / SECTOR_SIZE;
+				prt->tmp_save_off = header->tmp_save_off / SECTOR_SIZE;			
 			}
 		
 			/* initialize disk key */
-			aes_lrw_init_key(
-				prt->d_key = malloc(sizeof(aes_key)), 
-				header.key_data + DISK_IV_SIZE,
-				header.key_data
-				);
+			dc_cipher_init(
+				d_key = malloc(sizeof(dc_key)),
+				crypt.cipher_id, crypt.mode_id, header->key_data
+				);			
 
-			prt->disk_id = header.disk_id; 
-			n_mount++;
+			if (prt->flags & VF_REENCRYPT) 
+			{
+				/* read old volume header */
+				if (dc_partition_io(prt, header, 1, prt->tmp_save_off, 1) == 0) {				
+					break;
+				}
+
+				/* decrypt header */
+				if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) {
+					break;
+				}
+
+				/* initialize old volume key */
+				dc_cipher_init(
+					o_key = malloc(sizeof(dc_key)),
+					crypt.cipher_id, crypt.mode_id, header->key_data
+					);
+			}
+			
+			prt->d_key = d_key; prt->o_key = o_key; n_mount++;
 		} while (0);
 	}
 
 	/* prevent leaks */
-	zeromem(&header, sizeof(header));
+	zeroauto(header,  sizeof(dc_header));
+	zeroauto(hdr_key, sizeof(dc_key));
 
 	return n_mount;
 }
@@ -309,11 +282,10 @@ static int dc_mount_parts()
 static void boot_from_mbr(hdd_inf *hdd)
 {
 	if ( !(conf.options & OP_EXTERNAL) && (hdd->dos_numb == boot_dsk) ) {
-		memcpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
+		autocpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
 	} else {
 		dc_disk_io(hdd, pv(0x7C00), 1, 0, 1);
 	}
-
 	bios_jump_boot(hdd->dos_numb);
 }
 
@@ -385,12 +357,16 @@ void boot_main()
 	prt_inf    *prt, *active;
 	char       *error;
 	int         login;
-	
+	int         n_mount;
+
 	active = NULL; error = NULL;
-	login = 0;
+	login = 0; n_mount = 0;
+
+	/* init crypto */
+	dc_init_crypto();
 	
 	/* prepare MBR copy buffer */
-	memcpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
+	autocpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
 
 	if (dc_scan_partitions() == 0) {
 		error = "partitions not found\n";
@@ -430,7 +406,17 @@ retry_auth:;
 		}
 	}
 
-	if ( (dc_mount_parts() == 0) && (login != 0) ) 
+	if (conf.pass_buf[0] != 0) 
+	{
+		n_mount = dc_mount_parts();
+
+		/* copy bootauth password to low memory */
+		autocpy(rb_dat->info.password, conf.pass_buf, MAX_PASSWORD);
+		/* clear password in high memory */
+		zeroauto(conf.pass_buf, MAX_PASSWORD);
+	}
+
+	if ( (n_mount == 0) && (login != 0) ) 
 	{
 		dc_password_error(active);
 
@@ -441,7 +427,7 @@ retry_auth:;
 			__halt();
 		}
 	}
-
+	
 	switch (conf.boot_type)
 	{
 		case BT_MBR_BOOT: 			  
@@ -458,7 +444,7 @@ retry_auth:;
 			  if ( (hdd = find_bootable_hdd()) == NULL ) {
 				  error = "boot disk not found\n";
 				  goto error;
-			  }			 
+			  }			 			  
 			  boot_from_mbr(hdd);
 		  }
 	    break;

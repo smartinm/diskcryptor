@@ -553,7 +553,8 @@ int dc_shrink_volume(
 		}
 
 		if (max_fs + sectors <= max_part) {
-			resl = ST_OK; break;
+			/* shrinking not needed */
+			shd->sh_pend = 0; resl = ST_OK; break;
 		}
 
 		sh.sh_start  = ttc - sh_clus;
@@ -596,20 +597,8 @@ int dc_shrink_volume(
 				dc_free_clusters(v_name, &sh);
 			}
 
-			if (num_clusters_used(&sh) != 0) 
-			{
-				if (is_win_2000() == 0)
-				{
-					succs = DeviceIoControl(
-						h_device, FSCTL_MARK_VOLUME_DIRTY, NULL, 0, NULL, 0, &bytes, NULL
-						);
-
-					if (succs == 0) {
-						resl = ST_CLUS_USED; break;
-					}
-				} else {
-					resl = ST_CLUS_USED; break;
-				}
+			if (num_clusters_used(&sh) != 0) {
+				resl = ST_CLUS_USED; break;
 			}
 		}		
 
@@ -669,7 +658,7 @@ int dc_shrink_volume(
 				case FS_NTFS:
 					{
 						/* update 'total sectors' value in NTFS header */
-						p64(vhdr + 0x28)[0] = (sh.sh_start * spc);
+						p64(vhdr + 0x28)[0] -= (sh_clus * spc);
 
 						/* write NTFS backup header */
 						dc_disk_write(

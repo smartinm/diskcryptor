@@ -135,7 +135,7 @@ int on_app_start(wchar_t *cmd_line)
 						path, sizeof_w(path), L"\"%s\" -p%u", name, (u32)(pbi.InheritedFromUniqueProcessId)
 						);
 
-					zeromem(&si, sizeof(si));
+					zeroauto(&si, sizeof(si));
 					si.cb = sizeof(si);
 
 					if (CreateProcess(

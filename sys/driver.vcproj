@@ -24,6 +24,215 @@
 	</ToolFiles>
 	<Configurations>
 		<Configuration
+			Name="Release|Win32"
+			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
+			IntermediateDirectory="$(ProjectDir)"
+			ConfigurationType="2"
+			DeleteExtensionsOnClean="*.obj;*.ilk;*.tlb;*.tli;*.tlh;*.tmp;*.rsp;*.pgc;*.pgd;$(TargetPath)"
+			WholeProgramOptimization="1"
+			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="MASM"
+				ObjectFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				UseUnicodeResponseFiles="false"
+				Optimization="3"
+				InlineFunctionExpansion="2"
+				EnableIntrinsicFunctions="true"
+				FavorSizeOrSpeed="1"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				IgnoreStandardIncludePath="true"
+				ExceptionHandling="0"
+				BufferSecurityCheck="false"
+				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
+				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
+				WarningLevel="3"
+				Detect64BitPortabilityProblems="false"
+				DebugInformationFormat="0"
+				CallingConvention="2"
+				CompileAs="1"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				AdditionalIncludeDirectories="..\include"
+				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				LinkLibraryDependencies="false"
+				UseUnicodeResponseFiles="false"
+				AdditionalOptions="ntoskrnl.lib hal.lib"
+				OutputFile="$(OutDir)\dcrypt.sys"
+				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
+				GenerateManifest="false"
+				GenerateDebugInformation="false"
+				SubSystem="3"
+				Driver="1"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
+				LinkTimeCodeGeneration="1"
+				EntryPointSymbol="DriverEntry"
+				BaseAddress="0x00010000"
+				RandomizedBaseAddress="0"
+				DataExecutionPrevention="0"
+				Profile="false"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+				CommandLine=""
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release|x64"
+			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\amd64"
+			IntermediateDirectory="$(ProjectDir)"
+			ConfigurationType="2"
+			DeleteExtensionsOnClean="*.obj;*.ilk;*.tlb;*.tli;*.tlh;*.tmp;*.rsp;*.pgc;*.pgd;$(TargetPath)"
+			WholeProgramOptimization="1"
+			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="MASM"
+				ObjectFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				TargetEnvironment="3"
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				UseUnicodeResponseFiles="false"
+				Optimization="3"
+				InlineFunctionExpansion="2"
+				EnableIntrinsicFunctions="true"
+				FavorSizeOrSpeed="1"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				IgnoreStandardIncludePath="true"
+				ExceptionHandling="0"
+				BufferSecurityCheck="false"
+				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
+				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
+				WarningLevel="3"
+				Detect64BitPortabilityProblems="false"
+				DebugInformationFormat="0"
+				CallingConvention="2"
+				CompileAs="1"
+				DisableSpecificWarnings="4103"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				AdditionalIncludeDirectories="..\include"
+				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				LinkLibraryDependencies="false"
+				UseUnicodeResponseFiles="false"
+				AdditionalOptions="ntoskrnl.lib hal.lib"
+				OutputFile="$(OutDir)\dcrypt.sys"
+				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
+				GenerateManifest="false"
+				IgnoreAllDefaultLibraries="true"
+				SubSystem="3"
+				Driver="1"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
+				EntryPointSymbol="DriverEntry"
+				BaseAddress="0x00010000"
+				RandomizedBaseAddress="0"
+				DataExecutionPrevention="0"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+				OutputManifestFile="$(IntDir)\$(TargetFileName).embed.manifest"
+				EmbedManifest="false"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+				CommandLine=""
+			/>
+		</Configuration>
+		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
 			IntermediateDirectory="$(ProjectDir)"
@@ -59,9 +268,8 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys"
-				PreprocessorDefinitions="_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;WIN32=100;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;DEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
 				BufferSecurityCheck="false"
@@ -69,7 +277,7 @@
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="3"
+				DebugInformationFormat="0"
 				CallingConvention="2"
 				CompileAs="1"
 			/>
@@ -97,10 +305,12 @@
 				Driver="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
+				LinkTimeCodeGeneration="1"
 				EntryPointSymbol="DriverEntry"
 				BaseAddress="0x00010000"
 				RandomizedBaseAddress="0"
 				DataExecutionPrevention="0"
+				Profile="false"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -162,219 +372,8 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys"
-				PreprocessorDefinitions="_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;WIN32=100;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;DEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
-				IgnoreStandardIncludePath="true"
-				ExceptionHandling="0"
-				BufferSecurityCheck="false"
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="3"
-				CallingConvention="2"
-				CompileAs="1"
-				DisableSpecificWarnings="4103"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\include"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				UseUnicodeResponseFiles="false"
-				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
-				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
-				GenerateManifest="false"
-				IgnoreAllDefaultLibraries="true"
-				GenerateDebugInformation="true"
-				SubSystem="3"
-				Driver="1"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
-				EntryPointSymbol="DriverEntry"
-				BaseAddress="0x00010000"
-				RandomizedBaseAddress="0"
-				DataExecutionPrevention="0"
-				TargetMachine="17"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-				OutputManifestFile="$(IntDir)\$(TargetFileName).embed.manifest"
-				EmbedManifest="false"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-				CommandLine=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="2"
-			DeleteExtensionsOnClean="*.obj;*.ilk;*.tlb;*.tli;*.tlh;*.tmp;*.rsp;*.pgc;*.pgd;$(TargetPath)"
-			WholeProgramOptimization="0"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-				CommandLine=""
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="MASM"
-				ObjectFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				UseUnicodeResponseFiles="false"
-				Optimization="3"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys"
-				PreprocessorDefinitions="_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;WIN32=100;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
-				IgnoreStandardIncludePath="true"
-				ExceptionHandling="0"
-				BufferSecurityCheck="false"
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="0"
-				CallingConvention="2"
-				CompileAs="1"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\include"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				UseUnicodeResponseFiles="false"
-				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
-				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
-				GenerateManifest="false"
-				SubSystem="3"
-				Driver="1"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
-				EntryPointSymbol="DriverEntry"
-				BaseAddress="0x00010000"
-				RandomizedBaseAddress="0"
-				DataExecutionPrevention="0"
-				Profile="false"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-				CommandLine=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="Release|x64"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\amd64"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="2"
-			DeleteExtensionsOnClean="*.obj;*.ilk;*.tlb;*.tli;*.tlh;*.tmp;*.rsp;*.pgc;*.pgd;$(TargetPath)"
-			WholeProgramOptimization="0"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-				CommandLine=""
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="MASM"
-				ObjectFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-				TargetEnvironment="3"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				UseUnicodeResponseFiles="false"
-				Optimization="3"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys"
-				PreprocessorDefinitions="_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;WIN32=100;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
 				BufferSecurityCheck="false"
@@ -450,23 +449,11 @@
 			Name="Header Files"
 			>
 			<File
-				RelativePath="..\include\sys\aes.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\aes_tab.h"
+				RelativePath="..\include\sys\benchmark.h"
 				>
 			</File>
 			<File
 				RelativePath="..\include\sys\boot_pass.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\crc32.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\crypto.h"
 				>
 			</File>
 			<File
@@ -498,11 +485,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\fastmem.h"
+				RelativePath="..\include\sys\fast_crypt.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\gf128mul.h"
+				RelativePath="..\include\sys\fastmem.h"
 				>
 			</File>
 			<File
@@ -522,11 +509,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\mount.h"
+				RelativePath="..\include\sys\misc_volume.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\pkcs5.h"
+				RelativePath="..\include\sys\mount.h"
 				>
 			</File>
 			<File
@@ -541,40 +528,64 @@
 				RelativePath="..\include\sys\readwrite.h"
 				>
 			</File>
-			<File
-				RelativePath="..\include\sys\sha1.h"
+			<Filter
+				Name="crypto"
 				>
-			</File>
-			<File
-				RelativePath="..\include\sys\sha512.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\speed_test.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\tests.h"
-				>
-			</File>
+				<File
+					RelativePath="..\include\crypto\aes.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\aes_tab.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crc32.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crypto.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\gf128mul.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\pkcs5.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\serpent.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\sha1.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\sha512.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\tests.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\twofish.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Source Files"
 			>
 			<File
-				RelativePath=".\aes.c"
+				RelativePath=".\benchmark.c"
 				>
 			</File>
 			<File
 				RelativePath=".\boot_pass.c"
-				>
-			</File>
-			<File
-				RelativePath=".\crc32.c"
-				>
-			</File>
-			<File
-				RelativePath=".\crypto.c"
 				>
 			</File>
 			<File
@@ -602,11 +613,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\fastmem.c"
+				RelativePath=".\fast_crypt.c"
 				>
 			</File>
 			<File
-				RelativePath=".\gf128mul.c"
+				RelativePath=".\fastmem.c"
 				>
 			</File>
 			<File
@@ -626,11 +637,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\mount.c"
+				RelativePath=".\misc_volume.c"
 				>
 			</File>
 			<File
-				RelativePath=".\pkcs5.c"
+				RelativePath=".\mount.c"
 				>
 			</File>
 			<File
@@ -645,66 +656,216 @@
 				RelativePath=".\readwrite.c"
 				>
 			</File>
-			<File
-				RelativePath=".\sha1.c"
+			<Filter
+				Name="crypto"
 				>
-			</File>
-			<File
-				RelativePath=".\sha512.c"
-				>
-			</File>
-			<File
-				RelativePath=".\speed_test.c"
-				>
-			</File>
-			<File
-				RelativePath=".\tests.c"
-				>
-			</File>
+				<File
+					RelativePath="..\crypto\aes.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crc32.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crypto.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\gf128mul.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\pkcs5.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\serpent.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\sha1.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\sha512.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\tests.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\twofish.c"
+					>
+				</File>
+				<Filter
+					Name="i386"
+					Filter="asm"
+					>
+					<File
+						RelativePath="..\crypto\i386\aes_x86.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\gf128mul_fast.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\twofish-i586.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
+				<Filter
+					Name="amd64"
+					Filter="asm"
+					>
+					<File
+						RelativePath="..\crypto\amd64\twofish-x86_64.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
+			</Filter>
 		</Filter>
-		<File
-			RelativePath=".\i386\crypto_t.asm"
-			>
-			<FileConfiguration
-				Name="Debug|x64"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="MASM"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release|x64"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="MASM"
-				/>
-			</FileConfiguration>
-		</File>
 		<File
 			RelativePath=".\driver.rc"
 			>
-		</File>
-		<File
-			RelativePath=".\i386\gf128mul_t.asm"
-			>
-			<FileConfiguration
-				Name="Debug|x64"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="MASM"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release|x64"
-				ExcludedFromBuild="true"
-				>
-				<Tool
-					Name="MASM"
-				/>
-			</FileConfiguration>
 		</File>
 	</Files>
 	<Globals>

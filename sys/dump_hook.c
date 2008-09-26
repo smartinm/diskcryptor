@@ -125,10 +125,8 @@ void dump_encrypt_buffer(
 		KeBugCheck(STATUS_BUFFER_OVERFLOW);
 	}
 	
-	aes_lrw_encrypt(
-		buff, dump_mem, size,
-		lrw_index(offset), 
-		&hook->dsk_key
+	dc_cipher_encrypt(
+		buff, dump_mem, size, offset, &hook->dsk_key
 		); 
 		
 	MmInitializeMdl(
@@ -166,7 +164,7 @@ NTSTATUS
 
 	status = dump_ctx[index].WriteRoutine(&offs, nmdl);
 
-	zeromem(dump_mem, DUMP_MEM_SIZE);
+	zeroauto(dump_mem, DUMP_MEM_SIZE);
 
 	return status;
 }
@@ -206,7 +204,7 @@ NTSTATUS
 					 );
 
 		if (status == STATUS_SUCCESS) {
-			zeromem(dump_mem, DUMP_MEM_SIZE);
+			zeroauto(dump_mem, DUMP_MEM_SIZE);
 		}
 	} else {
 		status = dump_ctx[index].WritePendingRoutine(
@@ -281,7 +279,7 @@ static void dump_crash_finish(void)
 	dc_clean_locked_mem(NULL);
 	dc_clean_keys();
 
-	zeromem(dump_mem, DUMP_MEM_SIZE);
+	zeroauto(dump_mem, DUMP_MEM_SIZE);
 }
 
 static void dump_hiber_finish(void)
@@ -294,7 +292,7 @@ static void dump_hiber_finish(void)
 	dc_clean_locked_mem(NULL);
 	dc_clean_keys();
 
-	zeromem(dump_mem, DUMP_MEM_SIZE);	
+	zeroauto(dump_mem, DUMP_MEM_SIZE);	
 }
 
 int is_dump_crypt() 
@@ -418,7 +416,7 @@ void hook_dump_entry()
 			{
 				if (ehook = mem_alloc(sizeof(entry_hook)))
 				{
-					memcpy(ehook->code, jmp_code, sizeof(jmp_code));
+					autocpy(ehook->code, jmp_code, sizeof(jmp_code));
 					ppv(ehook->code + DEST_OFF)[0] = dump_driver_entry;
 					ppv(ehook->code + PARM_OFF)[0] = ehook;
 					ehook->old_entry  = table->EntryPoint;
@@ -517,9 +515,7 @@ int dump_hook_init()
 		high_addr.HighPart = 0;
 		high_addr.LowPart  = 0xFFFFFFFF;
 
-		dump_mem = MmAllocateContiguousMemory(
-			DUMP_MEM_SIZE, high_addr
-			);
+		dump_mem = MmAllocateContiguousMemory(DUMP_MEM_SIZE, high_addr);
 
 		if (dump_mem == NULL) {
 			break;
@@ -533,7 +529,7 @@ int dump_hook_init()
 			break;
 		}
 
-		zeromem(dump_mem, DUMP_MEM_SIZE);
+		zeroauto(dump_mem, DUMP_MEM_SIZE);
 		MmBuildMdlForNonPagedPool(dump_mdl); 
 		resl = 1;
 	} while (0);

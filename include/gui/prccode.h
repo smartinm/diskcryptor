@@ -5,22 +5,17 @@
 #include "drv_ioctl.h"
 #include "main.h"
 
-#define QR_MOUNT        1
-#define QR_CHANGE_PASS  2
-#define QR_EMBD_PASS    3
-
-#define BOOT_SHEETS     3
 #define MAIN_SHEETS     2
 #define BOOT_WZR_SHEETS 2
 
 #define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); }
 
 typedef struct _dlgpass {
-	char *pass;
-	char *new_pass;
+	_dnode  *node;
 
-	int query;
-	_dnode *node;
+	char    *pass;
+	char    *new_pass;
+	wchar_t *mnt_point;
 
 } dlgpass, *pdlgpass;
 
@@ -57,6 +52,11 @@ int _dlg_get_pass(
 		dlgpass *pass
 	);
 
+int _dlg_change_pass(
+		HWND hwnd,
+		dlgpass *pass
+	);
+
 int _dlg_config_loader(
 		HWND hwnd,
 		BOOL external
@@ -64,6 +64,7 @@ int _dlg_config_loader(
 
 int _dlg_options(HWND hwnd);
 void _dlg_about(HWND hwnd);
+void _dlg_benchmark(HWND hwnd);
 
 INT_PTR CALLBACK
 _main_dialog_proc(

@@ -35,13 +35,14 @@
 #include "misc_irp.h"
 #include "devhook.h"
 #include "readwrite.h"
-#include "speed_test.h"
 #include "enc_dec.h"
 #include "io_control.h"
 #include "pnp_irp.h"
 #include "boot_pass.h"
 #include "mount.h"
 #include "mem_lock.h"
+#include "fast_crypt.h"
+#include "debug.h"
 
 PDRIVER_OBJECT dc_driver;
 PDEVICE_OBJECT dc_device;
@@ -51,13 +52,14 @@ u32            dc_io_count;
 u32            dc_conf_flags; /* config flags readed from registry */
 u32            dc_load_flags; /* other flags setted by driver      */
 
-static
-void dc_reinit_routine(
-	   IN PDRIVER_OBJECT drv_obj,
-	   IN PVOID          context,
-	   IN u32            count
-	   )
+static void dc_automount_thread(void *param)
 {
+	LARGE_INTEGER time;
+
+	/* wait 0.5 sec */
+	time.QuadPart = 500 * -10000;
+	KeDelayExecutionThread(KernelMode, FALSE, &time);
+
 	/* complete automounting */
 	dc_mount_all(NULL);
 
@@ -65,6 +67,19 @@ void dc_reinit_routine(
 	if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 		dc_clean_pass_cache();
 	}
+
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+static
+void dc_reinit_routine(
+	   IN PDRIVER_OBJECT drv_obj,
+	   IN PVOID          context,
+	   IN u32            count
+	   )
+{
+	start_system_thread(
+		dc_automount_thread, NULL, NULL);
 }
 
 static void dc_load_config(
@@ -96,7 +111,7 @@ static void dc_load_config(
 			);
 
 		if (NT_SUCCESS(status) != FALSE) {			
-			memcpy(&dc_conf_flags, info->Data, sizeof(dc_conf_flags));
+			autocpy(&dc_conf_flags, info->Data, sizeof(dc_conf_flags));
 		}
 
 		ZwClose(h_key);
@@ -115,10 +130,9 @@ NTSTATUS
 	ULONG          maj_ver;
 	ULONG          min_ver;
 	int            num;
-		
+
 	PsGetVersion(
-		&maj_ver, &min_ver, NULL, NULL
-		);
+		&maj_ver, &min_ver, NULL, NULL);
 
 	dc_os_type = OS_UNK; status = STATUS_DRIVER_INTERNAL_ERROR;
 
@@ -131,19 +145,19 @@ NTSTATUS
 	}	
 
 	RtlInitUnicodeString(
-		&dev_name_u, DC_DEVICE_NAME
-		);
+		&dev_name_u, DC_DEVICE_NAME);
 
 	RtlInitUnicodeString(
-		&dos_name_u, DC_LINK_NAME
-		);
+		&dos_name_u, DC_LINK_NAME);
 
 	dc_driver = DriverObject;
 
-#ifdef DBG_COM
-	dc_com_dbg_init();
+#ifdef DBG_MSG
+	dc_dbg_init();
 #endif
-	
+	DbgMsg("dcrypt.sys started\n");
+
+	dc_init_crypto();
 	dc_init_devhook(); dc_init_mount();
 	fastmem_init(); mem_lock_init();
 	dc_get_boot_pass();
@@ -164,13 +178,14 @@ NTSTATUS
 
 	do
 	{
-		/* init random number generator */
-		if (rnd_init_prng() != ST_OK) {
-			break;
-		}
-
+#ifdef CRYPT_TESTS
 		/* test crypto primitives */
 		if (crypto_self_test() == 0) {
+			break;
+		}
+#endif
+		/* init random number generator */
+		if (rnd_init_prng() != ST_OK) {
 			break;
 		}
 
@@ -179,13 +194,12 @@ NTSTATUS
 			break;
 		}
 
-		if (dc_setup_io_queue(dc_conf_flags) != ST_OK) {
+		if (dc_init_fast_crypt() != ST_OK) {
 			break;
 		}
 					
 		status = IoCreateDevice(
-			dc_driver, 0, &dev_name_u, FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device
-			);
+			dc_driver, 0, &dev_name_u, FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			break;
@@ -200,8 +214,7 @@ NTSTATUS
 		dc_device->Flags               &= ~DO_DEVICE_INITIALIZING;
 
 		status = IoCreateSymbolicLink(
-			       &dos_name_u, &dev_name_u
-				   );
+			       &dos_name_u, &dev_name_u);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			break;
@@ -222,8 +235,7 @@ NTSTATUS
 			IoDeleteDevice(dc_device);
 		}
 
-		dc_setup_io_queue(0);
-
+		dc_free_fast_crypt();
 		fastmem_free();		
 	} 
 

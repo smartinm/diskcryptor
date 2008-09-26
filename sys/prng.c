@@ -25,6 +25,7 @@
 #include "sha512.h"
 #include "misc.h"
 #include "aes.h"
+#include "debug.h"
 
 typedef struct _seed_data {
 	PEPROCESS       seed1;
@@ -87,8 +88,8 @@ static void rnd_pool_mix()
 	}
 
 	/* Prevent leaks */
-	zeromem(hval, sizeof(hval));
-	zeromem(&sha_ctx, sizeof(sha_ctx));
+	zeroauto(hval, sizeof(hval));
+	zeroauto(&sha_ctx, sizeof(sha_ctx));
 }
 
 
@@ -127,9 +128,9 @@ void rnd_add_buff(void *data, int size)
 	}
 	
 	/* prevent leaks */
-	zeromem(&sha_ctx, sizeof(sha_ctx));
-	zeromem(&hval, sizeof(hval));
-	zeromem(&seed, sizeof(seed));
+	zeroauto(&sha_ctx, sizeof(sha_ctx));
+	zeroauto(&hval, sizeof(hval));
+	zeroauto(&seed, sizeof(seed));
 }
 
 
@@ -163,7 +164,7 @@ void rnd_reseed_now()
 	rnd_add_buff(&seed, sizeof(seed));
 	
 	/* Prevent leaks */	
-	zeromem(&seed, sizeof(seed));
+	zeroauto(&seed, sizeof(seed));
 }
 
 void rnd_get_bytes(u8 *buf, int len)
@@ -239,14 +240,12 @@ void rnd_get_bytes(u8 *buf, int len)
 	rnd_pool_mix();
 
 	/* Prevent leaks */
-	zeromem(rnd_key, sizeof(aes256_key));
-	zeromem(&sha_ctx, sizeof(sha_ctx));
-	zeromem(hval, sizeof(hval));
-	zeromem(&seed, sizeof(seed));
+	zeroauto(rnd_key, sizeof(aes256_key));
+	zeroauto(&sha_ctx, sizeof(sha_ctx));
+	zeroauto(hval, sizeof(hval));
+	zeroauto(&seed, sizeof(seed));
 
-	KeReleaseMutex(
-		&rnd_mutex, FALSE
-		);
+	KeReleaseMutex(&rnd_mutex, FALSE);
 }
 
 rnd_ctx *rnd_fast_init() 
@@ -264,7 +263,7 @@ rnd_ctx *rnd_fast_init()
 	}
 
 	/* prevent leaks */
-	zeromem(key, sizeof(key));
+	zeroauto(key, sizeof(key));
 
 	return ctx;
 }
@@ -272,7 +271,7 @@ rnd_ctx *rnd_fast_init()
 void rnd_fast_free(rnd_ctx *ctx)
 {
 	/* prevent leaks */
-	zeromem(ctx, sizeof(rnd_ctx));
+	zeroauto(ctx, sizeof(rnd_ctx));
 	mem_free(ctx);
 }
 
@@ -301,7 +300,7 @@ void rnd_fast_rand(rnd_ctx *ctx, u8 *buf, int len)
 	} while (len != 0);
 
 	/* prevent leaks */
-	zeromem(buff, sizeof(buff));
+	zeroauto(buff, sizeof(buff));
 }
 
 int rnd_init_prng()

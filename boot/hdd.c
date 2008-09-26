@@ -20,6 +20,7 @@
 */
 
 #include "boot.h"
+#include "bios.h"
 #include "misc.h"
 #include "hdd.h"
 #include "crypto.h"
@@ -28,99 +29,151 @@
 list_entry hdd_head;
 list_entry prt_head;
 
+static 
+int hdd_chs_io(
+	   u8 dos_numb, void *buff, u16 sectors, u16 cyl, u8 head, u8 sect, int read
+	   )
+{
+	rm_ctx ctx;
+
+	/* setup initial context */
+	set_ctx(0, &ctx);
+
+	ctx.ah = read ? 0x02:0x03;
+	ctx.al = d8(sectors);
+	ctx.ch = d8(cyl);
+	ctx.cl = d8(((cyl & 0x0300) >> 2) | sect);
+    ctx.dh = head; 
+	ctx.dl = dos_numb;
+	ctx.es = rm_seg(buff);
+	ctx.bx = rm_off(buff);
+
+	/* do not check AH because some buggy USB BIOSes fail to clear AH on success */
+	return bios_call(0x13, &ctx);
+}
+
+static 
+int hdd_lba_io(
+	   u8 dos_numb, void *buff, u16 sectors, u64 start, int read
+	   )
+{
+	u8     sbuf[32];
+	rm_ctx ctx;
+	lba_p *lba = pv(0x580); /* this needed for avoid stupid actions by buggy BIOSes */
+	int    succs = 0;
+
+	/* save old buffer */	
+	autocpy(sbuf, lba, sizeof(sbuf));
+
+	/* setup LBA block */
+	lba->size    = sizeof(lba_p);
+	lba->unk     = 0;
+	lba->dst_sel = rm_seg(buff);
+	lba->dst_off = rm_off(buff);
+	lba->numb    = sectors; 
+	lba->sector  = start;
+
+	/* setup initial context */
+	set_ctx(0, &ctx);
+	ctx.ah = read ? 0x42:0x43;
+	ctx.dl = dos_numb; 
+	ctx.si = 0x180; 
+	ctx.ds = 0x40; /* if DS can be 0x40, we can avoid AWARD BIOS bug of int13/AX=4B01 */ 
+	/* set additional registers to serve buggy BIOSes. */
+	ctx.es = ctx.ds;
+	ctx.di = ctx.si;
+	ctx.bx = ctx.si;
+	ctx.cx = ctx.ds;
+
+	/* do not check AH because some buggy USB BIOSes fail to clear AH on success */
+	succs = bios_call(0x13, &ctx);
+	
+	/* restore saved buffer */
+	autocpy(lba, sbuf, sizeof(sbuf));
+	
+	return succs;
+}
+
+static int hdd_is_lba(u8 dos_numb)
+{
+	rm_ctx ctx;
+	int    is_lba = 0;
+
+	/* check for LBA support */
+	set_ctx(0x4100, &ctx);
+	ctx.bx = 0x55AA; 
+	ctx.dl = dos_numb;
+
+	if (bios_call(0x13, &ctx) != 0) {
+		is_lba = (ctx.bx == 0xAA55);
+	}
+	
+	return is_lba;
+}
+
+static void hdd_get_geometry(hdd_inf *hdd)
+{
+	rm_ctx ctx;
+
+	set_ctx(0x0800, &ctx); 
+	ctx.dl = hdd->dos_numb;
+	
+	if ( (bios_call(0x13, &ctx) != 0) && (ctx.ah == 0) ) {
+		hdd->max_head = ctx.dh + 1;
+		hdd->max_sect = ctx.cl & 0x3F;
+	} else {
+		hdd->max_head = 1;
+		hdd->max_sect = 1;
+	}
+}
+
 int dc_bios_io(
-	  hdd_inf *hdd, void *buff, 
-	  u16      sectors, u64 start,
-	  int      read
+	  hdd_inf *hdd, void *buff, u16 sectors, u64 start, int read
 	  )
 {
-	lba_p  lba;
-	rm_ctx ctx;
-	u32    soff, head;
-	u32    hoff, coff;
-	u8     flag;
-
-	if (read != 0) {
-		flag = 2;
+	u32 soff, head;
+	u32 hoff, coff;
+	
+	if (hdd->lba_mode == 0)
+	{
+		soff = d32(start) % hdd->max_sect + 1;
+		head = d32(start) / hdd->max_sect;
+		hoff = head % hdd->max_head;
+		coff = head / hdd->max_head;
+		
+		return hdd_chs_io(
+			hdd->dos_numb, buff, sectors, d16(coff), d8(hoff), d8(soff), read
+			);
 	} else {
-		flag = 3;
+		return hdd_lba_io(hdd->dos_numb, buff, sectors, start, read);
 	}
-
-	if (hdd->lba_mode != 0) 
-	{
-		lba.size    = sizeof(lba); 
-		lba.unk     = 0;
-		lba.dst_sel = rm_seg(buff);
-		lba.dst_off = rm_off(buff);
-		lba.numb    = sectors; 
-		lba.sector  = start;
-		ctx.si      = rm_off(&lba); 
-		ctx.ds      = rm_seg(&lba); 
-		ctx.dl      = hdd->dos_numb; 
-		ctx.ah      = 0x40 | flag;		
-	} else 
-	{
-		soff   = ((u32)start % hdd->max_sect + 1);
-		head   = (u32)((u32)start / hdd->max_sect);
-		hoff   = head % hdd->max_head;
-		coff   = head / hdd->max_head;
-		ctx.ah = flag;
-		ctx.al = (u8)sectors;
-		ctx.dh = (u8)hoff; 
-		ctx.dl = hdd->dos_numb;
-		ctx.ch = (u8)coff;
-		ctx.cl = (u8)( ((coff & 0x0300) >> 2) | soff);
-		ctx.es = rm_seg(buff);
-		ctx.bx = rm_off(buff);	
-	}
-
-	return bios_call(0x13, &ctx);
 }
 
 static int dc_find_hdds() 
 {
 	hdd_inf *hdd;
-	rm_ctx   ctx;
+	u8      *mbr = pv(0x5000); /* free memory location */
 	int      num = 0;
 	int      i;
 
 	/* detect all HDDs */
-	for (i = 0x80; i < 0xFF; i++) 
+	for (i = 0x80; i < 0x8F; i++) 
 	{
-		/* get drive geometry */
-		ctx.ah = 0x08; ctx.dl = i;
-				
-		if ( (bios_call(0x13, &ctx) != 0) && (ctx.ah == 0) ) 
-		{
-			hdd = malloc(sizeof(hdd_inf));
-			hdd->dos_numb = i;
-			hdd->max_head = ctx.dh + 1;
-			hdd->max_sect = ctx.cl & 0x3F;
-
-			_insert_tail_list(&hdd_head, &hdd->entry);
-			_init_list_head(&hdd->part_head);
-
-			/* check for LBA support */
-			ctx.bx = 0x55AA; ctx.ah = 0x41; 
-			ctx.dl = i;
-
-			do
-			{
-				if (bios_call(0x13, &ctx) == 0) {
-					break;
-				}
-
-				if ( (ctx.bx != 0xAA55) || !(ctx.cl & 1) ) {
-					break;
-				}
-
-				hdd->lba_mode = 1; 
-			} while (0);
-
-			num++;
-		} else {
-			break;
+		/* probe to read drive MBR  */
+		if (hdd_chs_io(i, mbr, 1, 0, 0, 1, 1) == 0) {
+			break; /* no more HDDs */
 		}
+		
+		/* insert HDD to list */
+		hdd = malloc(sizeof(hdd_inf));
+		hdd->dos_numb = i;
+		hdd->lba_mode = hdd_is_lba(i);
+		_init_list_head(&hdd->part_head);
+		_insert_tail_list(&hdd_head, &hdd->entry);
+		/* get drive geometry */
+		hdd_get_geometry(hdd);
+		/* increase number of detected drives */
+		num++; 
 	}
 
 	return num;	
@@ -147,12 +200,10 @@ hdd_inf *find_hdd(u8 num)
 	return NULL;
 }
 
- 
-
-static
-int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
+static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 {
-	u8       mbr[512];
+	u8      *buff = pv(0x5000); /* free memory location */
+	u8       mbr[SECTOR_SIZE];	
 	pt_ent  *pt;
 	prt_inf *prt;
 	int      num;
@@ -163,9 +214,12 @@ int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 	do
 	{
 		/* read MBR */
-		if (dc_bios_io(hdd, mbr, 1, off + ext_off, 1) == 0) {
+		if (dc_bios_io(hdd, buff, 1, off + ext_off, 1) == 0) {
 			break;
 		}
+
+		/* copy MBR to stack */
+		autocpy(mbr, buff, sizeof(mbr));
 
 		/* check MBR signature */
 		if (p16(mbr+510)[0] != 0xAA55) {
@@ -176,8 +230,8 @@ int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 
 		for (num = 4; num; num--, pt++)
 		{
-			if (pt->os == 0) {
-				break;
+			if (pt->prt_size == 0) {
+				continue;
 			}
 
 			pt_off = pt->start_sect;
@@ -201,7 +255,8 @@ int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 				prt->active = (pt->active == 0x80);
 				prt->extend = (ext_off != 0);			
 				prt->hdd    = hdd;
-				prt->d_key  = NULL; found++;
+				prt->d_key  = NULL; 
+				prt->o_key  = NULL; found++;
 
 				_insert_tail_list(&hdd->part_head, &prt->entry_hdd);
 				_insert_tail_list(&prt_head, &prt->entry_glb);				
@@ -214,8 +269,7 @@ int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 
 static
 int dc_partition_enc_read(
-	  prt_inf *prt, void *buff, 
-	  u16 sectors, u64 start
+	  prt_inf *prt, void *buff, u16 sectors, u64 start, dc_key *key
 	  )
 {
 	int res;
@@ -224,11 +278,8 @@ int dc_partition_enc_read(
 		prt->hdd, buff, sectors, start + prt->begin + 1, 1
 		);
 
-	if (res != 0) 
-	{
-		aes_lrw_decrypt(
-			buff, buff, sectors * 512, start, prt->d_key
-			); 
+	if (res != 0) {
+		dc_cipher_decrypt(buff, buff, (sectors << 9), (start << 9), key); 
 	}
 	
 	return res;
@@ -236,16 +287,13 @@ int dc_partition_enc_read(
 
 static
 int dc_partition_enc_write(
-	  prt_inf *prt, void *buff, 
-	  u16      sectors,  u64 start
+	  prt_inf *prt, void *buff, u16 sectors, u64 start, dc_key *key
 	  )
 {
 	int res;
 
 	/* encrypt buffer */
-	aes_lrw_encrypt(
-		buff, buff, sectors * 512, start, prt->d_key
-		);
+	dc_cipher_encrypt(buff, buff, (sectors << 9), (start << 9), key);
 
 	/* write buffer to disk */
 	res = dc_bios_io(
@@ -253,9 +301,7 @@ int dc_partition_enc_write(
 		);
 
 	/* decrypt buffer to save original data */
-	aes_lrw_decrypt(
-		buff, buff, sectors * 512, start, prt->d_key
-		);
+	dc_cipher_decrypt(buff, buff, (sectors << 9), (start << 9), key);
 
 	return res;
 }
@@ -280,7 +326,45 @@ int dc_partition_io(
 			s1  = s2 = s3 = 0;
 			p1  = p2 = p3 = NULL;
 			tmp = prt->tmp_size;
-			end = start + sectors;	
+			end = start + sectors;
+
+			if (prt->flags & VF_REENCRYPT)
+			{
+				if (start >= tmp) {
+					o3 = start; s3 = sectors; p3 = buff;
+				} else
+				{
+					if ( (start+sectors) > tmp )
+					{
+						o1 = start; s1 = (u16)(tmp - start); p1 = buff;
+						o3 = start + s1; s3 = sectors - s1; p3 = p1 + (s1 * SECTOR_SIZE);
+					} else {
+						o1 = start; s1 = sectors; p1 = buff;
+					}
+				}
+
+				if (read != 0)
+				{
+					if (s1 != 0) {
+						res = dc_partition_enc_read(prt, p1, s1, o1, prt->d_key);
+					}
+
+					if (o3 != 0) {
+						res = dc_partition_enc_read(prt, p3, s3, o3, prt->o_key);
+					}
+				} else
+				{
+					if (s1 != 0) {
+						res = dc_partition_enc_write(prt, p1, s1, o1, prt->d_key);
+					}
+
+					if (o3 != 0) {
+						res = dc_partition_enc_write(prt, p3, s3, o3, prt->o_key);
+					}
+				}
+
+				return res;
+			}
 
 			if (start > tmp) {
 				o3 = start; s3 = sectors; p3 = buff;
@@ -300,7 +384,7 @@ int dc_partition_io(
 			{
 				/* read encrypted part */
 				if (s1 != 0) {
-					res = dc_partition_enc_read(prt, p1, s1, o1);
+					res = dc_partition_enc_read(prt, p1, s1, o1, prt->d_key);
 				}
 
 				/* read temporary part */
@@ -316,7 +400,7 @@ int dc_partition_io(
 			{
 				/* write encrypted part */
 				if (s1 != 0) {
-					res = dc_partition_enc_write(prt, p1, s1, o1);
+					res = dc_partition_enc_write(prt, p1, s1, o1, prt->d_key);
 				}
 
 				/* write temporary part */
@@ -332,9 +416,9 @@ int dc_partition_io(
 		} else 
 		{
 			if (read != 0) {
-				res = dc_partition_enc_read(prt, buff, sectors, start);
+				res = dc_partition_enc_read(prt, buff, sectors, start, prt->d_key);
 			} else {
-				res = dc_partition_enc_write(prt, buff, sectors, start);
+				res = dc_partition_enc_write(prt, buff, sectors, start, prt->d_key);
 			}
 		}		
 	} else {
@@ -409,11 +493,11 @@ int dc_disk_io(
 			  (start == 0) && (read == 0) ) 
 		{
 			/* save old buffer */
-			fastcpy(old, buff, SECTOR_SIZE);
+			autocpy(old, buff, SECTOR_SIZE);
 			/* read my MBR */
 			dc_bios_io(hdd, buff, 1, 0, 1);
 			/* copy partition table to MBR */
-			fastcpy(p8(buff) + 432, old + 432, 80);
+			autocpy(p8(buff) + 432, old + 432, 80);
 			saved = 1;
 		}
 
@@ -421,7 +505,7 @@ int dc_disk_io(
 
 		if (saved != 0) {
 			/* restore old buffer */
-			fastcpy(buff, old, SECTOR_SIZE);
+			autocpy(buff, old, SECTOR_SIZE);
 		}
 	}
 

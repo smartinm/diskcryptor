@@ -31,6 +31,9 @@
 #include "misc_irp.h"
 #include "readwrite.h"
 #include "mount.h"
+#include "fast_crypt.h"
+#include "misc_volume.h"
+#include "debug.h"
 
 typedef struct _dsk_pass {
 	struct _dsk_pass *next;
@@ -42,14 +45,11 @@ typedef struct _mount_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
 	PDEVICE_OBJECT   dev_obj;
 	PIRP             irp;
+	s_callback       on_complete;
+	void            *param;
+	dev_hook        *hook;
 	
 } mount_ctx;
-
-typedef struct _unm_struct {
-	s_callback on_complete;
-	void      *param;
-
-} unm_struct;
 
 static dsk_pass *f_pass;
 static ERESOURCE p_resource;
@@ -100,7 +100,7 @@ void dc_clean_pass_cache()
 		c_pass = d_pass;
 		d_pass = d_pass->next;
 
-		zeromem(c_pass, sizeof(dsk_pass));
+		zeroauto(c_pass, sizeof(dsk_pass));
 
 		if (loirql != 0) {
 			mem_free(c_pass);
@@ -127,77 +127,45 @@ void dc_clean_keys()
 			hook = next;
 			next = dc_next_hook(hook);
 
-			zeromem(&hook->dsk_key, sizeof(aes_key));
-			zeromem(&hook->tmp_header, sizeof(dc_header));
-			zeromem(&hook->tmp_pass, sizeof(hook->tmp_pass));
+			zeroauto(&hook->dsk_key, sizeof(dc_key));
+			zeroauto(&hook->tmp_header, sizeof(dc_header));
+			zeroauto(&hook->old_header, sizeof(dc_header));
+			zeroauto(&hook->tmp_pass, sizeof(hook->tmp_pass));
 			
 			if (hook->hdr_key != NULL) {
-				zeromem(hook->hdr_key, sizeof(aes_key));
+				zeroauto(hook->hdr_key, sizeof(dc_key));
+			}
+			if (hook->tmp_key != NULL) {
+				zeroauto(hook->tmp_key, sizeof(dc_key));
 			}
 		} while (next != NULL);
 	} 
 }
 
-aes_key *dc_init_hdr_key(dc_header *header, char *password)
+dc_key *dc_init_hdr_key(crypt_info *crypt, dc_header *header, char *password)
 {
-	u8       dk[DISKKEY_SIZE];
-	aes_key *hdr_key;
+	u8      dk[DISKKEY_SIZE];
+	dc_key *hdr_key;
 
-	if ( (hdr_key = mem_alloc(sizeof(aes_key))) == NULL ) {
+	if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
 		return NULL;
 	}
 
-	sha1_pkcs5_2(
-		password, strlen(password), 
-		header->salt, PKCS5_SALT_SIZE, 
-		2000, dk, DISK_IV_SIZE + MAX_KEY_SIZE
+	pkcs5_2_prf(
+		crypt->prf_id, -1, password, strlen(password), 
+		header->salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX
 		);
 
-	aes_lrw_init_key(
-		hdr_key, dk + DISK_IV_SIZE, dk
+	dc_cipher_init(
+		hdr_key, crypt->cipher_id, crypt->mode_id, dk
 		);
 
-	zeromem(dk, sizeof(dk));
+	/* prevent leaks */
+	zeroauto(dk, sizeof(dk));
 
 	return hdr_key;
 }
 
-aes_key *dc_decrypt_header(dc_header *header, char *password)	   
-{
-	aes_key *hdr_key;
-	int      succs = 0;
-	
-	if ( (hdr_key = dc_init_hdr_key(header, password)) == NULL ) {
-		return NULL;
-	}
-
-	do
-	{
-		aes_lrw_decrypt(
-			pv(&header->sign), pv(&header->sign), 
-			HEADER_ENCRYPTEDDATASIZE, 1, hdr_key 
-			);
-
-		/* Magic 'TRUE' or 'DTMP' */
-		if ( (header->sign != DC_TRUE_SIGN) && (header->sign != DC_DTMP_SIGN) ) {
-			break;
-		}
-
-		/* Check CRC of the key set */
-		if (BE32(header->key_crc) != crc32(header->key_data, DISKKEY_SIZE)) {
-			break;
-		}
-		succs = 1;
-	} while (0);
-
-	if (succs == 0) {
-		zeromem(hdr_key, sizeof(aes_key));
-		mem_free(hdr_key); 
-		hdr_key = NULL;
-	}
-	
-	return hdr_key;
-}
 
 static u64 dc_get_dev_size(dev_hook *hook)
 {
@@ -230,24 +198,28 @@ int dc_write_header(
 	  )
 {
 	dc_header t_header;
-	aes_key  *hdr_key;
+	dc_key   *hdr_key;
 	int       resl;
 
 	do
 	{
 		/* copy header to new buffer */
-		fastcpy(&t_header, header, sizeof(dc_header));
+		autocpy(&t_header, header, sizeof(dc_header));
 
+		/* add volume header to random pool because RNG not 
+		   have sufficient entropy at boot time 
+		*/
+		rnd_add_buff(header, sizeof(dc_header));
 		/* generate new salt */
 		rnd_get_bytes(t_header.salt, PKCS5_SALT_SIZE);
 
 		/* init new header key */
-		if ( (hdr_key = dc_init_hdr_key(&t_header, password)) == NULL ) {
+		if ( (hdr_key = dc_init_hdr_key(&hook->crypt, &t_header, password)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
 		/* encrypt header with new key */
-		aes_lrw_encrypt(
+		dc_cipher_encrypt(
 			pv(&t_header.sign), pv(&t_header.sign), HEADER_ENCRYPTEDDATASIZE, 1, hdr_key
 			);
 
@@ -259,32 +231,72 @@ int dc_write_header(
 
 	/* prevent leaks */
 	if (hdr_key != NULL) {
-		zeromem(hdr_key, sizeof(aes_key));
+		zeroauto(hdr_key, sizeof(dc_key));
 		mem_free(hdr_key);
 	}
 
-	zeromem(&t_header, sizeof(t_header));
+	zeroauto(&t_header, sizeof(t_header));
 
 	return resl;
 }
 
-static
-int dc_get_header_and_restory_copy(
-	  dev_hook *hook, dc_header *hcopy, aes_key **res_key, char *res_pass,
-	  u64 offset, u64 copy_offset, char *password
-	  )
+dc_key *dc_dec_known_header(
+		  dc_header *header, crypt_info *crypt, char *password
+		  )
 {
-	dsk_pass *d_pass;	
-	dc_header v_header;
-	dc_header b_header;
-	aes_key  *hdr_key = NULL;
-	aes_key  *bkf_key = NULL;
-	int       resl, b_resl;
+	dc_key *hdr_key;
+	int     succs = 0;
+	
+	if ( (hdr_key = dc_init_hdr_key(crypt, header, password)) == NULL ) {
+		return NULL;
+	}
 
 	do
 	{
+		dc_cipher_decrypt(
+			pv(&header->sign), pv(&header->sign), 
+			HEADER_ENCRYPTEDDATASIZE, 0, hdr_key 
+			);
+
+		/* Magic 'TRUE' or 'DTMP' */
+		if ( (header->sign != DC_TRUE_SIGN) && (header->sign != DC_DTMP_SIGN) ) {
+			break;
+		}
+
+		/* Check CRC of the key set */
+		if (BE32(header->key_crc) != crc32(header->key_data, DISKKEY_SIZE)) {
+			break;
+		}
+		succs = 1;
+	} while (0);
+
+	if (succs == 0) {
+		zeroauto(hdr_key, sizeof(dc_key));
+		mem_free(hdr_key); 
+		hdr_key = NULL;
+	}
+	
+	return hdr_key;
+}
+
+
+
+static
+int dc_get_header_and_restory_copy(
+	  dev_hook *hook, dc_header *header, dc_key **res_key, char *res_pass,
+	  u64 offset, u64 copy_offset, char *password
+	  )
+{
+	dsk_pass  *d_pass;	
+	dc_header  b_header;
+	dc_key    *hdr_key = NULL;
+	dc_key    *bkf_key = NULL;
+	int        resl, b_resl;
+	
+	do
+	{
 		resl = dc_device_rw(
-			hook, IRP_MJ_READ, &v_header, sizeof(v_header), offset
+			hook, IRP_MJ_READ, header, sizeof(dc_header), offset
 			);
 		
 		if (resl != ST_OK) {			
@@ -297,9 +309,7 @@ int dc_get_header_and_restory_copy(
 			if ( (password != NULL) && (password[0] != 0) )
 			{
 				/* probe mount with entered password */
-				fastcpy(hcopy, &v_header, sizeof(dc_header));
-				
-				if (hdr_key = dc_decrypt_header(hcopy, password)) {
+				if (hdr_key = dc_fast_dec_header(header, &hook->crypt, password)) {
 					strcpy(res_pass, password); break;
 				}
 			}
@@ -310,9 +320,7 @@ int dc_get_header_and_restory_copy(
 			/* probe mount with cached passwords */
 			for (d_pass = f_pass; d_pass; d_pass = d_pass->next)
 			{
-				fastcpy(hcopy, &v_header, sizeof(dc_header));
-
-				if (hdr_key = dc_decrypt_header(hcopy, d_pass->pass)) {
+				if (hdr_key = dc_fast_dec_header(header, &hook->crypt, d_pass->pass)) {
 					strcpy(res_pass, d_pass->pass); break;
 				}
 			}
@@ -322,7 +330,7 @@ int dc_get_header_and_restory_copy(
 		} while (0);
 
 		/* check backup header and fix it */
-		if ( (hdr_key != NULL) && (BE16(hcopy->version) > 2) && !(hcopy->flags & VF_TMP_MODE) )
+		if ( (hdr_key != NULL) && (BE16(header->version) > 2) && !(header->flags & VF_TMP_MODE) )
 		{
 			DbgMsg("check backup header\n");
 			
@@ -334,24 +342,23 @@ int dc_get_header_and_restory_copy(
 				break;
 			}
 
-			if (bkf_key = dc_decrypt_header(&b_header, res_pass)) {
+			bkf_key = dc_dec_known_header(
+				&b_header, &hook->crypt, res_pass
+				);
+
+			if (bkf_key != NULL) {
 				DbgMsg("backup header ok\n");
 				break;
 			}
 			DbgMsg("backup header error\n");
 
-			/* add volume header to random pool because RNG not 
-			   have sufficient entropy at boot time 
-			*/
-			rnd_add_buff(hcopy, sizeof(dc_header));
-
 			/* restore backup header */
-			dc_write_header(hook, hcopy, copy_offset, res_pass);
+			dc_write_header(hook, header, copy_offset, res_pass);
 		}
 	} while (0);
 
 	if ( (resl == ST_OK) && (hdr_key == NULL) ) {
-		resl = ST_PASS_ERR;		
+		resl = ST_PASS_ERR;
 	}
 
 	/* save header key */
@@ -359,12 +366,11 @@ int dc_get_header_and_restory_copy(
 
 	/* prevent leaks */
 	if (bkf_key != NULL) {
-		zeromem(bkf_key, sizeof(aes_key));
+		zeroauto(bkf_key, sizeof(dc_key));
 		mem_free(bkf_key);
 	}
-
-	zeromem(&v_header, sizeof(v_header));
-	zeromem(&b_header, sizeof(b_header));
+	
+	zeroauto(&b_header, sizeof(b_header));
 
 	return resl;
 }
@@ -374,71 +380,49 @@ void dc_delayed_shrink(
 	   dev_hook *hook, dc_header *hcopy, char *pass
 	   )
 {
-	u8  buff[SECTOR_SIZE];
-	int resl;
+	NTSTATUS status;
+	u8       buff[SECTOR_SIZE];
 
-	if ( (hcopy->flags & VF_TMP_MODE) && (hcopy->tmp_size == 0) )
-	{
-		/* read temp sector */
-		resl = dc_device_rw(
-			hook, IRP_MJ_READ, &buff, sizeof(buff), hcopy->tmp_save_off
-			);
+	DbgMsg("dc_delayed_shrink\n");
 
-		if (resl == ST_OK)
-		{
-			/* set new FS sectors count */
-			p32(buff + hcopy->shrink_off)[0] = hcopy->shrink_val;
-
-			/* write temp sector */
-			dc_device_rw(
-				hook, IRP_MJ_WRITE, &buff, sizeof(buff), hcopy->tmp_save_off
-				);
-		}		
-	} else
+	do
 	{
 		/* read first FS sector */
-		resl = dc_device_rw(
-			hook, IRP_MJ_READ, &buff, sizeof(buff), SECTOR_SIZE
+		status = io_device_rw_block(
+			hook->hook_dev, IRP_MJ_READ, buff, sizeof(buff), 0, SL_OVERRIDE_VERIFY_VOLUME
 			);
 
-		if (resl == ST_OK)
-		{
-			aes_lrw_decrypt(
-				buff, buff, SECTOR_SIZE, lrw_index(0), &hook->dsk_key
-				);
-
-			/* set new FS sectors count */
-			p32(buff + hcopy->shrink_off)[0] = hcopy->shrink_val;
-
-			aes_lrw_encrypt(
-				buff, buff, SECTOR_SIZE, lrw_index(0), &hook->dsk_key
-				);
-
-			/* write first FS sector */
-			dc_device_rw(
-				hook, IRP_MJ_WRITE, &buff, sizeof(buff), SECTOR_SIZE
-				);
+		if (NT_SUCCESS(status) == FALSE) {
+			break;
 		}
-	}
+
+		/* set new FS sectors count */
+		p32(buff + hcopy->shrink_off)[0] = hcopy->shrink_val;
+
+		/* write first FS sector */
+		io_device_rw_block(
+			hook->hook_dev, IRP_MJ_WRITE, buff, sizeof(buff), 0, SL_OVERRIDE_VERIFY_VOLUME
+			);
+	} while (0);
 
 	/* clean shrink flags */
 	hcopy->flags     &= ~VF_SHRINK_PENDING;
 	hcopy->shrink_off = 0;
-	hcopy->shrink_val = 0;
+	hcopy->shrink_val = 0;	
 	/* save volume header and backup header */
 	dc_write_header(hook, hcopy, 0, pass);
 	dc_write_header(hook, hcopy, DC_BACKUP_OFFSET(hook), pass);
 }
 
-int dc_mount_device(wchar_t *dev_name, char *passwod)
+int dc_mount_device(wchar_t *dev_name, char *password)
 {
 	dc_header     hcopy;
 	char          pass[MAX_PASSWORD + 1];
-	dev_hook     *hook    = NULL;
-	aes_key      *hdr_key = NULL;
+	dev_hook     *hook = NULL;
+	dc_key       *hdr_key = NULL;
 	DISK_GEOMETRY dg;
 	NTSTATUS      status;
-	int           resl, lock;
+	int           resl;
 	
 	DbgMsg("dc_mount_device %ws\n", dev_name);
 
@@ -450,12 +434,14 @@ int dc_mount_device(wchar_t *dev_name, char *passwod)
 			resl = ST_NF_DEVICE; break;
 		}
 
-		if (hook_lock_acquire(hook, &lock) == 0) {
-			resl = ST_DEVICE_BUSY; break;
-		}
+		wait_object_infinity(&hook->busy_lock);		
 
 		if (hook->flags & F_ENABLED) {
 			resl = ST_ALR_MOUNT; break;
+		}
+
+		if (hook->flags & (F_UNSUPRT | F_DISABLE | F_FORMATTING)) {
+			resl = ST_ERROR; break;
 		}
 
 		status = io_device_control(
@@ -478,13 +464,13 @@ int dc_mount_device(wchar_t *dev_name, char *passwod)
 		}
 
 		resl = dc_get_header_and_restory_copy(
-			hook, &hcopy, &hdr_key, pass, 0, DC_BACKUP_OFFSET(hook), passwod
+			hook, &hcopy, &hdr_key, pass, 0, DC_BACKUP_OFFSET(hook), password
 			);
-	
+
 		if (resl == ST_PASS_ERR)
 		{
 			resl = dc_get_header_and_restory_copy(
-				hook, &hcopy, &hdr_key, pass, DC_BACKUP_OFFSET(hook), 0, passwod
+				hook, &hcopy, &hdr_key, pass, DC_BACKUP_OFFSET(hook), 0, password
 				);
 		}
 		
@@ -494,14 +480,14 @@ int dc_mount_device(wchar_t *dev_name, char *passwod)
 		
 		DbgMsg("hdr_key %x\n", hdr_key);
 
-		aes_lrw_init_key(
-		   &hook->dsk_key, hcopy.key_data + DISK_IV_SIZE, hcopy.key_data
-		   );
+		dc_cipher_init(
+			&hook->dsk_key, hook->crypt.cipher_id, 
+			hook->crypt.mode_id, hcopy.key_data
+			);
 
 		DbgMsg("device mounted\n");
 
 		hook->disk_id    = hcopy.disk_id;
-		hook->wp_mode    = hcopy.tmp_wp_mode;
 		hook->vf_version = BE16(hcopy.version);
 
 		DbgMsg("hook->vf_version %d\n", hook->vf_version);
@@ -509,52 +495,60 @@ int dc_mount_device(wchar_t *dev_name, char *passwod)
 
 		if (hook->vf_version == 2) {
 			hook->use_size = hook->dsk_size - HEADER_SIZE;
-		} else 
-		{
-			if (hcopy.flags & VF_SHRINK_PENDING) {
-				dc_delayed_shrink(hook, &hcopy, pass);
-			}
-
+		} else {
 			hook->use_size = hook->dsk_size - HEADER_SIZE - DC_RESERVED_SIZE;
 		}
-			
+
 		if (hcopy.flags & VF_TMP_MODE)
 		{
 			hook->tmp_size       = hcopy.tmp_size;
 			hook->tmp_save_off   = hcopy.tmp_save_off;
 			hook->hdr_key        = hdr_key;
-			hook->sync_init_type = S_CONTINUE_ENC;
+			hook->crypt.wp_mode  = hcopy.tmp_wp_mode;			
+
+			if (hcopy.flags & VF_REENCRYPT) {
+				hook->sync_init_type = S_CONTINUE_RE_ENC;
+			} else {
+				hook->sync_init_type = S_CONTINUE_ENC;
+			}
 				
 			/* copy decrypted header and password to device data */
-			fastcpy(&hook->tmp_header, &hcopy, sizeof(dc_header));
+			autocpy(&hook->tmp_header, &hcopy, sizeof(dc_header));
 			strcpy(hook->tmp_pass, pass);
 				
 			if ( (resl = dc_enable_sync_mode(hook)) != ST_OK ) 
 			{
-				zeromem(&hook->tmp_header, sizeof(dc_header));
-				zeromem(&hook->tmp_pass, sizeof(hook->tmp_pass));
+				zeroauto(&hook->tmp_header, sizeof(dc_header));
+				zeroauto(&hook->tmp_pass, sizeof(hook->tmp_pass));
 				hdr_key = hook->hdr_key;
-			} else {
+			} else 
+			{
+				if ( (hcopy.flags & VF_SHRINK_PENDING) && (hook->vf_version == TC_VOLUME_HEADER_VERSION) ) 
+				{
+					dc_delayed_shrink(hook, &hcopy, pass);
+					/* copy changed header to device data */
+					autocpy(&hook->tmp_header, &hcopy, sizeof(dc_header));
+				}
 				hdr_key = NULL; /* prevent key wiping */
 			}
 		} else {
 			hook->flags |= F_ENABLED; resl = ST_OK;
-		}
+		}			
 	} while (0);
-
-	if (hook != NULL) {
-		hook_lock_release(hook, lock);
-		dc_deref_hook(hook);
-	}
 
 	/* prevent leaks */
 	if (hdr_key != NULL) {
-		zeromem(hdr_key, sizeof(aes_key));
+		zeroauto(hdr_key, sizeof(dc_key));
 		mem_free(hdr_key);
 	}
 
-	zeromem(pass, sizeof(pass));
-	zeromem(&hcopy,  sizeof(dc_header));
+	zeroauto(pass, sizeof(pass));
+	zeroauto(&hcopy,  sizeof(dc_header));
+
+	if (hook != NULL) {
+		KeReleaseMutex(&hook->busy_lock, FALSE);
+		dc_deref_hook(hook);
+	}	
 
 	lock_dec(&dc_data_lock);
 
@@ -572,14 +566,22 @@ int dc_process_unmount(dev_hook *hook, int opt)
 	HANDLE h_dev = NULL;
 	int    resl;
 
-	DbgMsg("dc_process_unmount at IRQL %d\n", KeGetCurrentIrql());
+	DbgMsg("dc_process_unmount\n");
 	
 	if ( !(hook->flags & F_ENABLED) ) {
 		return ST_NO_MOUNT;
 	}
 
+	if ( !(opt & UM_NOSYNC) ) {
+		wait_object_infinity(&hook->busy_lock);
+	}
+
 	do
 	{
+		if (hook->flags & F_FORMATTING) {
+			dc_format_done(hook->dev_name);
+		}
+
 		if ( !(hook->flags & F_SYSTEM) && !(opt & UM_NOFSCTL) )
 		{
 			h_dev = io_open_volume(hook->dev_name);
@@ -604,86 +606,86 @@ int dc_process_unmount(dev_hook *hook, int opt)
 			hook->flags |= F_DISABLE;
 
 			/* send signal to syncronous mode thread */
-			dc_send_sync_packet(
-				hook->dev_name, S_OP_FINALIZE, 0
-				);
+			dc_send_sync_packet(hook->dev_name, S_OP_FINALIZE, 0);
 
 			/* enable IRP processing */
 			hook->flags &= ~F_DISABLE;
-		}
+		}		
 
-		hook->flags    &= ~(F_ENABLED | F_SYNC);
+		hook->flags    &= ~(F_ENABLED | F_SYNC | F_REENCRYPT);
 		hook->use_size  = hook->dsk_size;
 		hook->tmp_size  = 0;
 		resl            = ST_OK;
 
 		/* prevent leaks */
-		zeromem(&hook->dsk_key, sizeof(aes_key));
+		zeroauto(&hook->dsk_key, sizeof(dc_key));
 	} while (0);
 
 	if (h_dev != NULL) {
 		ZwClose(h_dev);
 	}
+
+	if ( !(opt & UM_NOSYNC) ) {
+		KeReleaseMutex(&hook->busy_lock, FALSE);
+	}
 	
 	return resl;
 }
 
-static void dc_unmount_callback(
-			  dev_hook *hook, unm_struct *unm, int resl
-			  )
+static void unmount_thread_proc(mount_ctx *mnt) 
 {
-	if (hook->flags & F_SYNC) {
-		// enable IRP processing
-		hook->flags &= ~F_DISABLE;
+	int resl;
+
+	DbgMsg("unmount_thread_proc\n");
+
+	resl = dc_process_unmount(mnt->hook, UM_NOFSCTL);
+	mnt->on_complete(mnt->hook, mnt->param, resl);
+	dc_deref_hook(mnt->hook);
+	mem_free(mnt);
+
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+static void unmount_item_proc(mount_ctx *mnt)
+{
+	int resl;
+
+	DbgMsg("unmount_item_proc\n");
+
+	resl = start_system_thread(unmount_thread_proc, mnt, NULL);
+
+	if (resl != ST_OK) {
+		mnt->on_complete(mnt->hook, mnt->param, resl);
+		dc_deref_hook(mnt->hook);
+		mem_free(mnt);
 	}
-
-	hook->flags    &= ~(F_ENABLED | F_SYNC);
-	hook->use_size  = hook->dsk_size;
-	hook->tmp_size  = 0;
-
-	unm->on_complete(
-		hook, unm->param, resl
-		);
-	
-	/* prevent leaks */
-	zeromem(&hook->dsk_key, sizeof(aes_key));
-
-	mem_free(unm);
 }
 
 void dc_process_unmount_async(
 		dev_hook *hook, s_callback on_complete, void *param
 		)
 {
-	unm_struct *unm;
-	int         resl;
+	mount_ctx *mnt;
 
-	if ( !(hook->flags & (F_ENABLED | F_SYNC)) ) {
-		on_complete(hook, param, ST_NO_MOUNT); return;
-	}
+	DbgMsg("dc_process_unmount_async\n");
 
-	if ( (unm = mem_alloc(sizeof(unm_struct))) == NULL ) {
-		on_complete(hook, param, ST_NOMEM); return;
-	}
-
-	unm->on_complete = on_complete;
-	unm->param       = param;
-
-	if (hook->flags & F_SYNC)
+	if ( (mnt = mem_alloc(sizeof(mount_ctx))) == NULL ) {
+		on_complete(hook, param, ST_NOMEM);
+	} else
 	{
-		// temporary disable IRP processing 
-		hook->flags |= F_DISABLE;
+		mnt->on_complete = on_complete;
+		mnt->param       = param;
+		mnt->hook        = hook;
 
-		// send signal to syncronous mode thread
-		resl = dc_send_async_packet(
-			hook->dev_name, S_OP_FINALIZE, 0, dc_unmount_callback, unm 
+		dc_reference_hook(hook);
+
+		ExInitializeWorkItem(
+			&mnt->wrk_item, unmount_item_proc, mnt
 			);
 
-		if (resl != ST_OK) {
-			dc_unmount_callback(hook, unm, resl);
-		}
-	} else {
-		dc_unmount_callback(hook, unm, ST_OK);
+		ExQueueWorkItem(
+			&mnt->wrk_item, DelayedWorkQueue
+			);
 	}
 }
 
@@ -691,24 +693,17 @@ void dc_process_unmount_async(
 int dc_unmount_device(wchar_t *dev_name, int force)
 {
 	dev_hook *hook;
-	int       resl, lock;
+	int       resl;
 
 	DbgMsg("dc_unmount_device %ws\n", dev_name);
 
 	if (hook = dc_find_hook(dev_name)) 
 	{
-		if (hook_lock_acquire(hook, &lock) != 0) 
-		{
-			if (IS_UNMOUNTABLE(hook)) {
-				resl = dc_process_unmount(hook, force);
-			} else {
-				resl = ST_UNMOUNTABLE;
-			}			
+		if (IS_UNMOUNTABLE(hook)) {
+			resl = dc_process_unmount(hook, force);
 		} else {
-			resl = ST_DEVICE_BUSY;
-		}		
-
-		hook_lock_release(hook, lock);
+			resl = ST_UNMOUNTABLE;
+		}
 		dc_deref_hook(hook);
 	} else {
 		resl = ST_NF_DEVICE;
@@ -786,10 +781,12 @@ static void mount_item_proc(mount_ctx *mnt)
 		if (lock_inc(&hook->mnt_probe_cnt) > MAX_MNT_PROBES) {
 			hook->mnt_probed = 1;
 		}
+	}
 
-		dc_forward_irp(dev_obj, mnt->irp);
-	} else {
+	if (hook->flags & F_ENABLED) {
 		dc_read_write_irp(dev_obj, mnt->irp);
+	} else {
+		dc_forward_irp(dev_obj, mnt->irp);
 	}
 
 	mem_free(mnt);

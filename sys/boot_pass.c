@@ -43,80 +43,92 @@ static void *find_8b(u8 *data, int size, u32 s1, u32 s2)
 	return find;
 }
 
-static void dc_load_boot_pass(rb_data *rbd)
+static void dc_zero_boot(u32 pm_base, u32 pm_size)
 {
 	PHYSICAL_ADDRESS addr;
-	u32              pm_base;
-	u32              pm_size;
 	void            *emem;
-	ldr_config      *conf;	
+	ldr_config      *conf;
 	
-	emem = NULL;
-	do
+	/* map bootloader body */
+	addr.HighPart = 0;
+	addr.LowPart  = pm_base;
+
+	if (emem = MmMapIoSpace(addr, pm_size, MmCached))
 	{
-		/* get bootloader body offset and size */
-		pm_base = rbd->pm_base;
-		pm_size = rbd->pm_size;			
-
-		/* map bootloader body */
-		addr.HighPart = 0;
-		addr.LowPart  = pm_base;
-		if ( (emem = MmMapIoSpace(addr, pm_size, MmCached)) == NULL ) {
-			break;
-		}
-
 		/* find configuration area */
-		if ( (conf = find_8b(emem, pm_size, 0x1434A669, 0x7269DA46)) == NULL ) {
-			break;
+		if (conf = find_8b(emem, pm_size, 0x1434A669, 0x7269DA46))
+		{
+			/* add legacy bootloader password to cache */
+			dc_add_password(conf->pass_buf);
+
+			/* zero bootloader body */
+			zeromem(emem, pm_size);
 		}
 
-		/* add password to cache */
-		if (conf->pass_buf[0] != 0) {
-			dc_add_password(conf->pass_buf);				
-		}
-
-		/* zero bootloader body */
-		zeromem(emem, pm_size);
-	} while (0);
-
-	if (emem != NULL) {
 		MmUnmapIoSpace(emem, pm_size);
 	}
+}
+
+static void dc_scan_page(u8 *base)
+{
+	rb_data   *rbd;
+	rb_legacy *rbd_l;
+	u32        rbm, rbs;	
+	u32        pm_base, pm_size;
+
+	rbm = 0; rbs = PAGE_SIZE;
+	do
+	{
+		/* find real mode block */
+		if (rbd = find_8b(base + rbm, rbs, 0x01F53F55, 0x9E4361E4))
+		{
+			if (rbd->sign3 == 0x13B3F73D) 
+			{
+				/* add password to cache */
+				dc_add_password(rbd->info.password);
+
+				/* update pointers */
+				rbm    += min(rbd->rb_size, PAGE_SIZE);
+				pm_base = rbd->pm_base;
+				pm_size = rbd->pm_size;
+
+				/* zero real mode block */
+				zeroauto(rbd, sizeof(rb_data));
+			} else 
+			{
+				rbd_l = pv(rbd);
+				/* update pointers */
+				rbm    += min(rbd_l->rb_size, PAGE_SIZE);
+				pm_base = rbd_l->pm_base;
+				pm_size = rbd_l->pm_size;
+			}
+			rbs = PAGE_SIZE - rbm;
+
+			/* zero bootloader body */
+			if (pm_base != 0) {
+				dc_zero_boot(pm_base, pm_size);
+			}
+		}
+	} while ( (rbd != NULL) && (rbs > sizeof(rb_data)) );
 }
 
 void dc_get_boot_pass()
 {
 	PHYSICAL_ADDRESS addr;
 	u8              *bmem;
-	u32              rbm;
-	int              rbs;
-	rb_data         *rbd;
+	int              kbs;
+
+	kbs = 640; addr.QuadPart = 0;
 	
-	bmem = NULL;
 	do
 	{
-		/* map base memory */
-		addr.QuadPart = 0;
-		
-		if ( (bmem = MmMapIoSpace(addr, BMEM_SIZE, MmCached)) == NULL ) {
-			break;
+		if (bmem = MmMapIoSpace(addr, PAGE_SIZE, MmCached))
+		{
+			dc_scan_page(bmem);
+
+			MmUnmapIoSpace(bmem, PAGE_SIZE);
 		}
 
-		rbm = 0; rbs = BMEM_SIZE;
-		do
-		{
-			/* find real mode block */
-			if (rbd = find_8b(bmem + rbm, rbs, 0x01F53F55, 0x9E4361E4))
-			{
-				rbm = rbd->rb_base + rbd->rb_size;
-				rbs = BMEM_SIZE - rbm;
-
-				dc_load_boot_pass(rbd);
-			}
-		} while ( (rbd != NULL) && (rbs > sizeof(rb_data)) );
-	} while (0);
-
-	if (bmem != NULL) {
-		MmUnmapIoSpace(bmem, BMEM_SIZE);
-	}
+		addr.LowPart += PAGE_SIZE, kbs -= 4;
+	} while (kbs != 0);	
 }

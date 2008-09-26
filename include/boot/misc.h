@@ -3,7 +3,6 @@
 
 u32  get_rtc_time();
 void _putch(char ch);
-void setchar(char ch);
 char _getch();
 int  _kbhit();
 void puts(char *msg);

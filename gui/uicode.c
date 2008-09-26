@@ -21,21 +21,27 @@
 
 #include <windows.h>
 #include <ctype.h>
+#include <shlwapi.h>
+#include <shlobj.h>
+
 #include "resource.h"
 #include "hotkeys.h"
 #include "uicode.h"
 #include "defines.h"
 #include "misc.h"
+#include "subs.h"
 #include "main.h"
 #include "..\boot\boot.h"
+#include "crypto\crypto.h"
+#include "crypto\pkcs5.h"
 
 colinfo _main_headers[ ] = {
-	{ L" ", 110 },
-	{ L"Size", 75 },
-	{ L"Label", 100 },
-	{ L"Type", 50 },
-	{ L"Status", 80 },
-	{ L" ", 70 },
+	{ L" ", 120 },
+	{ L"Size", 74 },
+	{ L"Label", 94 },
+	{ L"Type", 43 },
+	{ L"Status", 88 },
+	{ L" ", 65 },
 	{ L"", 0 }
 };
 
@@ -44,7 +50,6 @@ colinfo _boot_headers[ ] = {
 	{ L"Size", 60 },
 	{ L"Bootloader", 75 },
 	{ L" ", 40 },
-	{ L" ", 95 },
 	{ L"", 0 }
 };
 
@@ -56,9 +61,20 @@ colinfo _part_by_id_headers[ ] = {
 	{ L"",  },
 };
 
+colinfo _benchmark_headers[ ] = {
+	{ L"Cipher", 160 },
+	{ L"Mode", 60 },
+	{ L"Speed", 90 },
+	{ L"",  },
+};
+
 wchar_t *_info_table_items[ ] = {
+	L"Symbolic Link",
 	L"Device",
-	L"Type",
+	L" ",
+	L"Cipher",
+	L"Encryption mode",
+	L"Pkcs5.2 prf",
 	L""
 };
 
@@ -82,6 +98,29 @@ _static_view pass_pe_ctls[ ] = {
 	{ IDC_PE_MEDIUM, 0, 0 }, { IDC_PE_HIGH, 0, 0 },
 	{ IDC_PE_UNCRK,  0, 0 }, 
 	{ -1, 0, 0 }
+};
+
+_combo_list cipher_names[ ] = {
+	{ CF_AES,             L"AES" },
+	{	CF_TWOFISH,         L"Twofish" },
+	{	CF_SERPENT,         L"Serpent" },
+	{	CF_AES_TWOFISH,     L"AES-Twofish" },
+	{	CF_TWOFISH_SERPENT, L"Twofish-Serpent" },
+	{	CF_SERPENT_AES,     L"Serpent-AES" },
+	{	CF_AES_TWOFISH_SERPENT, L"AES-Twofish-Serpent" },
+	{ 0, L"" }
+};
+
+_combo_list mode_names[ ] = {
+	{	EM_XTS, L"XTS" },
+	{	EM_LRW, L"LRW" },
+	{ 0, L"" }
+};
+
+_combo_list prf_names[ ] = {
+	{	PRF_HMAC_SHA512, L"HMAC-SHA-512" },
+	{	PRF_HMAC_SHA1,   L"HMAC-SHA-1" },
+	{ 0, L"" }
 };
 
 _combo_list wipe_modes[ ] = {
@@ -148,7 +187,15 @@ _combo_list bad_pass_act[ ] = {
 	{ ET_BOOT_ACTIVE,  L"Boot from active partition" },
 	{ ET_EXIT_TO_BIOS, L"Exit to BIOS" },
 	{ ET_RETRY,        L"Retry authentication" },
-	{ 0, L"" },
+	{ 0, L"" }
+};
+
+_combo_list loader_type[ ] = {
+	{ CTL_LDR_MBR,   L"HDD master boot record", },
+	{ CTL_LDR_STICK, L"Bootable partition (USB-Stick, etc)", },
+	{ CTL_LDR_ISO,   L"ISO bootloader image", },
+	{ CTL_LDR_PXE,   L"Bootloader image for PXE network booting" },
+	{ 0, L"" }
 };
 
 _ctl_init hotks_chk[ ] = {
@@ -177,15 +224,16 @@ _ctl_init hotks_static[ ] = {
 
 HINSTANCE __hinst;
 
+HFONT __font_small;
 HFONT __font_bold;
 HFONT __font_link;
-HFONT __font_small;
 
-HCURSOR __cur_hand;
 HCURSOR __cur_arrow;
+HCURSOR __cur_hand;
+HCURSOR __cur_wait;
 
-HIMAGELIST __img;
 HIMAGELIST __dsk_img;
+HIMAGELIST __img;
 
 HWND __dlg;
 HWND __dlg_shrink;
@@ -296,7 +344,7 @@ LPARAM _get_item_index(
 	)
 {
 	LVITEM lvi;
-	memset(&lvi, '\0', sizeof(LVITEM));
+	zeroauto(&lvi, sizeof(LVITEM));
 
 	lvi.mask = LVIF_PARAM;
 	lvi.iItem = item;
@@ -351,6 +399,86 @@ DWORD _cl(
 	b += ((255 - b) * prc) / 100;
 
 	return (r | (g << 8) | (b << 16));
+
+}
+
+
+void _relative_move(
+		HWND h_anchor,
+		HWND h_child,
+		int dy,
+		int dx
+	)
+{
+	RECT rc_parent;
+	RECT rc_anchor;
+
+	RECT rc_child;
+	RECT rc_relative;
+
+	RECT anchor_size;
+	RECT ñhild_size;
+
+	RECT rect;
+	WINDOWINFO winfo;
+
+	GetWindowInfo(GetParent(h_anchor), &winfo);
+
+	GetWindowRect(GetParent(h_anchor), &rc_parent);
+	GetWindowRect(h_anchor, &rc_anchor);
+	GetWindowRect(h_child, &rc_child);
+
+	GetClientRect(h_anchor, &anchor_size);
+	GetClientRect(h_child, &ñhild_size);
+
+	rc_relative.top = rc_anchor.top - rc_parent.top;
+	rc_relative.left = rc_anchor.left - rc_parent.left;
+
+	//
+	rect.top = dy ? 
+		rc_relative.top + /*anchor_size.bottom +*/ dy :
+		rc_child.top - rc_parent.top;
+
+	rect.left = dx ? 
+		rc_relative.top + anchor_size.bottom + dy :
+		rc_child.left - rc_parent.left;
+
+	rect.left -= winfo.cxWindowBorders;
+	rect.top -= winfo.cyWindowBorders;
+	
+	MoveWindow(
+		h_child, 
+		rect.left, 
+		rect.top, 
+		ñhild_size.right, 
+		ñhild_size.bottom, 
+		TRUE
+
+	);
+}
+
+
+void _relative_rect(
+		HWND hwnd,
+		RECT *rc
+	)
+{
+	RECT rc_parent;
+	RECT rc_size;
+
+	WINDOWINFO winfo;
+
+	GetWindowInfo(GetParent(hwnd), &winfo);
+	GetWindowRect(GetParent(hwnd), &rc_parent);
+
+	GetWindowRect(hwnd, rc);
+	GetClientRect(hwnd, &rc_size);
+
+	rc->top  -= (rc_parent.top  + winfo.cyWindowBorders + GetSystemMetrics(SM_CYCAPTION));
+	rc->left -= (rc_parent.left + winfo.cxWindowBorders);
+
+	rc->right  = /*rc->left + */rc_size.right  + winfo.cxWindowBorders - 1;
+	rc->bottom = /*rc->top  + */rc_size.bottom + winfo.cyWindowBorders - 1;
 
 }
 
@@ -470,8 +598,9 @@ BOOL _ui_init(
 	ImageList_Add(__dsk_img, undisk, undisk_mask);
 	ImageList_Add(__dsk_img, disk_enb, disk_mask);
 
-	__cur_hand = LoadCursor(NULL, IDC_HAND);
 	__cur_arrow = LoadCursor(NULL, IDC_ARROW);
+	__cur_hand  = LoadCursor(NULL, IDC_HAND);
+	__cur_wait  = LoadCursor(NULL, IDC_WAIT);
 
 	return  TRUE;
 
@@ -513,6 +642,27 @@ void __unsub_class(
 		free(data);
 		SetWindowLongPtr(hwnd, GWL_USERDATA, 0);
 
+	}
+}
+
+
+void _init_mount_points(
+		HWND hwnd
+	)
+{
+	wchar_t item[MAX_PATH];
+
+	int drives = GetLogicalDrives( );
+	int k = 2;
+
+	SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)L"Select Folder..");
+	for ( ; k < 26; k++ ) 
+	{
+		if (!(drives & (1 << k)))
+		{
+			_snwprintf(item, sizeof_w(item), L"%c:", 'A'+k);
+			SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)item);
+		}
 	}
 }
 
@@ -668,10 +818,13 @@ void _draw_listview(
 	ListView_GetItem(itst->hwndItem, &lvitem);	
 	root = _is_root_item(lvitem.lParam);
 
-	if (itst->itemState & ODS_SELECTED && IsWindowEnabled(itst->hwndItem)) bgcolor = CL_WHITE; //_cl(COLOR_BTNSHADOW, 88);
-	if (root) bgcolor = _cl(COLOR_BTNSHADOW, 60);	
+	//if (_is_warning_item(lvitem.lParam)) bgcolor = CL_WARNING_BG;
 
+	if (itst->itemState & ODS_SELECTED && IsWindowEnabled(itst->hwndItem)) bgcolor = CL_WHITE; //_cl(COLOR_BTNSHADOW, 88);
+
+	if (root) bgcolor = _cl(COLOR_BTNSHADOW, 60);	
 	if (_is_marked_item(lvitem.lParam)) bgcolor = _cl(COLOR_BTNSHADOW, 35);
+	
 	_fill(itst->hDC, &itst->rcItem, bgcolor);
 
 	for ( ;k < cols; k++ ) {
@@ -727,11 +880,19 @@ void _draw_listview(
 		} else {
 			if (wcslen(text)) {
 
-				SetTextColor(itst->hDC, _is_active_item(lvitem.lParam) ? 
-					GetSysColor(COLOR_WINDOWTEXT) : GetSysColor(COLOR_GRAYTEXT));
+				COLORREF text_color = GetSysColor(COLOR_WINDOWTEXT);
+				if (_is_warning_item(lvitem.lParam)) {
+
+					//text_color = CL_WARNING;
+					//SelectObject(itst->hDC, __font_bold);
+
+				}
+				if (!_is_active_item(lvitem.lParam)) text_color = GetSysColor(COLOR_GRAYTEXT);
+
+				SetTextColor(itst->hDC, text_color);
 
 				if (k >= 4) SelectObject(itst->hDC, __font_bold);
-				if (!IsWindowEnabled(itst->hwndItem)) {					
+				if (!IsWindowEnabled(itst->hwndItem)) {			
 
 					//DrawState(itst->hDC, 0, NULL, (LPARAM)text, 0,
 					//	itst->rcItem.left+5, itst->rcItem.top, 0, 0, DST_PREFIXTEXT | DSS_MONO | DSS_DISABLED);
@@ -1123,10 +1284,7 @@ void _init_combo(
 }
 
 
-int _get_combo_val(
-		HWND hwnd, 
-		_combo_list *list
-	)
+int _get_combo_val(HWND hwnd, _combo_list *list)
 {
 	int count = 0;
 	wchar_t text[MAX_PATH];
@@ -1142,6 +1300,80 @@ int _get_combo_val(
 	}
 	return -1;
 
+}
+
+wchar_t *_get_text_name(int val, _combo_list *list)
+{
+	int count = 0;
+	while (wcslen(list[count].display)) {
+
+		if (list[count].val == val) 
+			return list[count].display;
+
+		count++;
+
+	}
+	return NULL;
+
+}
+
+
+int 
+CALLBACK 
+_browse_callback(
+		HWND hwnd,
+		UINT msg,
+		LPARAM lparam,
+		LPARAM data
+	)
+{
+	WIN32_FIND_DATA file_data;
+	HANDLE h_find;
+
+	int count = -1;
+	wchar_t path[MAX_PATH];
+
+	if (msg == BFFM_SELCHANGED) 
+	{
+		if (SHGetPathFromIDList((PIDLIST_ABSOLUTE)lparam, path)) 
+		{
+			_trailing_slash(path);
+			wcscat(path, L"*.*");
+
+			h_find = FindFirstFile(path, &file_data);
+			if (h_find != INVALID_HANDLE_VALUE) 
+			{
+				while (FindNextFile(h_find, &file_data) != 0) 
+					count++;
+
+				FindClose(h_find);
+			}
+		}
+	}
+	return 1L;
+}
+
+
+BOOL _folder_choice(
+		HWND hwnd, 
+		wchar_t *path, 
+		wchar_t *title
+	)
+{
+	PIDLIST_ABSOLUTE pid;
+	BROWSEINFO binfo = { hwnd };
+
+	binfo.pszDisplayName = path;
+	//binfo.lpfn           = _browse_callback; 
+	binfo.ulFlags        = BIF_NEWDIALOGSTYLE;
+	binfo.lpszTitle      = title;
+
+	pid = SHBrowseForFolder(&binfo);
+	if (pid) {
+		if (SHGetPathFromIDList(pid, path)) return TRUE;
+
+	}
+	return FALSE;
 }
 
 

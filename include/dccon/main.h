@@ -1,7 +1,7 @@
 #ifndef _MAIN_
 #define _MAIN_
 
-#include "drv_ioctl.h"
+#include "dcapi\drv_ioctl.h"
 
 void  cls_console();
 char  getchr(char min, char max);
@@ -13,7 +13,9 @@ int   dc_set_boot_interactive(int d_num);
 
 #define MAX_VOLUMES 128
 
-extern vol_inf volumes[MAX_VOLUMES];
-extern u32     vol_cnt;
+extern vol_inf   volumes[MAX_VOLUMES];
+extern u32       vol_cnt;
+extern int       g_argc;
+extern wchar_t **g_argv;
 
 #endif

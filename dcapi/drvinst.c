@@ -107,7 +107,7 @@ int dc_load_conf(dc_conf_data *conf)
 		cb = sizeof(conf->hotkeys);
 
 		if (RegQueryValueEx(h_key, L"Hotkeys", NULL, NULL, pv(&conf->hotkeys), &cb) != 0) {
-			zeromem(&conf->hotkeys, sizeof(conf->hotkeys));
+			zeroauto(&conf->hotkeys, sizeof(conf->hotkeys));
 		}
 
 		if (dc_get_conf_flags(&d_conf) == ST_OK) {
@@ -224,7 +224,7 @@ static int set_to_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 	}
 
 	memmove(p8(buf) + len, buf, cb);
-	memcpy(buf, name, len);
+	mincpy(buf, name, len);
 	cb += len;
 
 	return RegSetValueEx(h_key, v_name, 0, REG_MULTI_SZ, p8(buf), cb) == 0;
@@ -372,8 +372,7 @@ int dc_install_driver(wchar_t *name)
 		}
 		
 		/* setup default config */
-		zeromem(&conf, sizeof(conf));
-		conf.conf_flags = CONF_QUEUE_IO;
+		zeroauto(&conf, sizeof(conf));		
 		resl = dc_save_conf(&conf);
 	} while (0);
 

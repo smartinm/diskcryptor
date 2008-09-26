@@ -29,7 +29,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 
 IDR_MBR                 EXEFILE                 "..\\boot\\bin\\mbr_boot.bin"
 IDR_DCLDR               EXEFILE                 "..\\boot\\bin\\dcldr"
-IDR_FATBOOT             EXEFILE                 "..\\boot\\bin\\fat_boot.bin"
    
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION    DC_MAJOR_VER,DC_MINOR_VER,DC_DRIVER_VER,DC_BOOT_VER

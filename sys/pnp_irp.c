@@ -29,6 +29,7 @@
 #include "prng.h"
 #include "dump_hook.h"
 #include "enc_dec.h"
+#include "debug.h"
 
 
 static
@@ -236,7 +237,7 @@ NTSTATUS
 
 	do
 	{
-		zeromem(buf, sizeof(buf));
+		zeroauto(buf, sizeof(buf));
 
 		status = ObQueryNameString(
 			       dev_obj, inf, sizeof(buf), &size
@@ -257,7 +258,7 @@ NTSTATUS
 			break;
 		}
 
-		zeromem(hook_dev->DeviceExtension, sizeof(dev_hook));
+		zeroauto(hook_dev->DeviceExtension, sizeof(dev_hook));
 
 		hook           = hook_dev->DeviceExtension;
 		hook->hook_dev = hook_dev;
@@ -276,13 +277,13 @@ NTSTATUS
 		hook_dev->Characteristics = hook->orig_dev->Characteristics;
 		hook_dev->Flags          |= (DO_DIRECT_IO | DO_POWER_PAGABLE); 
 		
-		IoInitializeRemoveLock(
-			&hook->remv_lock, 0, 0, 0
-			);
+		IoInitializeRemoveLock(&hook->remv_lock, 0, 0, 0);
 
 		KeInitializeEvent(
 			&hook->paging_count_event, NotificationEvent, TRUE
 			);
+
+		KeInitializeMutex(&hook->busy_lock, 0);
 
 		wcscpy(hook->dev_name, inf->Name.Buffer);
 
