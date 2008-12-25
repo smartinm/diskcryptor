@@ -29,7 +29,6 @@
 #include "ntdll.h"
 #include "iso_fs.h"
 
-#define OLD_SIGN      0x69EADBF4
 #define NEW_SIGN      0x20B60251
 #define DC_ISO_SIZE   1835008
 #define BOOT_MAX_SIZE (2048 * 1024)
@@ -114,11 +113,8 @@ ldr_config *dc_find_conf(char *data, int size)
 	{
 		cnf = pv(data);
 
-		if ( (cnf->sign1 == 0x1434A669) && (cnf->sign2 == 0x7269DA46) &&
-			 (cnf->sign3 == 0x342C8006) && (cnf->sign4 == 0x1280A744)) 
-		{
-			conf = cnf;
-			break;
+		if ( (cnf->sign1 == 0x1434A669) && (cnf->sign2 == 0x7269DA46) ) {
+			conf = cnf;	break;
 		}
 	}
 
@@ -141,18 +137,15 @@ int dc_make_iso(wchar_t *file)
 		struct iso_initial_entry      *ie;
 		
 		if ( (isobuf = malloc(DC_ISO_SIZE)) == NULL ) {
-			resl = ST_NOMEM;
-			break;
+			resl = ST_NOMEM; break;
 		}
 
 		if ( (boot = dc_extract_rsrc(&bootsz, IDR_MBR)) == NULL ) {
-			resl = ST_ERROR;
-			break;
+			resl = ST_ERROR; break;
 		}
 			
 		if ( (loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR)) == NULL ) {
-			resl = ST_ERROR;
-			break;
+			resl = ST_ERROR; break;
 		}
 
 		/*
@@ -274,8 +267,7 @@ int dc_get_boot_disk(int *dsk_num)
 	do
 	{
 		resl = dc_get_drive_info(
-			L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info
-			);
+			L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info);
 
 		if ( (resl != ST_OK) || (info.dsk_type == DSK_DYN_SPANNED) ) {
 			resl = ST_NF_BOOT_DEV; break;
@@ -293,8 +285,7 @@ int dc_get_boot_disk(int *dsk_num)
 }
 
 static int dc_format_media_and_set_boot(
-			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg
-			 )
+			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg)
 {
 	u8                        buff[sizeof(DRIVE_LAYOUT_INFORMATION) + 
 		                           sizeof(PARTITION_INFORMATION) * 3];
@@ -316,8 +307,7 @@ static int dc_format_media_and_set_boot(
 		}
 
 		succs = DeviceIoControl(
-			h_device, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL
-			);
+			h_device, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 
 		if (succs == 0) {
 			resl = ST_LOCK_ERR; break;
@@ -326,15 +316,13 @@ static int dc_format_media_and_set_boot(
 		}
 
 		DeviceIoControl(
-			h_device, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &bytes, NULL
-			);
+			h_device, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &bytes, NULL);
 
 		zeroauto(mbr_sec, sizeof(mbr_sec));
 		zeroauto(buff, sizeof(buff));
 
 		resl = dc_disk_write(
-			h_device, mbr_sec, sizeof(mbr_sec), 0
-			);
+			h_device, mbr_sec, sizeof(mbr_sec), 0);
 
 		if (resl != ST_OK) {
 			break;
@@ -352,20 +340,17 @@ static int dc_format_media_and_set_boot(
 		dli->PartitionEntry[0].RewritePartition         = TRUE;
 
 		succs = DeviceIoControl(
-			h_device, IOCTL_DISK_SET_DRIVE_LAYOUT, dli, sizeof(buff), NULL, 0, &bytes, NULL
-			);
+			h_device, IOCTL_DISK_SET_DRIVE_LAYOUT, dli, sizeof(buff), NULL, 0, &bytes, NULL);
 
 		if (succs == 0) {
 			resl = ST_ERROR; break;
 		}
 
 		DeviceIoControl(
-			h_device, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytes, NULL
-			);
+			h_device, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 
 		succs = DeviceIoControl(
-			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL
-			);
+			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 
 		if (succs != 0) {
 			locked = 0;
@@ -383,8 +368,7 @@ static int dc_format_media_and_set_boot(
 	if (locked != 0) 
 	{
 		DeviceIoControl(
-			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL
-			);
+			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 	}
 
 	if (h_device != NULL) {
@@ -436,8 +420,7 @@ int dc_set_boot(wchar_t *root, int format)
 	if (root[0] != L'\\') 
 	{
 		_snwprintf(
-			disk, sizeof_w(disk), L"\\\\.\\%c:", root[0]
-			);
+			disk, sizeof_w(disk), L"\\\\.\\%c:", root[0]);
 	} else {
 		wcsncpy(disk, root, sizeof_w(disk));
 	}
@@ -446,8 +429,7 @@ int dc_set_boot(wchar_t *root, int format)
 	{
 		/* open partition */
 		hdisk = CreateFile(
-			disk, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL
-			);
+			disk, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
 		if (hdisk == INVALID_HANDLE_VALUE) {			
 			resl  = ST_ACCESS_DENIED;
@@ -455,8 +437,7 @@ int dc_set_boot(wchar_t *root, int format)
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL
-			);
+			hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL);
 
 		if (succs == 0) {
 			resl = ST_ERROR; break;
@@ -471,8 +452,7 @@ int dc_set_boot(wchar_t *root, int format)
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &d_num, sizeof(d_num), &bytes, NULL
-			);
+			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &d_num, sizeof(d_num), &bytes, NULL);
 
 		if (succs == 0) {
 			resl = ST_ERROR; break;
@@ -514,12 +494,12 @@ int dc_set_mbr(int dsk_num, int begin)
 	u64         ldr_off;
 	ldr_config *conf;
 	pt_ent     *pt;
-	void       *data;
+	void       *data, *n_data;
 	int         size, i;
-	int         resl;
+	int         resl, n_size;
 	HANDLE      hdisk;
 
-	hdisk = NULL;
+	hdisk = NULL; n_data = NULL;
 	do
 	{
 		/* if dsk_num == -1 then find boot disk */
@@ -544,7 +524,18 @@ int dc_set_mbr(int dsk_num, int begin)
 			resl = ST_ERROR; break;
 		}
 
-		if ( (conf = dc_find_conf(data, size)) == NULL ) {
+		/* align dcldr size to sector size */
+		n_size = _align(size, SECTOR_SIZE);
+		n_data = malloc(n_size);
+
+		if (n_data == NULL) {
+			resl = ST_NOMEM; break;
+		}
+
+		zeromem(n_data, n_size);
+		mincpy(n_data, data, size);
+
+		if ( (conf = dc_find_conf(n_data, n_size)) == NULL ) {
 			resl = ST_ERROR; break;
 		}
 
@@ -562,7 +553,7 @@ int dc_set_mbr(int dsk_num, int begin)
 			resl = ST_MBR_ERR; break;
 		}
 
-		if ( (old_mbr.sign == NEW_SIGN) || (old_mbr.old_sign == OLD_SIGN) ) {			
+		if (old_mbr.sign == NEW_SIGN) {			
 			resl = ST_BLDR_INSTALLED; break;
 		}
 
@@ -582,14 +573,14 @@ int dc_set_mbr(int dsk_num, int begin)
 
 		if (begin != 0) 
 		{
-			if (min_str < size + SECTOR_SIZE) {
+			if (min_str < n_size + SECTOR_SIZE) {
 				resl = ST_NF_SPACE; break;
 			}
 
 			ldr_off = SECTOR_SIZE;		
 		} else 
 		{
-			ldr_off = dsk_sze - size - (8 * SECTOR_SIZE); /* reserve last 8 sectors for LDM data */
+			ldr_off = dsk_sze - n_size - (8 * SECTOR_SIZE); /* reserve last 8 sectors for LDM data */
 
 			if (max_end > ldr_off) {
 				resl = ST_NF_SPACE; break;
@@ -603,10 +594,10 @@ int dc_set_mbr(int dsk_num, int begin)
 		autocpy(mbr.data2, old_mbr.data2, sizeof(mbr.data2));
 
 		mbr.set.sector = ldr_off / SECTOR_SIZE;
-		mbr.set.numb   = size / SECTOR_SIZE;
+		mbr.set.numb   = n_size / SECTOR_SIZE;
 
 		/* write bootloader data */
-		if ( (resl = dc_disk_write(hdisk, data, size, ldr_off)) != ST_OK ) {
+		if ( (resl = dc_disk_write(hdisk, n_data, n_size, ldr_off)) != ST_OK ) {
 			break;
 		}
 
@@ -619,13 +610,16 @@ int dc_set_mbr(int dsk_num, int begin)
 		CloseHandle(hdisk);
 	}
 
+	if (n_data != NULL) {
+		free(n_data);
+	}
+
 	return resl;
 }
 
 static
 int get_ldr_body_ptr(
-	   HANDLE hdisk, dc_mbr *mbr, u64 *start, int *size
-	   )
+	   HANDLE hdisk, dc_mbr *mbr, u64 *start, int *size)
 {
 	int resl;
 
@@ -639,30 +633,24 @@ int get_ldr_body_ptr(
 			resl = ST_MBR_ERR; break;
 		}
 
-		if ( (mbr->sign != NEW_SIGN) && (mbr->old_sign != OLD_SIGN) ) {
+		if (mbr->sign != NEW_SIGN) {
 			resl = ST_BLDR_NOTINST; break;
 		}
 
-		if (mbr->sign == NEW_SIGN) {
-			*start = mbr->set.sector * SECTOR_SIZE;
-			*size  = mbr->set.numb   * SECTOR_SIZE;
-		} else {
-			*start = 0;
-			*size  = mbr->old_offs;
-		}
-		resl = ST_OK;
+		*start = mbr->set.sector * SECTOR_SIZE;
+		*size  = mbr->set.numb   * SECTOR_SIZE;
+		resl   = ST_OK;
 	} while (0);
 
 	return resl;
 }
 
 int dc_get_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  )
+	  int dsk_num, wchar_t *file, ldr_config *conf)
 {
-	ldr_config *cnf, *def;
+	ldr_config *cnf;
 	HANDLE      hfile, hdisk;
-	void       *data, *dat2;
+	void       *data;
 	int         size, resl;
 	dc_mbr      mbr;		
 	u64         offs;
@@ -683,8 +671,7 @@ int dc_get_mbr_config(
 		{
 			/* open file */
 			hfile = CreateFile(
-				file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL
-				);
+				file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 
 			if (hfile == INVALID_HANDLE_VALUE) {
 				resl  = ST_NF_FILE;
@@ -733,31 +720,7 @@ int dc_get_mbr_config(
 			resl = ST_BLDR_NO_CONF; break;
 		}
 
-		if ( (file != NULL) || (mbr.sign == NEW_SIGN) ) 
-		{
-			autocpy(conf, cnf, sizeof(ldr_config));
-
-			if (conf->ldr_ver < 32) { /* timeout field been added in 32 version */
-				conf->timeout = 0;
-			}
-		} else 
-		{
-			/* load new bootloader */
-			if ( (dat2 = dc_extract_rsrc(&size, IDR_DCLDR)) == NULL ) {
-				resl = ST_ERROR; break;		
-			}
-
-			/* get default config */
-			if ( (def = dc_find_conf(dat2, size)) == NULL ) {
-				resl = ST_ERROR; break;
-			}
-
-			/* combine old and default config */
-			autocpy(conf, def, sizeof(ldr_config));
-			strcpy(conf->eps_msg, cnf->eps_msg);
-			strcpy(conf->err_msg, cnf->err_msg);
-			conf->ldr_ver = cnf->ldr_ver;
-		}
+		autocpy(conf, cnf, sizeof(ldr_config));		
 		resl = ST_OK;
 	} while (0);
 
@@ -777,8 +740,7 @@ int dc_get_mbr_config(
 }
 
 int dc_set_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  )
+	  int dsk_num, wchar_t *file, ldr_config *conf)
 {
 	HANDLE      hfile, hdisk;
 	int         size, resl;
@@ -804,8 +766,7 @@ int dc_set_mbr_config(
 			/* open file */
 			hfile = CreateFile(
 				file, GENERIC_READ | GENERIC_WRITE, 
-				FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL
-				);
+				FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 
 			if (hfile == INVALID_HANDLE_VALUE) {
 				resl  = ST_NF_FILE;
@@ -827,10 +788,6 @@ int dc_set_mbr_config(
 			if ( (resl = get_ldr_body_ptr(hdisk, &mbr, &offs, &size)) != ST_OK ) {
 				break;
 			}
-		}
-
-		if ( (file == NULL) && (mbr.sign != NEW_SIGN) ) {
-			resl = ST_BLDR_OLD_VER; break;
 		}
 
 		/* load bootloader body */
@@ -861,7 +818,6 @@ int dc_set_mbr_config(
 		autocpy(cnf, conf, sizeof(ldr_config));
 		/* set unchangeable fields to default */
 		cnf->sign1 = CFG_SIGN1; cnf->sign2 = CFG_SIGN2;
-		cnf->sign3 = CFG_SIGN3; cnf->sign4 = CFG_SIGN4;
 		cnf->ldr_ver = DC_BOOT_VER;
 		
 		if (file != NULL) 
@@ -899,8 +855,7 @@ int dc_set_mbr_config(
 }
 
 int dc_mbr_config_by_partition(
-      wchar_t *root, int set_conf, ldr_config *conf
-	  )
+      wchar_t *root, int set_conf, ldr_config *conf)
 {
 	HANDLE        hdisk;
 	wchar_t       name[MAX_PATH];
@@ -912,8 +867,7 @@ int dc_mbr_config_by_partition(
 	if (root[0] != L'\\')
 	{
 		_snwprintf(
-			name, sizeof_w(name), L"\\\\.\\%c:", root[0]
-			);
+			name, sizeof_w(name), L"\\\\.\\%c:", root[0]);
 	} else {
 		wcsncpy(name, root, sizeof_w(name));
 	}
@@ -923,8 +877,7 @@ int dc_mbr_config_by_partition(
 	{
 		/* open partition */
 		hdisk = CreateFile(
-			name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL
-			);
+			name, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
 		if (hdisk == INVALID_HANDLE_VALUE) {			
 			resl  = ST_ACCESS_DENIED;
@@ -932,8 +885,7 @@ int dc_mbr_config_by_partition(
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL
-			);
+			hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL);
 
 		if (succs == 0) {
 			resl = ST_ERROR; break;
@@ -993,66 +945,35 @@ int dc_unset_mbr(int dsk_num)
 			break;
 		}
 
-		if (mbr.sign == NEW_SIGN)
-		{
-			/* uninstall new bootloader */
-			if ( (data = malloc(size)) == NULL ) {
-				resl = ST_NOMEM; break;
-			}
-
-			/* read bootloader body */
-			if ( (resl = dc_disk_read(hdisk, data, size, offs)) != ST_OK ) {				
-				break;
-			}
-
-			if ( (conf = dc_find_conf(data, size)) == NULL ) {				
-				resl = ST_BLDR_NO_CONF; break;
-			}
-
-			/* copy saved old MBR */
-			autocpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
-
-			/* copy new partition table to old MBR */
-			autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
-
-			/* write new MBR */
-			if ( (resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {				
-				break;
-			}
-
-			/* zero bootloader sectors */
-			zeroauto(&mbr, sizeof(mbr));
-			
-			for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
-				dc_disk_write(hdisk, &mbr, sizeof(mbr), offs);
-			}
-			resl = ST_OK;
-		} else 
-		{
-			/* uninstall old bootloader */		
-			
-			/* read saved old MBR */
-			if ( (resl = dc_disk_read(hdisk, &old_mbr, sizeof(old_mbr), size)) != ST_OK ) {
-				break;
-			}
-
-			/* copy new partition table to old MBR */
-			autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
-
-			/* write new MBR */
-			if ( (resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {
-				break;
-			}
-
-			/* zero bootloader sectors */
-			zeroauto(&mbr, sizeof(mbr));
-			
-			for (; size; size -= SECTOR_SIZE ) {
-				dc_disk_write(hdisk, &mbr, sizeof(mbr), size);
-			}
-			resl = ST_OK;
+		/* uninstall new bootloader */
+		if ( (data = malloc(size)) == NULL ) {
+			resl = ST_NOMEM; break;
 		}
 
+		/* read bootloader body */
+		if ( (resl = dc_disk_read(hdisk, data, size, offs)) != ST_OK ) {				
+			break;
+		}
+
+		if ( (conf = dc_find_conf(data, size)) == NULL ) {				
+			resl = ST_BLDR_NO_CONF; break;
+		}
+
+		/* copy saved old MBR */
+		autocpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
+
+		/* copy new partition table to old MBR */
+		autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
+
+		/* zero bootloader sectors */
+		zeroauto(&mbr, sizeof(mbr));
+			
+		for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
+			dc_disk_write(hdisk, &mbr, sizeof(mbr), offs);
+		}
+
+		/* write new MBR */
+		resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0);
 	} while (0);
 
 	if (data != NULL) {
@@ -1078,11 +999,6 @@ int dc_update_boot(int dsk_num)
 			break;
 		}
 
-		/* set partition boot method if old bootloader found */
-		if (conf.ldr_ver <= 2) {
-			conf.boot_type = BT_ACTIVE;
-		}
-
 		if ( (resl = dc_unset_mbr(dsk_num)) != ST_OK ) {
 			break;
 		}
@@ -1103,8 +1019,7 @@ int dc_update_boot(int dsk_num)
 
 
 int dc_get_drive_info(
-	  wchar_t *w32_name, drive_inf *info
-	  )
+	  wchar_t *w32_name, drive_inf *info)
 {
 	PARTITION_INFORMATION_EX ptix;
 	PARTITION_INFORMATION    pti;
@@ -1122,16 +1037,14 @@ int dc_get_drive_info(
 	{
 		hdisk = CreateFile(
 			w32_name, SYNCHRONIZE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 
-			NULL, OPEN_EXISTING, 0, NULL
-			);
+			NULL, OPEN_EXISTING, 0, NULL);
 
 		if (hdisk == INVALID_HANDLE_VALUE) {
 			resl = ST_ERROR; break;
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix), &bytes, NULL
-			);
+			hdisk, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix), &bytes, NULL);
 
 		if (succs != 0) 
 		{
@@ -1143,8 +1056,7 @@ int dc_get_drive_info(
 		} else 
 		{
 			succs = DeviceIoControl(
-				hdisk, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti), &bytes, NULL
-				);
+				hdisk, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti), &bytes, NULL);
 
 			if (succs == 0) {
 				resl = ST_IO_ERROR; break;
@@ -1156,8 +1068,7 @@ int dc_get_drive_info(
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &dnum, sizeof(dnum), &bytes, NULL
-			);
+			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &dnum, sizeof(dnum), &bytes, NULL);
 
 		if (succs != 0) {
 			info->dsk_num         = 1;
@@ -1168,8 +1079,7 @@ int dc_get_drive_info(
 		} else 
 		{
 			succs = DeviceIoControl(
-				hdisk, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, NULL, 0, ext, sizeof(buff), &bytes, NULL
-				);
+				hdisk, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, NULL, 0, ext, sizeof(buff), &bytes, NULL);
 				
 			if (succs != 0) 
 			{

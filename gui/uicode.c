@@ -31,41 +31,40 @@
 #include "misc.h"
 #include "subs.h"
 #include "main.h"
-#include "..\boot\boot.h"
 #include "crypto\crypto.h"
 #include "crypto\pkcs5.h"
 
 colinfo _main_headers[ ] = {
-	{ L" ", 120 },
-	{ L"Size", 74 },
-	{ L"Label", 94 },
-	{ L"Type", 43 },
-	{ L"Status", 88 },
-	{ L" ", 65 },
-	{ L"", 0 }
+	{ L" ",      120 },
+	{ L"Size",   74  },
+	{ L"Label",  94  },
+	{ L"Type",   43  },
+	{ L"Status", 88  },
+	{ L" ",      65  },
+	{ L"",       0   }
 };
 
 colinfo _boot_headers[ ] = {
-	{ L"Device", 115 },
-	{ L"Size", 60 },
-	{ L"Bootloader", 75 },
-	{ L" ", 40 },
-	{ L"", 0 }
+	{ L"Device",     115 },
+	{ L"Size",       60  },
+	{ L"Bootloader", 75  },
+	{ L" ",          40  },
+	{ L"",           0   }
 };
 
 colinfo _part_by_id_headers[ ] = {
-	{ L"Volume", 115 },
-	{ L"Size", 60 },
-	{ L"Disk ID", 90 },
-	{ L" ", 110 },
-	{ L"",  },
+	{ L"Volume",  115 },
+	{ L"Size",    60  },
+	{ L"Disk ID", 90  },
+	{ L" ",       110 },
+	{ L"",        0   },
 };
 
 colinfo _benchmark_headers[ ] = {
 	{ L"Cipher", 160 },
-	{ L"Mode", 60 },
-	{ L"Speed", 90 },
-	{ L"",  },
+	{ L"Mode",   60  },
+	{ L"Speed",  90  },
+	{ L"",       0   },
 };
 
 wchar_t *_info_table_items[ ] = {
@@ -79,10 +78,10 @@ wchar_t *_info_table_items[ ] = {
 };
 
 wchar_t *_act_table_items[ ] = {
-	L"Done",
-	L"Speed",
-	L"Left",
-	L"Elapsed",
+	L"Done:",
+	L"Speed:",
+	L"Estimated:",
+	L"Elapsed:",
 	L""
 };
 
@@ -100,7 +99,7 @@ _static_view pass_pe_ctls[ ] = {
 	{ -1, 0, 0 }
 };
 
-_combo_list cipher_names[ ] = {
+_init_list cipher_names[ ] = {
 	{ CF_AES,             L"AES" },
 	{	CF_TWOFISH,         L"Twofish" },
 	{	CF_SERPENT,         L"Serpent" },
@@ -111,19 +110,7 @@ _combo_list cipher_names[ ] = {
 	{ 0, L"" }
 };
 
-_combo_list mode_names[ ] = {
-	{	EM_XTS, L"XTS" },
-	{	EM_LRW, L"LRW" },
-	{ 0, L"" }
-};
-
-_combo_list prf_names[ ] = {
-	{	PRF_HMAC_SHA512, L"HMAC-SHA-512" },
-	{	PRF_HMAC_SHA1,   L"HMAC-SHA-1" },
-	{ 0, L"" }
-};
-
-_combo_list wipe_modes[ ] = {
+_init_list wipe_modes[ ] = {
 	{ WP_NONE,    L"None" }, 
 	{ WP_DOD_E,   L"US DoD 5220.22-M (8-306. / E)" },
 	{ WP_DOD,     L"US DoD 5220.22-M (8-306. / E, C and E)" }, 
@@ -131,48 +118,48 @@ _combo_list wipe_modes[ ] = {
 	{ 0, L"" }
 };
 
-_combo_list kb_layouts[ ] = {
+_init_list kb_layouts[ ] = {
 	{ KB_QWERTY, L"QWERTY" },
 	{ KB_QWERTZ, L"QWERTZ" },
 	{ KB_AZERTY, L"AZERTY" },
 	{ 0, L"" }
 };
 
-_combo_list auth_type[ ] = {
-	{ LT_GET_PASS, L"Password request" },
-	{ OP_EPS_TMO,  L"Embeded bootauth password" },
+_init_list auth_type[ ] = {
+	{ LT_GET_PASS | LT_EMBED_KEY, L"Password and bootauth keyfile" },
+	{ LT_GET_PASS,  L"Password request" },
+	{ LT_EMBED_KEY, L"Embeded bootauth keyfile" },
 	{ 0, L"" }
 };
 
-_combo_list show_pass[ ] = {
+_init_list show_pass[ ] = {
 	{ TRUE,         L"Hide entered password" },
-	{ LT_DSP_PASS,  L"Display entered password" },
-	{ LT_MASK_PASS, L"Masking password with \"*\"" },
+	{ LT_DSP_PASS,  L"Display entered password as \"*\"" },
 	{ 0, L"" }
 };
 
-_combo_list auth_tmount[ ] = {
-	{ 0,  L"Disabled" },
-	{ 3,  L"3 sec" },
-	{ 5,  L"5 sec" },
-	{ 7,  L"7 sec" },
-	{ 10, L"10 sec" },
-	{ 20, L"20 sec" },
-	{ 30, L"30 sec" },
-	{ 50, L"50 sec" },
-	{ 60, L"2 minutes" },
+_init_list auth_tmount[ ] = {
+	{ 0,   L"Disabled"  },
+	{ 3,   L"3 sec"     },
+	{ 5,   L"5 sec"     },
+	{ 7,   L"7 sec"     },
+	{ 10,  L"10 sec"    },
+	{ 20,  L"20 sec"    },
+	{ 30,  L"30 sec"    },
+	{ 50,  L"50 sec"    },
+	{ 60,  L"2 minutes" },
 	{ 120, L"5 minutes" },
-	{ 0, L"" }
+	{ 0,   L""          }
 };
 
-_combo_list boot_type_ext[ ] = {
+_init_list boot_type_ext[ ] = {
 	{ BT_MBR_FIRST,   L"First disk MBR" },
 	{ BT_AP_PASSWORD, L"First partition with appropriate password" },
 	{ BT_DISK_ID,     L"Specified partition" },
 	{ 0, L"" }
 };
 
-_combo_list boot_type_all[ ] = {
+_init_list boot_type_all[ ] = {
 	{ BT_MBR_FIRST,   L"First disk MBR" },
 	{ BT_AP_PASSWORD, L"First partition with appropriate password" },
 	{ BT_DISK_ID,     L"Specified partition" },
@@ -181,7 +168,7 @@ _combo_list boot_type_all[ ] = {
 	{ 0, L"" }
 };
 
-_combo_list bad_pass_act[ ] = {
+_init_list bad_pass_act[ ] = {
 	{ FALSE,           L"Halt system" },
 	{ ET_REBOOT,       L"Reboot system" },
 	{ ET_BOOT_ACTIVE,  L"Boot from active partition" },
@@ -190,7 +177,7 @@ _combo_list bad_pass_act[ ] = {
 	{ 0, L"" }
 };
 
-_combo_list loader_type[ ] = {
+_init_list loader_type[ ] = {
 	{ CTL_LDR_MBR,   L"HDD master boot record", },
 	{ CTL_LDR_STICK, L"Bootable partition (USB-Stick, etc)", },
 	{ CTL_LDR_ISO,   L"ISO bootloader image", },
@@ -198,28 +185,38 @@ _combo_list loader_type[ ] = {
 	{ 0, L"" }
 };
 
+_init_list pass_status[ ] = {
+	{ ST_PASS_SPRS_SYMBOLS,  L" Used suppressed symbols on this layout" },
+	{ ST_PASS_EMPTY,         L" Pass is empty" },
+	{ ST_PASS_NOT_CONFIRMED, L" The password was not correctly confirmed" },
+	{ ST_PASS_EMPTY_CONFIRM, L" Confirm is empty" },
+	{ ST_PASS_EMPTY_KEYLIST, L" Keyfiles list is empty" },
+	{ ST_PASS_CORRRECT,      L" Correct" },
+	{ 0, L"" }
+};
+
 _ctl_init hotks_chk[ ] = {
-	{ L"", IDC_KEY_MOUNTALL, },
+	{ L"", IDC_KEY_MOUNTALL,   },
 	{ L"", IDC_KEY_UNMOUNTALL, },
-	{ L"", IDC_KEY_WIPE, },
-	{ L"", IDC_KEY_BSOD, },
-	{ L"", -1, -1 }
+	{ L"", IDC_KEY_WIPE,       },
+	{ L"", IDC_KEY_BSOD,       },
+	{ L"", -1, -1              }
 };
 
 _ctl_init hotks_edit[ ] = {
-	{ L"", IDC_EDIT_KEY_MOUNTALL, 0 },
+	{ L"", IDC_EDIT_KEY_MOUNTALL,   0 },
 	{ L"", IDC_EDIT_KEY_UNMOUNTALL, 0 },
-	{ L"", IDC_EDIT_KEY_WIPE, 0 },
-	{ L"", IDC_EDIT_KEY_BSOD, 0 },
-	{ L"", -1, -1 }
+	{ L"", IDC_EDIT_KEY_WIPE,       0 },
+	{ L"", IDC_EDIT_KEY_BSOD,       0 },
+	{ L"", -1, -1                     }
 };
 
 _ctl_init hotks_static[ ] = {
-	{ L"", IDC_STATIC_KEY_MOUNTALL, 0 },
+	{ L"", IDC_STATIC_KEY_MOUNTALL,   0 },
 	{ L"", IDC_STATIC_KEY_UNMOUNTALL, 0 },
-	{ L"", IDC_STATIC_KEY_WIPE, 0 },
-	{ L"", IDC_STATIC_KEY_BSOD, 0 },
-	{ L"", -1, -1 }
+	{ L"", IDC_STATIC_KEY_WIPE,       0 },
+	{ L"", IDC_STATIC_KEY_BSOD,       0 },
+	{ L"", -1, -1                       }
 };
 
 HINSTANCE __hinst;
@@ -236,7 +233,6 @@ HIMAGELIST __dsk_img;
 HIMAGELIST __img;
 
 HWND __dlg;
-HWND __dlg_shrink;
 HWND __dlg_act_info;
 
 void *wnd_get_long(
@@ -251,8 +247,8 @@ void *wnd_get_long(
 }
 
 void *wnd_set_long(
-		HWND wnd, 
-		int index, 
+		HWND  wnd, 
+		int   index, 
 		void *ptr
 	)
 {
@@ -263,10 +259,37 @@ void *wnd_set_long(
 }
 
 
+int _draw_proc(
+		int    message,
+		LPARAM lparam
+	)
+{
+	switch (message) 
+	{
+		case WM_DRAWITEM : 
+		{
+			_draw_static((LPDRAWITEMSTRUCT)lparam);			
+			return 1L;
+		}
+		break;
+
+		case WM_MEASUREITEM:
+		{
+			MEASUREITEMSTRUCT *item = pv(lparam);
+
+			if (item->CtlType != ODT_LISTVIEW)
+				item->itemHeight -= 3;
+		}
+		break;
+	}
+	return -1;
+}
+
+
 BOOL _list_set_item(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text
 	)
 {
@@ -282,9 +305,9 @@ BOOL _list_set_item(
 
 
 void _list_set_item_text(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text
 	)
 {
@@ -304,11 +327,11 @@ void _list_set_item_text(
 
 
 BOOL _list_insert_item(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text,
-		int state
+		int      state
 	)
 {
 	LVITEM lvitem = { LVIF_TEXT | LVIF_STATE, 0, 0 };
@@ -327,7 +350,7 @@ BOOL _list_insert_item(
 
 BOOL _list_insert_col(
 		HWND hlist,
-		int cx
+		int  cx
 	)
 {
 	LVCOLUMN lvcol = { LVCF_WIDTH, 0 };			
@@ -340,7 +363,7 @@ BOOL _list_insert_col(
 
 LPARAM _get_item_index(
 		HWND hlist,
-		int item
+		int  item
 	)
 {
 	LVITEM lvi;
@@ -356,11 +379,11 @@ LPARAM _get_item_index(
 
 
 void _get_item_text(
-		HWND hlist,
-		int item,
-		int subitem,
+		HWND     hlist,
+		int      item,
+		int      subitem,
 		wchar_t *text,
-		int chars
+		int      chars
 	)
 {
 	LVITEM lvitem = { 
@@ -369,6 +392,25 @@ void _get_item_text(
 
 	ListView_GetItem(hlist, &lvitem);
 	if (item == -1) text[0] = 0;
+
+}
+
+
+BOOL _is_duplicated_item(
+		HWND     h_list,
+		wchar_t *s_item
+	)
+{
+	wchar_t item[MAX_PATH];
+	int k = 0;
+
+	for ( ; k < ListView_GetItemCount(h_list) ; k++ )
+	{
+		_get_item_text(h_list, k, 0, item, sizeof_w(item));
+		if (wcscmp(item, s_item) == 0) return TRUE;
+
+	}
+	return FALSE;
 
 }
 
@@ -384,7 +426,7 @@ LPARAM _get_sel_item(
 
 
 DWORD _cl(
-		int index,
+		int  index,
 		char prc
 	)
 {
@@ -403,55 +445,92 @@ DWORD _cl(
 }
 
 
+void _middle_ctl(
+		HWND h_anchor,
+		HWND h_child,
+		BOOL border_correct
+	)
+{
+	RECT ch_size, pr_rect, pr_size;
+
+	GetClientRect(h_child, &ch_size);
+	GetClientRect(h_anchor, &pr_size);
+
+	GetWindowRect(h_anchor, &pr_rect);
+	ScreenToClient(GetParent(h_anchor), pv(&pr_rect));
+
+	MoveWindow(
+		h_child, 
+		pr_rect.left   + ( pr_size.right  / 2 ) - ( ch_size.right  / 2 ),
+		pr_rect.top    + ( pr_size.bottom / 2 ) - ( ch_size.bottom / 2 ),
+		ch_size.right  + ( border_correct ? GetSystemMetrics(SM_CXEDGE) : 0 ),
+		ch_size.bottom + ( border_correct ? GetSystemMetrics(SM_CYEDGE) : 0 ),
+		TRUE
+
+	);
+}
+
+
+void _resize_ctl(
+		HWND h_ctl,
+		int  dy,
+		int  dx,
+		BOOL border_correct
+	)
+{	
+	RECT rc_ctl, cr_ctl;
+
+	GetWindowRect(h_ctl, &cr_ctl);
+	GetClientRect(h_ctl, &rc_ctl);
+
+	ScreenToClient(GetParent(h_ctl), pv(&cr_ctl.right));
+	ScreenToClient(GetParent(h_ctl), pv(&cr_ctl.left));
+	
+	MoveWindow(
+		h_ctl, 
+		cr_ctl.left,
+		cr_ctl.top,
+		rc_ctl.right + dx + 
+				( border_correct ? GetSystemMetrics(SM_CXEDGE) : 0 ) + 
+				( GetWindowLong(h_ctl, GWL_STYLE) & WS_VSCROLL ? GetSystemMetrics(SM_CYVSCROLL) : 0 ),
+		rc_ctl.bottom + dy + 
+				( border_correct ? GetSystemMetrics(SM_CYEDGE) : 0 ) + 
+				( GetWindowLong(h_ctl, GWL_STYLE) & WS_HSCROLL ? GetSystemMetrics(SM_CYHSCROLL) : 0 ),
+		TRUE
+
+	);
+}
+
+
 void _relative_move(
 		HWND h_anchor,
 		HWND h_child,
-		int dy,
-		int dx
+		int  dt,
+		BOOL dy,
+		BOOL border_correct
 	)
 {
-	RECT rc_parent;
+	RECT rc_child, cr_child;
 	RECT rc_anchor;
 
-	RECT rc_child;
-	RECT rc_relative;
+	HWND h_parent = GetParent(h_anchor);
+	if (GetParent(h_anchor) != GetParent(h_child)) return;
 
-	RECT anchor_size;
-	RECT ñhild_size;
+	GetClientRect(h_child,  &rc_child);
+	GetWindowRect(h_child,  &cr_child);
 
-	RECT rect;
-	WINDOWINFO winfo;
-
-	GetWindowInfo(GetParent(h_anchor), &winfo);
-
-	GetWindowRect(GetParent(h_anchor), &rc_parent);
+	ScreenToClient(h_parent, pv(&cr_child.left));
 	GetWindowRect(h_anchor, &rc_anchor);
-	GetWindowRect(h_child, &rc_child);
 
-	GetClientRect(h_anchor, &anchor_size);
-	GetClientRect(h_child, &ñhild_size);
+	ScreenToClient(h_parent, pv(&rc_anchor.right));
+	ScreenToClient(h_parent, pv(&rc_anchor.left));
 
-	rc_relative.top = rc_anchor.top - rc_parent.top;
-	rc_relative.left = rc_anchor.left - rc_parent.left;
-
-	//
-	rect.top = dy ? 
-		rc_relative.top + /*anchor_size.bottom +*/ dy :
-		rc_child.top - rc_parent.top;
-
-	rect.left = dx ? 
-		rc_relative.top + anchor_size.bottom + dy :
-		rc_child.left - rc_parent.left;
-
-	rect.left -= winfo.cxWindowBorders;
-	rect.top -= winfo.cyWindowBorders;
-	
 	MoveWindow(
 		h_child, 
-		rect.left, 
-		rect.top, 
-		ñhild_size.right, 
-		ñhild_size.bottom, 
+		( !dy ? rc_anchor.left   + dt : cr_child.left ),
+		(  dy ? rc_anchor.bottom + dt : cr_child.top  ),
+		rc_child.right   + ( border_correct ? GetSystemMetrics(SM_CXEDGE) : 0 ),
+		rc_child.bottom  + ( border_correct ? GetSystemMetrics(SM_CYEDGE) : 0 ),
 		TRUE
 
 	);
@@ -459,7 +538,7 @@ void _relative_move(
 
 
 void _relative_rect(
-		HWND hwnd,
+		HWND  hwnd,
 		RECT *rc
 	)
 {
@@ -483,66 +562,8 @@ void _relative_rect(
 }
 
 
-BOOL _input_verify(
-		HWND     ide_pass,
-		HWND     ide_verify,
-		int      kb_layout,
-		wchar_t  *err,
-		int      sym_len
-		
-	)
-{
-	char *pass = secure_alloc(MAX_PASSWORD + 1);
-	char *verify = secure_alloc(MAX_PASSWORD + 1);
-
-	int enable = FALSE;
-	pass_inf info;
-
-	if (!pass || !verify) return FALSE;
-
-	GetWindowTextA(ide_pass, pass, MAX_PASSWORD + 1);
-	GetWindowTextA(ide_verify, verify, MAX_PASSWORD + 1);
-
-	check_password(pass, &info);
-	if (info.length) {		
-
-		if ((kb_layout == KB_QWERTY && info.flags & P_NCHAR) || 
-			 ((kb_layout == KB_QWERTZ || kb_layout == KB_AZERTY) && 
-					(info.flags & P_NCHAR || info.flags & P_SPCH))) {
-				 
-			wcsncpy(err, L"Used suppressed symbols on this layout", sym_len);
-
-		} else enable = TRUE;
-	} else {
-		wcsncpy(err, L"Pass is empty", sym_len);
-
-	}
-
-	if (ide_verify != (HWND)-1 && enable) {
-		if (strcmp(pass, verify) != 0) {
-
-			enable = FALSE;
-			wcsncpy(err, L"The password was not correctly confirmed", sym_len);
-
-		}
-		if (!strlen(verify)) {
-
-			enable = FALSE;
-			wcsncpy(err, L"Confirm is empty", sym_len);
-
-		}
-	}
-
-	secure_free(pass);
-	secure_free(verify);
-
-	return enable;
-
-}
-
-
 INT_PTR _ctl_color(
-		WPARAM wparam,
+		WPARAM   wparam,
 		COLORREF color
 	)
 {
@@ -583,7 +604,7 @@ BOOL _ui_init(
 	__font_bold = CreateFontIndirect(&metric.lfMessageFont);
 
 	metric.lfMessageFont.lfWeight = FW_DONTCARE;
-	metric.lfMessageFont.lfUnderline = TRUE;			
+	metric.lfMessageFont.lfUnderline = TRUE;
 	__font_link = CreateFontIndirect(&metric.lfMessageFont);
 
 	metric.lfMessageFont.lfHeight = -9;				
@@ -606,7 +627,7 @@ BOOL _ui_init(
 
 }
 
-_wnd_data *__sub_class(
+_wnd_data *_sub_class(
 		HWND hwnd,
 		HWND dlg,
 		char key
@@ -615,9 +636,14 @@ _wnd_data *__sub_class(
 	_wnd_data *data = NULL;
 	void *proc;
 
-	if (hwnd) data = malloc(sizeof(_wnd_data));
+	if (hwnd) 
+	{
+		data = malloc(sizeof(_wnd_data));
+		zeroauto(data, sizeof(_wnd_data));
+	}
 
-	if (data) {
+	if (data) 
+	{
 		if (key) proc = _key_proc; else proc = _static_proc;
 		data->old_proc = wnd_set_long(hwnd, GWL_WNDPROC, proc);
 
@@ -670,8 +696,8 @@ void _init_mount_points(
 LRESULT 
 CALLBACK 
 _key_proc(
-		HWND hwnd,
-		UINT msg,
+		HWND   hwnd,
+		UINT   msg,
 		WPARAM wparam,
 		LPARAM lparam
 	)
@@ -718,8 +744,8 @@ _key_proc(
 LRESULT 
 CALLBACK 
 _static_proc(
-		HWND hwnd,
-		UINT msg,
+		HWND   hwnd,
+		UINT   msg,
 		WPARAM wparam,
 		LPARAM lparam
 	)
@@ -748,19 +774,18 @@ _static_proc(
 		case WM_LBUTTONDOWN:
 		
 			data->state = !data->state;
-			if (data->dlg) {
-
+			if (data->dlg) 
+			{
 				_tab_data *tab = wnd_get_long(GetParent(hwnd), GWL_USERDATA);
 
 				tab->curr = hwnd;
-				if (data->dlg != (HWND)-1) {
-				
+				if (data->dlg != (HWND)-1) 
+				{				
 					ShowWindow(tab->active, SW_HIDE);
 					tab->active = data->dlg;
 
 					ShowWindow(tab->active, SW_SHOW);
 					SetWindowPos(tab->active, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE);
-
 				}
 				InvalidateRect(GetParent(hwnd), NULL, FALSE);
 			} else InvalidateRect(hwnd, NULL, FALSE);
@@ -770,15 +795,14 @@ _static_proc(
 		break;
 
 	}
-
 	CallWindowProc(data->old_proc, hwnd, msg, wparam, lparam);
 	return 1L;	
 
 }
 
 void _fill(
-		HDC dc,
-		RECT *rc,
+		HDC      dc,
+		RECT    *rc,
 		COLORREF cl
 	)
 {
@@ -1050,17 +1074,17 @@ void _draw_static(
 				GetWindowInfo(itst->hwndItem, &wi);
 				GetWindowText(itst->hwndItem, data, MAX_PATH);
 
-				if (data[0] == 0x20) {
+				if (data[0] == L'#') {
 					GetWindowRect(GetParent(GetParent(itst->hwndItem)), &rc);
 
 					itst->rcItem.right = rc.right - rc.left - 3;
 					itst->rcItem.top = itst->rcItem.left = 1;
 
-					_fill(itst->hDC, &itst->rcItem, _cl(COLOR_BTNSHADOW, DARK_CLR));
+					_fill(itst->hDC, &itst->rcItem, _cl(COLOR_BTNSHADOW, DARK_CLR - 7));
 
 					tp.iLeftMargin += 10;
 					itst->rcItem.top += 1;
-					DrawTextEx(itst->hDC, data, -1, &itst->rcItem, DT_END_ELLIPSIS, &tp);
+					DrawTextEx(itst->hDC, data + 1, -1, &itst->rcItem, DT_END_ELLIPSIS, &tp);
 					
 				}
 
@@ -1077,7 +1101,7 @@ void _draw_static(
 BOOL 
 CALLBACK 
 __sub_enum(
-		HWND hwnd,
+		HWND   hwnd,
 		LPARAM lParam
 	)
 {
@@ -1089,7 +1113,7 @@ __sub_enum(
 			(wcscmp(name, L"Button") == 0)) return 1L;
 
 	if (GetWindowLong(hwnd, GWL_STYLE) & BS_OWNERDRAW)
-		__sub_class(hwnd, FALSE, FALSE);
+		_sub_class(hwnd, FALSE, FALSE);
 
 	return 1L;
 
@@ -1099,7 +1123,7 @@ __sub_enum(
 BOOL 
 CALLBACK 
 __enable_enum(
-		HWND hwnd,
+		HWND   hwnd,
 		LPARAM lparam
 	)
 {
@@ -1112,7 +1136,7 @@ __enable_enum(
 
 void _enb_but_this(
 		HWND parent,
-		int skip_id,
+		int  skip_id,
 		BOOL enable
 	)
 {
@@ -1123,9 +1147,9 @@ void _enb_but_this(
 
 
 int _find_list_item(
-		HWND hlist,
+		HWND     hlist,
 		wchar_t *text,
-		int column
+		int      column
 	)
 {
 	int item = 0;
@@ -1169,7 +1193,7 @@ void _tray_icon(
 BOOL 
 CALLBACK 
 _enum_proc(
-		HWND hwnd,
+		HWND   hwnd,
 		LPARAM lparam
 	)
 {
@@ -1179,112 +1203,53 @@ _enum_proc(
 	if (*(HWND *)lparam == hwnd) return 1L;
 
 	data = wnd_get_long(hwnd, GWL_USERDATA);
-	if (data) {
-
+	if (data)
+	{
 		GetWindowText(hwnd, caption, sizeof_w(caption));
 		if (wcscmp(caption, DC_NAME) == 0) *(HWND *)lparam = hwnd;
-
 	}
 	return 1L;
 
 }
 
 
-void _draw_pass_rating(
-		HWND hwnd,
-		char *pass,
-		int kb_layout,
-		wchar_t *err,
-		int *entropy
-	)
-{
-	int k = 0;
-	int idx = -1;
-
-	pass_inf inf;			
-	check_password(pass, &inf);
-
-	while (pass_gr_ctls[k].id != -1) {
-	
-		pass_gr_ctls[k].hwnd = GetDlgItem(hwnd, pass_gr_ctls[k].id);
-		pass_pe_ctls[k].hwnd = GetDlgItem(hwnd, pass_pe_ctls[k].id);
-
-		pass_gr_ctls[k].color = 		
-		pass_pe_ctls[k].color = _cl(COLOR_BTNFACE, 70);
-
-		k++;
-		
-	};
-
-	if (inf.flags & P_AZ_L)  pass_gr_ctls[0].color = CL_BLUE;
-	if (inf.flags & P_AZ_H)  pass_gr_ctls[1].color = CL_BLUE;
-	if (inf.flags & P_09)    pass_gr_ctls[2].color = CL_BLUE;
-	if (inf.flags & P_SPACE) pass_gr_ctls[3].color = CL_BLUE;
-	if (inf.flags & P_SPCH)  pass_gr_ctls[4].color = CL_BLUE;
-	if (inf.flags & P_NCHAR) pass_gr_ctls[5].color = CL_BLUE;
-
-	if (kb_layout != -1) {
-		pass_gr_ctls[5].color = GetSysColor(COLOR_GRAYTEXT);
-
-		if (kb_layout != KB_QWERTY) {
-			pass_gr_ctls[4].color = pass_gr_ctls[5].color;
-
-		}
-	}
-	
-	*entropy = inf.entropy;
-
-	if (inf.entropy > 192) idx = 4;
-	if (inf.entropy < 193) idx = 3;
-	if (inf.entropy < 129) idx = 2;
-	if (inf.entropy < 81)  idx = 1;
-	if (inf.entropy < 65)  idx = 0;
-
-	if (!inf.entropy) idx = 5;
-	pass_pe_ctls[idx].color = CL_BLUE;
-
-	k = 0;
-	while (pass_gr_ctls[k].id != -1) {
-						
-		if (pass_gr_ctls[k].hwnd)
-			InvalidateRect(pass_gr_ctls[k].hwnd, NULL, TRUE);
-
-		if (pass_pe_ctls[k].hwnd)
-			InvalidateRect(pass_pe_ctls[k].hwnd, NULL, TRUE);
-
-		k++;
-
-	}
-}
-
-
-void _init_combo(
-		HWND hwnd, 
-		_combo_list *list,
-		int val,
-		BOOL or
+int _init_combo(
+		HWND        hwnd, 
+		_init_list *list,
+		DWORD       val,
+		BOOL        or,
+		int         bits
 	)
 {
 	int count = 0;
 	int item = 0;
 
-	while (wcslen(list[count].display)) {
+	while (wcslen(list[count].display))
+	{
 		SendMessage(hwnd, (UINT)CB_ADDSTRING, 0, (LPARAM)list[count].display);
-	
-		if (!or) {
-			if (list[count].val == val) item = count;
+		if (!or) 
+		{
+			if (list[count].val == val) item = count;			
 		} else {
-			if (val & list[count].val) item = count;
+			if ( (bits != -1 ? _bitcount(list[count].val) == bits : TRUE) && 
+					 (val & list[count].val) )
+			{
+				item = count;
+			}
 		}		
 		count++;
-
 	}
 	SendMessage(hwnd, CB_SETCURSEL, item, 0);
+
+	return item;
 
 }
 
 
-int _get_combo_val(HWND hwnd, _combo_list *list)
+int _get_combo_val(
+		HWND        hwnd, 
+		_init_list *list
+	)
 {
 	int count = 0;
 	wchar_t text[MAX_PATH];
@@ -1302,16 +1267,19 @@ int _get_combo_val(HWND hwnd, _combo_list *list)
 
 }
 
-wchar_t *_get_text_name(int val, _combo_list *list)
+
+wchar_t *_get_text_name(
+		int         val, 
+		_init_list *list
+	)
 {
 	int count = 0;
-	while (wcslen(list[count].display)) {
-
+	while (wcslen(list[count].display)) 
+	{
 		if (list[count].val == val) 
 			return list[count].display;
 
 		count++;
-
 	}
 	return NULL;
 
@@ -1321,8 +1289,8 @@ wchar_t *_get_text_name(int val, _combo_list *list)
 int 
 CALLBACK 
 _browse_callback(
-		HWND hwnd,
-		UINT msg,
+		HWND   hwnd,
+		UINT   msg,
 		LPARAM lparam,
 		LPARAM data
 	)
@@ -1337,7 +1305,7 @@ _browse_callback(
 	{
 		if (SHGetPathFromIDList((PIDLIST_ABSOLUTE)lparam, path)) 
 		{
-			_trailing_slash(path);
+			_set_trailing_slash(path);
 			wcscat(path, L"*.*");
 
 			h_find = FindFirstFile(path, &file_data);
@@ -1355,7 +1323,7 @@ _browse_callback(
 
 
 BOOL _folder_choice(
-		HWND hwnd, 
+		HWND     hwnd, 
 		wchar_t *path, 
 		wchar_t *title
 	)
@@ -1378,7 +1346,7 @@ BOOL _folder_choice(
 
 
 void _init_list_headers(
-		HWND hwnd,
+		HWND     hwnd,
 		colinfo *cols
 	)
 {
@@ -1404,4 +1372,6 @@ void _init_list_headers(
 		}
 	}
 }
+
+
 

@@ -19,6 +19,8 @@ typedef struct _lba_p
 
 } lba_p;
 
+#define SECT_SHIFT 9
+
 #ifdef BOOT_LDR
 
 typedef struct _hdd_inf
@@ -32,22 +34,27 @@ typedef struct _hdd_inf
 
 } hdd_inf;
 
+typedef struct _boot_key {
+	u8     *key_d;  /* RAW key data    */
+	int     alg;    /* cipher id       */
+} boot_key;
+
 typedef struct _prt_inf {
 	list_entry entry_hdd;
 	list_entry entry_glb;
 	hdd_inf   *hdd;
-	dc_key    *d_key;
-	dc_key    *o_key;
+	boot_key   d_key;
+	boot_key   o_key;
 	u8         active;
 	u8         extend;
+	u8         mnt_ok;
 	u64        begin;
 	u64        end;
 	u64        size;
-	u8         flags;
+	u32        flags;
 	u64        tmp_size;
-	u64        tmp_save_off;
+	u64        stor_off;	
 	u32        disk_id;
-
 } prt_inf;
 
 #endif

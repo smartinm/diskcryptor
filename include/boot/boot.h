@@ -6,12 +6,12 @@
 #include "volume.h"
 #include "bios.h"
 
-#define MAX_MOUNT 16
+#define MAX_MOUNT 8
 
 #define LT_GET_PASS  1 /* entering password needed       */
-#define LT_MESSAGE   2 /* display enter password message */
-#define LT_DSP_PASS  4 /* display password characters    */
-#define LT_MASK_PASS 8 /* mask password with '*'         */
+#define LT_EMBED_KEY 2 /* use embedded key               */
+#define LT_MESSAGE   4 /* display enter password message */
+#define LT_DSP_PASS  8 /* display '*'                    */
 
 #define ET_MESSAGE      1  /* display error message      */
 #define ET_REBOOT       2  /* reboot after 1 second      */
@@ -38,27 +38,22 @@
 
 #define CFG_SIGN1 0x1434A669
 #define CFG_SIGN2 0x7269DA46
-#define CFG_SIGN3 0x342C8006
-#define CFG_SIGN4 0x1280A744
 
 typedef struct _ldr_config {
-	u32 sign1;
-	u32 sign2;
-	u32 sign3;
-	u32 sign4;
-	u32 ldr_ver;
-	u8  logon_type;
-	u8  error_type;
-	u8  boot_type;
-	u32 disk_id;
-	u8  options;
-	u8  kbd_layout;
-	u8  legacy[1];
-	u8  eps_msg[120];
-	u8  err_msg[64];
-	u8  pass_buf[MAX_PASSWORD + 1];	
-	u8  save_mbr[512];
-	u32 timeout; /* time limit for password entering */
+	u32     sign1;
+	u32     sign2;
+	u32     ldr_ver;
+	u8      logon_type;
+	u8      error_type;
+	u8      boot_type;
+	u32     disk_id;
+	u16     options;
+	u8      kbd_layout;
+	char    eps_msg[128];
+	char    err_msg[128];
+	u8      save_mbr[512];
+	u32     timeout; /* time limit for password entering */
+	u8      emb_key[64];
 
 } ldr_config;
 

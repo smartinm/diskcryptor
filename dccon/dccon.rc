@@ -71,7 +71,7 @@ BEGIN
         BEGIN
             VALUE "FileDescription", "DiskCryptor console"
 			VALUE "FileVersion", DC_FILE_VER
-            VALUE "LegalCopyright", "freed0m.org"
+            VALUE "LegalCopyright", "http://diskcryptor.net/"
             VALUE "OriginalFilename", "dccon.exe"
             VALUE "ProductName", "DiskCryptor"
             VALUE "ProductVersion", DC_PRODUCT_VER

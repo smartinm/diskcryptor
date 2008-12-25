@@ -28,8 +28,6 @@
 #define DC_CTL_DECRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 14, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_SYNC_STATE    CTL_CODE(FILE_DEVICE_UNKNOWN, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_RESOLVE       CTL_CODE(FILE_DEVICE_UNKNOWN, 16, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_UPDATE_VOLUME CTL_CODE(FILE_DEVICE_UNKNOWN, 17, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SET_SHRINK    CTL_CODE(FILE_DEVICE_UNKNOWN, 18, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_GET_RAND      CTL_CODE(FILE_DEVICE_UNKNOWN, 19, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_BENCHMARK     CTL_CODE(FILE_DEVICE_UNKNOWN, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_BSOD          CTL_CODE(FILE_DEVICE_UNKNOWN, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -49,40 +47,31 @@
 
 #define MAX_DEVICE              64 // maximum device name length
 
-#define DC_DEVICE_NAME L"\\Device\\TcWde"
-#define DC_LINK_NAME   L"\\DosDevices\\TcWde"
-#define DC_WIN32_NAME  L"\\\\.\\TcWde"
+#define DC_DEVICE_NAME     L"\\Device\\dcrypt"
+#define DC_LINK_NAME       L"\\DosDevices\\dcrypt"
+#define DC_WIN32_NAME      L"\\\\.\\dcrypt"
+#define DC_OLD_WIN32_NAME  L"\\\\.\\TcWde"
 
 #pragma pack (push, 1)
 
+#ifndef BOOT_LDR
+
 typedef struct _crypt_info {
-	u8 prf_id;     /* pkcs 5.2 prf id */
 	u8 cipher_id;  /* cipher id */
-	u8 mode_id;    /* encryption mode id */
 	u8 wp_mode;    /* data wipe mode (for encryption) */
 
 } crypt_info;
 
-#ifndef BOOT_LDR
-
 typedef struct _dc_ioctl {
-	u8         passw1[MAX_PASSWORD + 1]; /* password                         */
-	u8         passw2[MAX_PASSWORD + 1]; /* new password (for changing pass) */
-	u16        device[MAX_DEVICE + 1];
+	dc_pass    passw1;  /* password                         */
+	dc_pass    passw2;  /* new password (for changing pass) */
+	wchar_t    device[MAX_DEVICE + 1];
 	int        force;   /* dismount flags                  */
 	int        status;  /* operation status code           */
 	int        n_mount; /* number of mounted devices       */
-	u16        shrink_off;
-	u32        shrink_val;
 	crypt_info crypt;
 
 } dc_ioctl;
-
-typedef struct _dc_hdd_query {
-	HANDLE  h_device;
-	wchar_t name[MAX_PATH];
-
-} dc_hdd_query;
 
 typedef struct _dc_lock_ctl {
 	void *data;
@@ -93,25 +82,26 @@ typedef struct _dc_lock_ctl {
 
 typedef struct _dc_backup_ctl {
 	u16        device[MAX_DEVICE + 1];
-	u8         passw1[MAX_PASSWORD + 1];
-	u8         backup[SECTOR_SIZE];
+	dc_pass    pass;
+	u8         backup[DC_AREA_SIZE];
 	int        status;
 
 } dc_backup_ctl;
 
 /* hook control flags */
-#define F_NONE           0x000
-#define F_ENABLED        0x001 /* device mounted                   */
-#define F_SYNC           0x002 /* syncronous IRP processing mode   */
-#define F_SYSTEM         0x004 /* this is a system device          */
-#define F_REMOVABLE      0x008 /* this is removable device         */
-#define F_HIBERNATE      0x010 /* this device used for hibernation */
-#define F_UNSUPRT        0x020 /* device unsupported */
-#define F_DISABLE        0x040 /* device temporary disabled */
-#define F_SHRINK_PENDING 0x080
-#define F_REENCRYPT      0x100
-#define F_FORMATTING     0x200
-#define F_NO_AUTO_MOUNT  0x400
+#define F_NONE          0x0000
+#define F_ENABLED       0x0001 /* device mounted                                          */
+#define F_SYNC          0x0002 /* syncronous IRP processing mode                          */
+#define F_SYSTEM        0x0004 /* this is a system device                                 */
+#define F_REMOVABLE     0x0008 /* this is removable device                                */
+#define F_HIBERNATE     0x0010 /* this device used for hibernation                        */
+#define F_UNSUPRT       0x0020 /* device unsupported                                      */
+#define F_DISABLE       0x0040 /* device temporary disabled                               */
+#define F_REENCRYPT     0x0100 /* reencryption in progress                                */
+#define F_FORMATTING    0x0200 /* formatting in progress                                  */
+#define F_NO_AUTO_MOUNT 0x0400 /* automounting disabled for this device                   */
+#define F_PROTECT_DCSYS 0x0800 /* protect \$dcsys$ file from any access                   */
+#define F_PREVENT_ENC   0x1000 /* fail any encrypt/decrypt requests with ST_CANCEL status */
 
 /* unmount flags */
 #define UM_FORCE    0x01 /* unmount volume if FSCTL_LOCK_VOLUME fail */
@@ -166,6 +156,8 @@ typedef struct _dc_backup_ctl {
 #define ST_FORMAT_NEEDED  41 /* */
 #define ST_CANCEL         42 /* */
 #define ST_INV_VOL_VER    43 /* invalid volume version */
+#define ST_EMPTY_KEYFILES 44 /* keyfiles not found */
+#define ST_NOT_BACKUP     45 /* this is a not backup file */
 
 /* data wipe modes */
 #define WP_NONE    0 /* no data wipe                           */
@@ -181,7 +173,6 @@ typedef struct _dc_backup_ctl {
 #define CONF_WIPEPAS_LOGOFF   0x08
 #define CONF_DISMOUNT_LOGOFF  0x10
 #define CONF_AUTO_START       0x20
-#define CONF_DEPRECATED       0x40
 
 typedef struct _dc_status {
 	u64        dsk_size;
@@ -211,6 +202,10 @@ typedef struct _dc_conf {
 #define IS_UNMOUNTABLE(d) ( !((d)->flags & (F_SYSTEM | F_HIBERNATE)) && \
                              ((d)->paging_count == 0) )
 
+#define IS_EQUAL_PASS(p1,p2) ( (p1 && p2) && \
+                               ((p1)->size == (p2)->size) && \
+	                             (memcmp((p1)->pass, (p2)->pass, (p1)->size) == 0) )
+
 #endif
 
 #pragma pack (pop)
@@ -219,6 +214,10 @@ typedef struct _dc_conf {
 #define OS_WIN2K 1
 #define OS_VISTA 2
 
+#define DC_DEVEXT_CONTROL 0
+#define DC_DEVEXT_HOOKDEV 1
+#define DC_DEVEXT_FSFILT  2
+
 #define DC_MEM_RETRY_TIME    10
 #define DC_MEM_RETRY_TIMEOUT (1000 * 30)
 
@@ -226,8 +225,8 @@ typedef struct _dc_conf {
  extern PDEVICE_OBJECT dc_device;
  extern PDRIVER_OBJECT dc_driver;
  extern u32            dc_os_type; 
- extern u32            dc_data_lock;
  extern u32            dc_io_count;
+ extern u32            dc_dump_disable;
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;  
 #endif

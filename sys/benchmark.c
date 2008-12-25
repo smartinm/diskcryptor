@@ -57,16 +57,14 @@ int dc_k_benchmark(crypt_info *crypt, dc_bench *info)
 		}
 		
 		dc_cipher_init(
-			dc_k, crypt->cipher_id, crypt->mode_id, key
-			);
+			dc_k, crypt->cipher_id, key);
 
 		time = KeQueryPerformanceCounter(pv(&freq)).QuadPart;
 
 		for (i = 0; i < TEST_BLOCK_NUM; i++) 
 		{
 			dc_fast_encrypt(
-				buff, buff, TEST_BLOCK_LEN, offset, dc_k
-				);
+				buff, buff, TEST_BLOCK_LEN, offset, dc_k);
 
 			offset += TEST_BLOCK_LEN;
 		}

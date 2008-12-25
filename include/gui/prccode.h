@@ -5,16 +5,14 @@
 #include "drv_ioctl.h"
 #include "main.h"
 
-#define MAIN_SHEETS     2
-#define BOOT_WZR_SHEETS 2
+#define MAIN_SHEETS       2
+#define BOOT_WZR_SHEETS   2
 
-#define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); }
-
-typedef struct _dlgpass {
+typedef struct _dlgpass 
+{
 	_dnode  *node;
-
-	char    *pass;
-	char    *new_pass;
+	dc_pass *pass;
+	dc_pass *new_pass;
 	wchar_t *mnt_point;
 
 } dlgpass, *pdlgpass;
@@ -23,8 +21,8 @@ typedef struct _dlgpass {
 INT_PTR 
 CALLBACK
 _install_dlg_proc(
-		HWND hwnd,
-		UINT message,
+		HWND   hwnd,
+		UINT   message,
 		WPARAM wparam,
 		LPARAM lparam
 	);
@@ -32,8 +30,8 @@ _install_dlg_proc(
 INT_PTR 
 CALLBACK
 _options_dlg_proc(
-		HWND hwnd,
-		UINT message,
+		HWND   hwnd,
+		UINT   message,
 		WPARAM wparam,
 		LPARAM lparam
 	);
@@ -41,19 +39,19 @@ _options_dlg_proc(
 INT_PTR 
 CALLBACK
 _wizard_encrypt_dlg_proc(
-		HWND hwnd,
-		UINT message,
+		HWND   hwnd,
+		UINT   message,
 		WPARAM wparam,
 		LPARAM lparam
 	);
 
 int _dlg_get_pass(
-		HWND hwnd,
+		HWND     hwnd,
 		dlgpass *pass
 	);
 
 int _dlg_change_pass(
-		HWND hwnd,
+		HWND     hwnd,
 		dlgpass *pass
 	);
 
@@ -63,13 +61,14 @@ int _dlg_config_loader(
 	);
 
 int _dlg_options(HWND hwnd);
+
 void _dlg_about(HWND hwnd);
 void _dlg_benchmark(HWND hwnd);
 
 INT_PTR CALLBACK
 _main_dialog_proc(
-		HWND hwnd,
-		UINT message,
+		HWND   hwnd,
+		UINT   message,
 		WPARAM wparam,
 		LPARAM lparam
 	);
@@ -77,23 +76,19 @@ _main_dialog_proc(
 INT_PTR 
 CALLBACK
 _wizard_boot_dlg_proc(
-		HWND hwnd,
-		UINT message,
+		HWND   hwnd,
+		UINT   message,
 		WPARAM wparam,
 		LPARAM lparam
 	);
 
 void __stdcall 
 _timer_handle(
-		HWND hwnd,
-		UINT msg,
+		HWND     hwnd,
+		UINT     msg,
 		UINT_PTR id,
-		DWORD tickcount
+		DWORD    tickcount
 	);
-
-int _shrink_volume(
-	   HWND parent, vol_inf *vol, sh_data *shd
-	   );
 
 void _update_info_table( );
 

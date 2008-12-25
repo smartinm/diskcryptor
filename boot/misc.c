@@ -336,10 +336,10 @@ void printf (const char *fmt, ...)
   }
 
   /* delay one second */
-  {
+/*  {
 	  u32 t = get_rtc_time();
 	  while (get_rtc_time() - t < 1);
   }
-
+*/
   va_end(args);
 }

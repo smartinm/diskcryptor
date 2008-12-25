@@ -44,94 +44,83 @@ static int dc_ioctl_process(
 	{
 		case DC_CTL_ADD_PASS:
 			{
-				if (data->passw1[0] != 0) {
-					dc_add_password(data->passw1);
-				}
-
+				dc_add_password(&data->passw1);
 				resl = ST_OK;
 			} 
 		break;
 		case DC_CTL_MOUNT:
 			{
 				resl = dc_mount_device(
-					data->device, data->passw1
-					);
+					data->device, &data->passw1);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-					dc_add_password(data->passw1);
+					dc_add_password(&data->passw1);
 				}
 			}
 		break;
 		case DC_CTL_MOUNT_ALL:
 			{
-				data->n_mount = dc_mount_all(data->passw1);
+				data->n_mount = dc_mount_all(&data->passw1);
 				resl          = ST_OK;
 
 				if ( (data->n_mount != 0) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-					dc_add_password(data->passw1);
+					dc_add_password(&data->passw1);
 				}
 			}
 		break;
 		case DC_CTL_UNMOUNT:
 			{
 				resl = dc_unmount_device(
-					data->device, (data->force & UM_FORCE)
-					);
+					data->device, (data->force & UM_FORCE));
 			}
 		break;
 		case DC_CTL_CHANGE_PASS:
 			{
 				resl = dc_change_pass(
-					data->device, data->passw1, data->passw2, data->crypt.prf_id
-					);
+					data->device, &data->passw1, &data->passw2);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-					dc_add_password(data->passw2);
+					dc_add_password(&data->passw2);
 				}
 			}
 		break;
 		case DC_CTL_ENCRYPT_START:
 			{
 				resl = dc_encrypt_start(
-					data->device, data->passw1, &data->crypt
-					);
+					data->device, &data->passw1, &data->crypt);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-					dc_add_password(data->passw1);
+					dc_add_password(&data->passw1);
 				}
 			}
 		break;
 		case DC_CTL_DECRYPT_START:
 			{
-				resl = dc_decrypt_start(data->device, data->passw1);
+				resl = dc_decrypt_start(data->device, &data->passw1);
 			}
 		break;
 		case DC_CTL_RE_ENC_START:
 			{
 				resl = dc_reencrypt_start(
-					data->device, data->passw1, &data->crypt
-					);
+					data->device, &data->passw1, &data->crypt);
 			}
 		break;
 		case DC_CTL_ENCRYPT_STEP:
 			{
 				resl = dc_send_sync_packet(
-					data->device, S_OP_ENC_BLOCK, pv(data->crypt.wp_mode)
-					);
+					data->device, S_OP_ENC_BLOCK, pv(data->crypt.wp_mode));
 			}
 		break;
 		case DC_CTL_DECRYPT_STEP:
 			{
 				resl = dc_send_sync_packet(
-					data->device, S_OP_DEC_BLOCK, 0
-					);
+					data->device, S_OP_DEC_BLOCK, 0);
 			}
 		break; 
 		case DC_CTL_SYNC_STATE:
 			{
 				resl = dc_send_sync_packet(
-					data->device, S_OP_SYNC, 0
-					);
+					data->device, S_OP_SYNC, 0);
 			}
 		break;
 		case DC_CTL_RESOLVE:
@@ -143,36 +132,20 @@ static int dc_ioctl_process(
 				}
 			}
 		break;
-		case DC_CTL_UPDATE_VOLUME:
-			{
-				resl = dc_update_volume(
-					data->device, data->passw1, data
-					); 
-			}
-		break;
-		case DC_CTL_SET_SHRINK:
-			{
-				resl = dc_send_sync_packet(
-					data->device, S_OP_SET_SHRINK, data
-					);
-			}
-		break;
 		case DC_FORMAT_START:
 			{
 				resl = dc_format_start(
-					data->device, data->passw1, &data->crypt
-					);
+					data->device, &data->passw1, &data->crypt);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-					dc_add_password(data->passw1);
+					dc_add_password(&data->passw1);
 				}
 			}
 		break;
 		case DC_FORMAT_STEP:
 			{
 				resl = dc_format_step(
-					data->device, data->crypt.wp_mode
-					);
+					data->device, data->crypt.wp_mode);
 			}
 		break;
 		case DC_FORMAT_DONE:
@@ -185,11 +158,9 @@ static int dc_ioctl_process(
 	return resl;
 }
 
-static
 NTSTATUS
   dc_drv_control_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	PIO_STACK_LOCATION  irp_sp  = IoGetCurrentIrpStackLocation(irp);
@@ -241,8 +212,7 @@ NTSTATUS
 						}
 
 						dc_get_mount_point(
-							hook, stat->mnt_point, sizeof(stat->mnt_point)
-							);
+							hook, stat->mnt_point, sizeof(stat->mnt_point));
 
 						stat->crypt        = hook->crypt;
 						stat->dsk_size     = hook->dsk_size;
@@ -294,7 +264,7 @@ NTSTATUS
 		break;
 		case DC_CTL_BSOD:
 			{
-				lock_inc(&dc_data_lock);
+				lock_inc(&dc_dump_disable);
 				dc_clean_pass_cache();
 				dc_clean_locked_mem(NULL);
 				dc_clean_keys();
@@ -336,8 +306,7 @@ NTSTATUS
 				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
 				{
 					smem->resl = dc_lock_mem(
-						smem->data, smem->size, irp_sp->FileObject
-						);
+						smem->data, smem->size, irp_sp->FileObject);
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_lock_ctl);
@@ -351,8 +320,7 @@ NTSTATUS
 				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
 				{
 					smem->resl = dc_unlock_mem(
-						smem->data, irp_sp->FileObject
-						);
+						smem->data, irp_sp->FileObject);
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_lock_ctl);
@@ -365,15 +333,13 @@ NTSTATUS
 				
 				if ( (in_len == sizeof(dc_backup_ctl)) && (out_len == in_len) )
 				{
-					back->passw1[MAX_PASSWORD] = 0;
-					back->device[MAX_DEVICE]   = 0;
+					back->device[MAX_DEVICE] = 0;
 
 					back->status = dc_backup_header(
-						back->device, back->passw1, back->backup
-						);
+						back->device, &back->pass, back->backup);
 
 					/* prevent leaks */
-					zeroauto(back->passw1, sizeof(back->passw1));
+					zeroauto(&back->pass, sizeof(back->pass));
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_backup_ctl);
@@ -386,15 +352,13 @@ NTSTATUS
 				
 				if ( (in_len == sizeof(dc_backup_ctl)) && (out_len == in_len) )
 				{
-					back->passw1[MAX_PASSWORD] = 0;
-					back->device[MAX_DEVICE]   = 0;
+					back->device[MAX_DEVICE] = 0;
 
 					back->status = dc_restore_header(
-						back->device, back->passw1, back->backup
-						);
+						back->device, &back->pass, back->backup);
 
 					/* prevent leaks */
-					zeroauto(back->passw1, sizeof(back->passw1));
+					zeroauto(&back->pass, sizeof(back->pass));
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_backup_ctl);
@@ -407,17 +371,15 @@ NTSTATUS
 
 				if ( (in_len == sizeof(dc_ioctl)) && (out_len == sizeof(dc_ioctl)) )
 				{					
-					/* limit null-terminated strings length */
-					dctl->passw1[MAX_PASSWORD] = 0;
-					dctl->passw2[MAX_PASSWORD] = 0;
-					dctl->device[MAX_DEVICE]   = 0;
+					/* limit null-terminated string length */
+					dctl->device[MAX_DEVICE] = 0;
 					
 					/* process IOCTL */
 					dctl->status = dc_ioctl_process(code, dctl);
 
 					/* prevent leaks  */
-					zeroauto(dctl->passw1, sizeof(dctl->passw1));
-					zeroauto(dctl->passw2, sizeof(dctl->passw2));
+					zeroauto(&dctl->passw1, sizeof(dctl->passw1));
+					zeroauto(&dctl->passw2, sizeof(dctl->passw2));
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_ioctl);
@@ -426,9 +388,7 @@ NTSTATUS
 		break;
 	}
 
-	return dc_complete_irp(
-		      irp, status, bytes
-			  );
+	return dc_complete_irp(irp, status, bytes);
 }
 
 static void dc_verify_ioctl_complete(
@@ -446,9 +406,7 @@ static void dc_verify_ioctl_complete(
 static
 NTSTATUS
   dc_ioctl_complete(
-    IN PDEVICE_OBJECT dev_obj,
-    IN PIRP           irp,
-    IN PVOID          param
+    PDEVICE_OBJECT dev_obj, PIRP irp, void *param
     )
 {
 	PIO_STACK_LOCATION irp_sp;
@@ -465,8 +423,7 @@ NTSTATUS
 		IoMarkIrpPending(irp);
 	}
 
-	if ( NT_SUCCESS(status) && (hook->flags & F_ENABLED) && 
-		 !(hook->flags & F_SHRINK_PENDING) && (irp->RequestorMode == UserMode) )
+	if ( NT_SUCCESS(status) && (hook->flags & F_ENABLED) )
 	{
 		switch (ioctl)
 		{
@@ -498,8 +455,7 @@ NTSTATUS
 			DbgMsg("media removed\n");
 
 			dc_process_unmount_async(
-				hook, dc_verify_ioctl_complete, irp
-				);
+				hook, dc_verify_ioctl_complete, irp);
 
 			return STATUS_MORE_PROCESSING_REQUIRED;
 		}
@@ -510,27 +466,17 @@ NTSTATUS
 
 NTSTATUS
   dc_io_control_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	dev_hook *hook;
 		
-	if (dev_obj == dc_device) 
-	{
-		return dc_drv_control_irp(
-			      dev_obj, irp
-				  );				 
-	}
-
 	hook = dev_obj->DeviceExtension;
 
 	IoCopyCurrentIrpStackLocationToNext(irp);
 
 	IoSetCompletionRoutine(
-		irp, dc_ioctl_complete,
-		NULL, TRUE, TRUE, TRUE
-		);
+		irp, dc_ioctl_complete,	NULL, TRUE, TRUE, TRUE);
 
 	return IoCallDriver(hook->orig_dev, irp);
 }

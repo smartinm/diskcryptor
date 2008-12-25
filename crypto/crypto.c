@@ -25,7 +25,6 @@
 #include "aes.h"
 #include "twofish.h"
 #include "serpent.h"
-#include "..\sys\driver.h"
 #include "pkcs5.h"
 #include "crc32.h"
 #include "gf128mul.h"
@@ -33,77 +32,6 @@
 
 #define XTS_TWEAK_UNIT_SIZE SECTOR_SIZE
 #define XTS_BLOCK_SIZE      16
-
-#ifndef SMALL_CODE
-
-static int iv_to_index(u32 *p)
-{
-	u32 bps;
-	
-	if (bsf(&bps, ~p[0]) == 0) {
-		if (bsf(&bps, ~p[1]) == 0) {
-			bps = 64;
-		} else bps += 32;
-	}
-
-	return bps;
-}
-
-void lrw_mode_process(
-		u8 *in, u8 *out, size_t len, u64 offset, struct _dc_key *key, c_crypt_proc cryptprc
-		)
-{
-	u8  t[16];
-	u64 idx = (offset >> 4) | 1;
-	int i;
-
-	gf128mul64_table(pv(t), pv(&idx), &key->mode_k.lrw.gf_ctx);
-
-	do
-	{
-		xor128(out, in, t);
-		cryptprc(out, out, &key->cipher_k);
-		xor128(out, out, t);
-
-		if ( (len -= 16) == 0 ) {
-			break;
-		}
-
-		i = iv_to_index(pv(&idx));
-		xor128(t, t, &key->mode_k.lrw.inctab[i]); 
-		in += 16; out += 16; idx++;
-	} while (1); 	
-}
-
-#else /* SMALL_CODE */
-
-void lrw_mode_process(
-		u8 *in, u8 *out, size_t len, u64 offset, struct _dc_key *key, c_crypt_proc cryptprc
-		)
-{
-	u8  t[16];
-	u64 x, idx;
-
-	idx = (offset >> 4) | 1;
-	
-	while (len != 0)
-	{
-		x = BE64(idx);
-		gf128_mul64(key->mode_k.lrw.gf_key, pv(&x), t);
-
-		xor128(out, in, t);
-		cryptprc(out, out, &key->cipher_k);
-		xor128(out, out, t);
-
-		idx++; len -= 16;
-		in += 16; out += 16; 
-	}
-
-	/* prevent leaks */
-	zeroauto(t, sizeof(t));
-}
-
-#endif /* SMALL_CODE */
 
 void xts_mode_process(
 		u8 *in, u8 *out, size_t len, u64 offset,
@@ -118,15 +46,10 @@ void xts_mode_process(
 	u32   cfg;
 #endif
 
-	b_max = (u32)(len / XTS_BLOCK_SIZE);
-	idx.b = 0;
-
-	if (len < XTS_TWEAK_UNIT_SIZE) {
-		b_base = b_max; idx.a = 0;
-	} else {
-		idx.a  = (offset / XTS_TWEAK_UNIT_SIZE) + 1;
-		b_base = (XTS_TWEAK_UNIT_SIZE / XTS_BLOCK_SIZE);
-	}
+	b_max  = (u32)(len / XTS_BLOCK_SIZE);
+	b_base = (XTS_TWEAK_UNIT_SIZE / XTS_BLOCK_SIZE);
+	idx.a  = (offset / XTS_TWEAK_UNIT_SIZE) + 1;
+	idx.b  = 0;	
 
 	do
 	{
@@ -163,32 +86,11 @@ void xts_mode_process(
 	} while (b_max != 0);
 }
 
-static void lrw_mode_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
-{
-	lrw_mode_process(in, out, len, offset, key, key->encrypt);
-}
-
-static void lrw_mode_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
-{
-	lrw_mode_process(in, out, len, offset, key, key->decrypt);
-}
 
 static void aes_twofish_setkey(u8 *key, chain_ctx *ctx)
 {
 	twofish_setkey(key, &ctx->twofish_key);
 	aes256_set_key(key + TF_MAX_KEY_SIZE, &ctx->aes_key);
-}
-
-static void pcall aes_twofish_encrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	twofish_encrypt(in, out, &ctx->twofish_key);
-	aes256_encrypt(out, out, &ctx->aes_key);
-}
-
-static void pcall aes_twofish_decrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	aes256_decrypt(in, out, &ctx->aes_key);
-	twofish_decrypt(out, out, &ctx->twofish_key);
 }
 
 static void twofish_serpent_setkey(u8 *key, chain_ctx *ctx)
@@ -197,35 +99,12 @@ static void twofish_serpent_setkey(u8 *key, chain_ctx *ctx)
 	twofish_setkey(key + SERPENT_MAX_KEY_SIZE, &ctx->twofish_key);
 }
 
-static void pcall twofish_serpent_encrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	serpent_encrypt(in, out, &ctx->serpent_key);
-	twofish_encrypt(out, out, &ctx->twofish_key);
-}
-
-static void pcall twofish_serpent_decrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	twofish_decrypt(in, out, &ctx->twofish_key);
-	serpent_decrypt(out, out, &ctx->serpent_key);
-}
-
 static void serpent_aes_setkey(u8 *key, chain_ctx *ctx)
 {
 	aes256_set_key(key, &ctx->aes_key);
 	serpent_setkey(key + AES_KEY_SIZE, &ctx->serpent_key);
 }
 
-static void pcall serpent_aes_encrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	aes256_encrypt(in, out, &ctx->aes_key);
-	serpent_encrypt(out, out, &ctx->serpent_key);
-}
-
-static void pcall serpent_aes_decrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	serpent_decrypt(in, out, &ctx->serpent_key);
-	aes256_decrypt(out, out, &ctx->aes_key);
-}
 
 static void aes_twofish_serpent_setkey(u8 *key, chain_ctx *ctx)
 {
@@ -234,136 +113,108 @@ static void aes_twofish_serpent_setkey(u8 *key, chain_ctx *ctx)
 	aes256_set_key(key + SERPENT_MAX_KEY_SIZE + TF_MAX_KEY_SIZE, &ctx->aes_key);
 }
 
-static void pcall aes_twofish_serpent_encrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	serpent_encrypt(in, out, &ctx->serpent_key);
-	twofish_encrypt(out, out, &ctx->twofish_key);
-	aes256_encrypt(out, out, &ctx->aes_key);
-}
-
-static void pcall aes_twofish_serpent_decrypt(u8 *in, u8 *out, chain_ctx *ctx) 
-{
-	aes256_decrypt(in, out, &ctx->aes_key);
-	twofish_decrypt(out, out, &ctx->twofish_key);
-	serpent_decrypt(out, out, &ctx->serpent_key);	
-}
-
 static void xts_single_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	xts_mode_process(
-		in, out, len, offset, key->mode_k.xts.encrypt, 
-		key->encrypt, &key->cipher_k, &key->mode_k.xts.tweak_k
-		);
+		in, out, len, offset, key->xts.encrypt, 
+		key->encrypt, &key->cipher_k, &key->xts.tweak_k);
 }
 
 static void xts_single_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	xts_mode_process(
-		in, out, len, offset, key->mode_k.xts.encrypt, 
-		key->decrypt, &key->cipher_k, &key->mode_k.xts.tweak_k
-		);
+		in, out, len, offset, key->xts.encrypt, 
+		key->decrypt, &key->cipher_k, &key->xts.tweak_k);
 }
 
 static void xts_aes_twofish_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key),
-		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);
+		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);
 	
 	xts_mode_process(
 		out, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);
+		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key);
 }
 
 static void xts_aes_twofish_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);
+		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key);
 
 	xts_mode_process(
 		out, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key), 
-		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);	
+		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);	
 }
 
 static void xts_twofish_serpent_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_encrypt_ptr(sp_key), sp_key, &tw_key->serpent_key
-		);
+		serpent_encrypt_ptr(sp_key), sp_key, &tw_key->serpent_key);
 
 	xts_mode_process(
 		out, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key), 
-		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);	
+		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);	
 }
 
 static void xts_twofish_serpent_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key), 
-		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);	
+		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);	
 
 	xts_mode_process(
 		out, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key
-		);	
+		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key);	
 }
 
 static void xts_serpent_aes_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);
+		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key);
 
 	xts_mode_process(
 		out, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_encrypt_ptr(sp_key), sp_key, &tw_key->serpent_key
-		);		
+		serpent_encrypt_ptr(sp_key), sp_key, &tw_key->serpent_key);		
 }
 
 static void xts_serpent_aes_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
 {
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key
-		);	
+		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key);	
 
 	xts_mode_process(
 		out, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);		
+		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key);		
 }
 
 static void xts_aes_twofish_serpent_encrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
@@ -371,22 +222,19 @@ static void xts_aes_twofish_serpent_encrypt(u8 *in, u8 *out, size_t len, u64 off
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_encrypt_ptr(sp_key),  sp_key, &tw_key->serpent_key
-		);
+		serpent_encrypt_ptr(sp_key),  sp_key, &tw_key->serpent_key);
 
 	xts_mode_process(
 		out, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key), 
-		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);	
+		twofish_encrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);	
 
 	xts_mode_process(
 		out, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);			
+		aes256_encrypt_ptr(ae_key), ae_key, &tw_key->aes_key);			
 }
 
 static void xts_aes_twofish_serpent_decrypt(u8 *in, u8 *out, size_t len, u64 offset, dc_key *key)
@@ -394,36 +242,33 @@ static void xts_aes_twofish_serpent_decrypt(u8 *in, u8 *out, size_t len, u64 off
 	aes256_key  *ae_key = &key->cipher_k.chain_key.aes_key;
 	twofish_ctx *tf_key = &key->cipher_k.chain_key.twofish_key;
 	serpent_ctx *sp_key = &key->cipher_k.chain_key.serpent_key;
-	chain_ctx   *tw_key = &key->mode_k.xts.tweak_k.chain_key;
+	chain_ctx   *tw_key = &key->xts.tweak_k.chain_key;
 
 	xts_mode_process(
 		in, out, len, offset, aes256_encrypt_ptr(&tw_key->aes_key), 
-		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key
-		);	
+		aes256_decrypt_ptr(ae_key), ae_key, &tw_key->aes_key);	
 
 	xts_mode_process(
 		out, out, len, offset, twofish_encrypt_ptr(&tw_key->twofish_key), 
-		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key
-		);
+		twofish_decrypt_ptr(tf_key), tf_key, &tw_key->twofish_key);
 
 	xts_mode_process(
 		out, out, len, offset, serpent_encrypt_ptr(&tw_key->serpent_key), 
-		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key
-		);
+		serpent_decrypt_ptr(sp_key), sp_key, &tw_key->serpent_key);
 }
 
 static dc_cipher dc_ciphers[] = {
 #ifdef AES_ASM
-	{ 32, aes256_set_key, NULL,  NULL  },                                                         /* AES */
+	{ 32, aes256_set_key, NULL,  NULL  },                      /* AES */
 #else
-	{ 32, aes256_set_key, aes256_encrypt,  aes256_decrypt  },                                     /* AES */
+	{ 32, aes256_set_key, aes256_encrypt,  aes256_decrypt  },  /* AES */
 #endif
-	{ 32, twofish_setkey, twofish_encrypt, twofish_decrypt },                                     /* Twofish */
-	{ 32, serpent_setkey, serpent_encrypt, serpent_decrypt },                                     /* Serpent */
-	{ 64, aes_twofish_setkey, aes_twofish_encrypt, aes_twofish_decrypt },                         /* AES-Twofish */
-	{ 64, twofish_serpent_setkey, twofish_serpent_encrypt, twofish_serpent_decrypt },             /* Twofish-Serpent */
-	{ 64, serpent_aes_setkey, serpent_aes_encrypt, serpent_aes_decrypt },                         /* Serpent-AES */
-	{ 96, aes_twofish_serpent_setkey, aes_twofish_serpent_encrypt, aes_twofish_serpent_decrypt }  /* AES-Twofish-Serpent */
+	{ 32, twofish_setkey, twofish_encrypt, twofish_decrypt },  /* Twofish */
+	{ 32, serpent_setkey, serpent_encrypt, serpent_decrypt },  /* Serpent */
+	{ 64, aes_twofish_setkey, NULL, NULL },                    /* AES-Twofish */
+	{ 64, twofish_serpent_setkey, NULL, NULL },                /* Twofish-Serpent */
+	{ 64, serpent_aes_setkey, NULL, NULL },                    /* Serpent-AES */
+	{ 96, aes_twofish_serpent_setkey, NULL, NULL }             /* AES-Twofish-Serpent */
 };
 
 static struct {
@@ -441,58 +286,24 @@ static struct {
 
 
 void dc_cipher_init(
-	   dc_key *key, int cipher, int mode, char *d_key
+	   dc_key *key, int cipher, char *d_key
 	   )
 {
-	char *c_k;
-#ifndef SMALL_CODE
-	u32 t[2];
-	int i;
-#endif
+	/* init XTS tweak key */
+	dc_ciphers[cipher].set_key(
+		d_key + dc_ciphers[cipher].key_len, &key->xts.tweak_k);
 
-	if (mode == EM_LRW)
-	{
-#ifndef SMALL_CODE
-		/* initialize GF(2^128) multiplication table */
-		gf128mul_init_32k(
-			&key->mode_k.lrw.gf_ctx, pv(d_key)
-			);
-
-		/* initialize increment table */
-		t[0] = t[1] = 0;
-		for (i = 0; i < 64; i++) 
-		{
-			t[i / 32] |= 1 << (i % 32);
-			
-			gf128mul64_table(
-				&key->mode_k.lrw.inctab[i], pv(t), &key->mode_k.lrw.gf_ctx
-				);
-		}
-#else
-		/* copy tweak key */
-		autocpy(key->mode_k.lrw.gf_key, d_key, 16); 
-#endif
-		key->mode_encrypt = lrw_mode_encrypt; 
-		key->mode_decrypt = lrw_mode_decrypt; 
-		c_k = d_key + LRW_TWEAK_SIZE;
-	} else 
-	{
-		/* init XTS tweak key */
-		dc_ciphers[cipher].set_key(
-			d_key + dc_ciphers[cipher].key_len, &key->mode_k.xts.tweak_k
-			);
-		key->mode_k.xts.encrypt = dc_ciphers[cipher].encrypt;
+	key->xts.encrypt = dc_ciphers[cipher].encrypt;
 #ifdef AES_ASM
-		if (cipher == CF_AES) {
-			key->mode_k.xts.encrypt = aes256_encrypt_ptr(&key->mode_k.xts.tweak_k);
-		}
-#endif 
-		key->mode_encrypt = xts_procs[cipher].encrypt;
-		key->mode_decrypt = xts_procs[cipher].decrypt;
-		c_k = d_key;
+	if (cipher == CF_AES) {
+		key->xts.encrypt = aes256_encrypt_ptr(&key->xts.tweak_k);
 	}
-
-	dc_ciphers[cipher].set_key(c_k, &key->cipher_k);
+#endif 
+	key->mode_encrypt = xts_procs[cipher].encrypt;
+	key->mode_decrypt = xts_procs[cipher].decrypt;
+	
+	/* init cipher key */
+	dc_ciphers[cipher].set_key(d_key, &key->cipher_k);
 	key->encrypt = dc_ciphers[cipher].encrypt;
 	key->decrypt = dc_ciphers[cipher].decrypt;
 #ifdef AES_ASM
@@ -503,7 +314,6 @@ void dc_cipher_init(
 #endif
 #ifndef SMALL_CODE
 	key->cipher = cipher;
-	key->mode   = mode;
 #endif
 }
 
@@ -515,70 +325,65 @@ void dc_cipher_reinit(dc_key *key)
 	{
 		key->encrypt = aes256_encrypt_ptr(&key->cipher_k);
 		key->decrypt = aes256_decrypt_ptr(&key->cipher_k);
-
-		if (key->mode == EM_XTS) {
-			key->mode_k.xts.encrypt = aes256_encrypt_ptr(&key->mode_k.xts.tweak_k);
-		}
+		key->xts.encrypt = aes256_encrypt_ptr(&key->xts.tweak_k);
 	}
 #endif
 }
 #endif
+
+#ifndef NO_PKCS5
+
 int dc_decrypt_header(
-	  dc_key    *hdr_key,
-	  dc_header *header, crypt_info *crypt, char *password
+	  dc_key *hdr_key, dc_header *header, dc_pass *password
 	  )
 {
 	u8        dk[DISKKEY_SIZE];
-	int       i, j, k, succs;
-	dc_header hcopy;
-	size_t    pss_len;	
+	int       i, succs;
+	dc_header *hcopy;
 
-	pss_len = strlen(password);
-	succs   = 0;
-
-	for (i = 0; i < PRF_NUM; i++)
-	{
-		pkcs5_2_prf(
-			i, -1, password, pss_len, header->salt, PKCS5_SALT_SIZE, 
-			dk, PKCS_DERIVE_MAX
-			);
-
-		for (j = 0; j < CF_CIPHERS_NUM; j++)
-		{
-			for (k = 0; k < EM_NUM; k++)
-			{
-				dc_cipher_init(hdr_key, j, k, dk);
-
-				dc_cipher_decrypt(
-					pv(&header->sign), pv(&hcopy.sign), 
-					HEADER_ENCRYPTEDDATASIZE, 0, hdr_key 
-					);
-
-				/* Magic 'TRUE' or 'DTMP' */
-				if (IS_DC_SIGN(hcopy.sign) == 0) {
-					continue;
-				}
-#ifndef NO_CRC32
-				/* Check CRC of the key set */
-				if (BE32(hcopy.key_crc) != crc32(hcopy.key_data, DISKKEY_SIZE)) {
-					continue;
-				}			
-#endif
-				autocpy(&header->sign, &hcopy.sign, HEADER_ENCRYPTEDDATASIZE);
-
-				crypt->prf_id    = i;
-				crypt->cipher_id = j;
-				crypt->mode_id   = k;
-				succs = 1; goto brute_done;
-			}
-		}
+#ifdef BOOT_LDR
+	hcopy = pv(0x9000);
+#else
+	if ( (hcopy = mem_alloc(sizeof(dc_header))) == NULL ) {
+		return 0;
 	}
-brute_done:;
+#endif
+	succs = 0;
 
+	sha512_pkcs5_2(
+		1000, password->pass, password->size, 
+		header->salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
+
+	for (i = 0; i < CF_CIPHERS_NUM; i++)
+	{
+		dc_cipher_init(hdr_key, i, dk);
+
+		dc_cipher_decrypt(
+			pv(header), pv(hcopy), sizeof(dc_header), 0, hdr_key);
+
+		/* Magic 'DCRP' */
+		if (hcopy->sign != DC_VOLM_SIGN) {
+			continue;
+		}
+#ifndef NO_CRC32
+		/* Check CRC of header */
+		if (hcopy->hdr_crc != crc32(pv(&hcopy->version), DC_CRC_AREA_SIZE)) {
+			continue;
+		}			
+#endif
+		/* copy decrypted part to output */
+		autocpy(&header->sign, &hcopy->sign, DC_ENCRYPTEDDATASIZE);
+		succs = 1; break;
+	}
 	/* prevent leaks */
-	zeroauto(dk, sizeof(dk));
-	zeroauto(&hcopy, sizeof(hcopy));
+	zeroauto(dk,    sizeof(dk));
+	zeroauto(hcopy, sizeof(dc_header));
+
+#ifndef BOOT_LDR
+	mem_free(hcopy);
+#endif
 
 	return succs;
 }
 
+#endif /* NO_PKCS5 */

@@ -22,11 +22,13 @@
 #include <ntifs.h>
 #include <ntdddisk.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "defines.h"
 #include "driver.h"
 #include "misc.h"
 #include "devhook.h"
 #include "fastmem.h"
+#include "debug.h"
 
 NTSTATUS 
   io_device_control(
@@ -39,13 +41,10 @@ NTSTATUS
 	PIRP            irp;
 
 	KeInitializeEvent(
-		&sync_event, NotificationEvent, FALSE
-		);
+		&sync_event, NotificationEvent, FALSE);
 
 	irp = IoBuildDeviceIoControlRequest(
-		ctl_code, hook->orig_dev, in_data, in_size, 
-		out_data, out_size, FALSE, &sync_event, &io_status
-		);
+		ctl_code, hook->orig_dev, in_data, in_size, out_data, out_size, FALSE, &sync_event, &io_status);
 
 	if (irp != NULL)
 	{
@@ -62,70 +61,6 @@ NTSTATUS
 	return status;
 }
 
-int io_fs_control(
-	   HANDLE h_device, u32 ctl_code
-	   )
-{
-	PFILE_OBJECT       f_obj;
-	PDEVICE_OBJECT     dev_obj;
-	IO_STATUS_BLOCK    io_status;
-	PIO_STACK_LOCATION irp_sp;
-	NTSTATUS           status;
-	KEVENT             sync_event;
-	PIRP               irp;
-	int                resl;
-	
-	KeInitializeEvent(
-		&sync_event, NotificationEvent, FALSE
-		);
-
-	f_obj = NULL; irp = NULL;
-	do
-	{
-		status = ObReferenceObjectByHandle(
-			h_device, 0, NULL, KernelMode, &f_obj, NULL
-			);
-
-		if (NT_SUCCESS(status) == FALSE) {
-			resl = ST_ERROR; break;
-		}
-
-		dev_obj = IoGetRelatedDeviceObject(f_obj);
-
-		irp = IoBuildDeviceIoControlRequest(
-			ctl_code, dev_obj, NULL, 0, NULL, 0, FALSE, &sync_event, &io_status
-			);
-
-		if (irp == NULL) {
-			resl = ST_NOMEM; break;
-		}
-
-		irp_sp                = IoGetNextIrpStackLocation(irp);
-		irp_sp->FileObject    = f_obj;
-		irp_sp->MajorFunction = IRP_MJ_FILE_SYSTEM_CONTROL;
-		irp_sp->MinorFunction = IRP_MN_USER_FS_REQUEST;
-
-		status = IoCallDriver(dev_obj, irp);
-
-		if (status == STATUS_PENDING) {
-			wait_object_infinity(&sync_event);
-			status = io_status.Status;
-		}
-
-		if (NT_SUCCESS(status) != FALSE) {
-			resl = ST_OK;
-		} else {
-			resl = ST_ERROR;
-		}
-	} while (0);
-
-	if (f_obj != NULL) {
-		ObDereferenceObject(f_obj);
-	}
-
-	return resl;
-}
-
 
 HANDLE io_open_volume(wchar_t *dev_name)
 {
@@ -138,14 +73,12 @@ HANDLE io_open_volume(wchar_t *dev_name)
 	RtlInitUnicodeString(&u_name, dev_name);
 
 	InitializeObjectAttributes(
-		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL
-		);
+		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
 
 	status = ZwCreateFile(
 		&handle, SYNCHRONIZE | GENERIC_READ, &obj, &io_status, NULL,
 		FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN,
-		FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0
-		);
+		FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
 
 	if (NT_SUCCESS(status) == FALSE) {
 		handle = NULL;
@@ -160,8 +93,7 @@ int io_verify_hook_device(dev_hook *hook)
 	u32      chg_count;
 
 	status = io_device_control(
-		hook, IOCTL_DISK_CHECK_VERIFY, NULL, 0, &chg_count, sizeof(chg_count)
-		);
+		hook, IOCTL_DISK_CHECK_VERIFY, NULL, 0, &chg_count, sizeof(chg_count));
 
 	if (NT_SUCCESS(status) != FALSE) 
 	{
@@ -175,48 +107,33 @@ int io_verify_hook_device(dev_hook *hook)
 	}
 }
 
-NTSTATUS io_device_rw_block(
-			PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
-			)
+NTSTATUS 
+  io_device_rw_block(
+    PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
+	)
 {
 	IO_STATUS_BLOCK io_status;
 	NTSTATUS        status;
 	PIRP            irp;
 	KEVENT          sync_event;
-	void           *new_buf;
-	LARGE_INTEGER   time;
 	u32             timeout;
 	
-	new_buf = NULL;
 	do
 	{
 		KeInitializeEvent(
 			&sync_event, NotificationEvent,  FALSE);
 
-		/* process IO with new memory buffer because 
-		   IoBuildSynchronousFsdRequest fails for some system buffers   
-		*/
-		if ( (new_buf = fast_alloc(size)) == NULL ) {
-			status = STATUS_INSUFFICIENT_RESOURCES; break;
-		}
-
-		if (func == IRP_MJ_WRITE) {
-			fastcpy(new_buf, buff, size);
-		}
-
-		time.QuadPart = DC_MEM_RETRY_TIME * -10000;
-		timeout       = DC_MEM_RETRY_TIMEOUT;
+		timeout = DC_MEM_RETRY_TIMEOUT;
 		do
 		{
 			irp = IoBuildSynchronousFsdRequest(
-				func, device, new_buf, size, pv(&offset), &sync_event, &io_status);
+				func, device, buff, size, pv(&offset), &sync_event, &io_status);
 
 			if (irp != NULL) {
 				break;
 			}
 
-			KeDelayExecutionThread(KernelMode, FALSE, &time);
-			timeout -= DC_MEM_RETRY_TIME;
+			dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
 		} while (timeout != 0);
 
 		if (irp == NULL) {
@@ -231,15 +148,7 @@ NTSTATUS io_device_rw_block(
 			wait_object_infinity(&sync_event);
 			status = io_status.Status;
 		}
-
-		if ( (NT_SUCCESS(status) != FALSE) && (func == IRP_MJ_READ) ) {
-			fastcpy(buff, new_buf, size);
-		} 
 	} while (0);
-
-	if (new_buf != NULL) {
-		fast_free(new_buf);
-	}
 
 	return status;
 }
@@ -262,8 +171,7 @@ int dc_device_rw(
 		sq.QueryType  = PropertyStandardQuery;
 
 		status = io_device_control(
-			hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd)
-			);
+			hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd));
 
 		if (NT_SUCCESS(status) != FALSE) {
 			hook->max_chunk = sd.MaximumTransferLength;
@@ -280,8 +188,7 @@ int dc_device_rw(
 		blen = min(size, max_trans);
 		
 		status = io_device_rw_block(
-			hook->orig_dev, function, buff, blen, offset, 0
-			);
+			hook->orig_dev, function, buff, blen, offset, 0);
 
 		if (NT_SUCCESS(status) == FALSE)
 		{
@@ -299,8 +206,7 @@ int dc_device_rw(
 				}
 				
 				status = io_device_rw_block(
-					hook->orig_dev, function, buff, blen, offset, SL_OVERRIDE_VERIFY_VOLUME
-					);
+					hook->orig_dev, function, buff, blen, offset, SL_OVERRIDE_VERIFY_VOLUME);
 
 				if (NT_SUCCESS(status) == FALSE) {				
 					resl = ST_RW_ERR; break;
@@ -320,8 +226,7 @@ int dc_device_rw(
 void wait_object_infinity(void *wait_obj)
 {
 	KeWaitForSingleObject(
-		wait_obj, Executive, KernelMode, FALSE, NULL
-		);
+		wait_obj, Executive, KernelMode, FALSE, NULL);
 }
 
 
@@ -337,12 +242,10 @@ int start_system_thread(
 	int               resl;
 
 	InitializeObjectAttributes(
-		&obj, NULL, OBJ_KERNEL_HANDLE, NULL, NULL
-		);
+		&obj, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
 
 	status = PsCreateSystemThread(
-		&h_thread, THREAD_ALL_ACCESS, &obj, NULL, NULL, thread_start, context
-		);
+		&h_thread, THREAD_ALL_ACCESS, &obj, NULL, NULL, thread_start, context);
 
 	if (NT_SUCCESS(status)) 
 	{
@@ -360,23 +263,19 @@ int start_system_thread(
 }
 
 
-int dc_set_security(
-	  PDEVICE_OBJECT device
-	  )
+int dc_set_default_security(HANDLE h_object)
 {
 	SID_IDENTIFIER_AUTHORITY autort = SECURITY_NT_AUTHORITY;
 	PSID                     adm_sid;
 	PSID                     sys_sid;
 	PACL                     sys_acl;
-	HANDLE                   handle;
 	ULONG                    dacl_sz;
 	NTSTATUS                 status;
 	SECURITY_DESCRIPTOR      sc_desc;
 	int                      resl;
 
 	adm_sid = NULL; sys_sid = NULL; 
-	sys_acl = NULL; handle = NULL;
-
+	sys_acl = NULL;
 	do
 	{
 		adm_sid = mem_alloc(RtlLengthRequiredSid(2));
@@ -401,56 +300,42 @@ int dc_set_security(
 		}
 
 		status = RtlCreateAcl(
-			sys_acl, dacl_sz, ACL_REVISION
-			);
+			sys_acl, dacl_sz, ACL_REVISION);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
 		status = RtlAddAccessAllowedAce(
-			sys_acl, ACL_REVISION, GENERIC_ALL, sys_sid
-			);
+			sys_acl, ACL_REVISION, GENERIC_ALL, sys_sid);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
 		status = RtlAddAccessAllowedAce(
-			sys_acl, ACL_REVISION, GENERIC_ALL, adm_sid
-			);
+			sys_acl, ACL_REVISION, GENERIC_ALL, adm_sid);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
 		status = RtlCreateSecurityDescriptor( 
-			&sc_desc, SECURITY_DESCRIPTOR_REVISION1 
-			);
+			&sc_desc, SECURITY_DESCRIPTOR_REVISION1);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
 		status = RtlSetDaclSecurityDescriptor( 
-			&sc_desc, TRUE, sys_acl, FALSE 
-			);
+			&sc_desc, TRUE, sys_acl, FALSE);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
-		status = ObOpenObjectByPointer(
-			device, OBJ_KERNEL_HANDLE, NULL, GENERIC_ALL, NULL, KernelMode, &handle
-			);
-
-		if (NT_SUCCESS(status) == FALSE) {
-			handle = NULL; resl = ST_ERROR; break;
-		}
-		
 		status = ZwSetSecurityObject(
-			handle, DACL_SECURITY_INFORMATION, &sc_desc
-			);
+			h_object, DACL_SECURITY_INFORMATION, &sc_desc);
 
 		if (NT_SUCCESS(status) != FALSE) {
 			resl = ST_OK;
@@ -458,10 +343,6 @@ int dc_set_security(
 			resl = ST_ERROR;
 		}
 	} while (0);
-
-	if (handle != NULL) {
-		ZwClose(handle);
-	}
 
 	if (sys_acl != NULL) {
 		mem_free(sys_acl);
@@ -489,18 +370,15 @@ int dc_resolve_link(
 	int               resl;
 
 	RtlInitUnicodeString(
-		&u_name, sym_link
-		);
+		&u_name, sym_link);
 
 	InitializeObjectAttributes(
-		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL
-		);
+		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
 
 	do
 	{
 		status = ZwOpenSymbolicLinkObject(
-			&handle, GENERIC_READ, &obj 
-			);
+			&handle, GENERIC_READ, &obj);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			handle = NULL; resl = ST_ERROR; break;
@@ -511,8 +389,7 @@ int dc_resolve_link(
 		u_name.MaximumLength = length - 2;
 
 		status = ZwQuerySymbolicLinkObject(
-			handle, &u_name, NULL 
-			);
+			handle, &u_name, NULL);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
@@ -539,8 +416,7 @@ int dc_get_mount_point(
 	int            resl;
 
 	status = RtlVolumeDeviceToDosName(
-		hook->orig_dev, &name
-		);
+		hook->orig_dev, &name);
 
 	buffer[0] = 0; resl = ST_ERROR;
 
@@ -557,22 +433,55 @@ int dc_get_mount_point(
 	return resl;
 }
 
-void *dc_map_mdl_with_retry(PMDL mdl)
+void dc_query_object_name(
+	   void *object, wchar_t *buffer, u16 length
+	   )
+{
+	u8                       buf[256];
+	POBJECT_NAME_INFORMATION inf = pv(buf);
+	u32                      bytes;
+	NTSTATUS                 status;
+
+	status = ObQueryNameString(
+		object, inf, sizeof(buf), &bytes);
+
+	if (NT_SUCCESS(status) != FALSE) {
+		bytes = min(length, inf->Name.Length);
+		mincpy(buffer, inf->Name.Buffer, bytes);
+		buffer[bytes >> 1] = 0;
+	} else {
+		buffer[0] = 0;
+	}
+}
+
+u32 intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2)
+{
+	u64 end, i;	
+	end = min(start1 + size1, start2 + size2);
+	*i_st = i = max(start1, start2);
+	return d32((i < end) ? end - i : 0);
+}
+
+void dc_delay(u32 msecs)
 {
 	LARGE_INTEGER time;
-	void         *mem;
-	u32           timeout;
+	time.QuadPart = msecs * -10000;
+	KeDelayExecutionThread(KernelMode, FALSE, &time);
+}
 
-	time.QuadPart = DC_MEM_RETRY_TIME * -10000; 
-	timeout       = DC_MEM_RETRY_TIMEOUT;
+void *dc_map_mdl_with_retry(PMDL mdl)
+{
+	void *mem;
+	u32   timeout;
+
+	timeout = DC_MEM_RETRY_TIMEOUT;
 	do
 	{
 		if (mem = MmGetSystemAddressForMdlSafe(mdl, HighPagePriority)) {
 			break;
 		}
 
-		KeDelayExecutionThread(KernelMode, FALSE, &time);
-		timeout -= DC_MEM_RETRY_TIME;
+		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
 	} while (timeout != 0);
 
 	return mem;
@@ -580,21 +489,17 @@ void *dc_map_mdl_with_retry(PMDL mdl)
 
 PMDL dc_allocate_mdl_with_retry(void *data, u32 size)
 {
-	LARGE_INTEGER time;
-	PMDL          mdl;
-	u32           timeout;
+	PMDL mdl;
+	u32  timeout;
 
-	time.QuadPart = DC_MEM_RETRY_TIME * -10000; 
-	timeout       = DC_MEM_RETRY_TIMEOUT;
-
+	timeout = DC_MEM_RETRY_TIMEOUT;
 	do
 	{
 		if (mdl = IoAllocateMdl(data, size, FALSE, FALSE, NULL)) {
 			break;
 		}
 
-		KeDelayExecutionThread(KernelMode, FALSE, &time);
-		timeout -= DC_MEM_RETRY_TIME;
+		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
 	} while (timeout != 0);
 
 	return mdl;

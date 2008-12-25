@@ -6,22 +6,25 @@
 #define IDOK3                           2
 #define IDB_                            2
 #define IDOK2                           3
-#define DC_MINOR_VER                    4
+#define IDB_ADD_FOLDER                  3
 #define IDCANCEL2                       4
 #define IDC_BTN_MOUNTALL                4
 #define IDB_MAIN_ACTION                 4
+#define IDB_REMOVE_ITEM                 4
 #define IDC_BTN_UNMOUNTALL              5
 #define IDB_MAIN_ACTION2                5
 #define IDB_BOOT_BADPASS                5
+#define DC_MINOR_VER                    5
+#define IDB_REMOVE_ITEMS                5
 #define IDC_BTN_ENCRYPT                 6
 #define IDC_BTN_ENCRYPT_                6
+#define IDB_GENERATE_KEYFILE            6
 #define IDC_BTN_ENCRYPT2                7
 #define IDC_BTN_DECRYPT_                7
 #define IDC_BTN_ENCRYPT3                8
 #define IDC_BTN_MOUNTALL_               8
 #define IDC_BTN_ENCRYPT4                9
 #define IDC_BTN_UNMOUNTALL_             9
-#define DC_BOOT_VER                     69
 #define IDD_MAIN_DLG                    101
 #define IDS_STRING102                   102
 #define IDC_DISKDRIVES                  104
@@ -60,7 +63,6 @@
 #define DLG_WIZ_PAGE3                   153
 #define DLG_WIZ_PASS                    154
 #define IDR_EXEFILE2                    155
-#define IDD_DIALOG_SHRINK               156
 #define IDD_WIZARD_BOOT                 157
 #define DLG_BOOT_PAGE2                  158
 #define DLG_BOOT_CONF                   159
@@ -74,6 +76,7 @@
 #define IDD_DIALOG_BENCHMARK            167
 #define DLG_WIZ_TYPE                    170
 #define DLG_WIZ_FORMAT                  171
+#define IDD_DIALOG_KEYFILES             172
 #define IDC_DRIVER_VER                  206
 #define IDB_PREF_GENERAL                305
 #define IDB_PREF_HOTKEYS                306
@@ -98,8 +101,10 @@
 #define IDC_MAIN_TAB                    325
 #define IDC_COMBO_PASSES                326
 #define IDE_NEW_PASS                    327
+#define IDE_PASS_NEW                    327
 #define IDC_STATIC_PASSES_LIST2         328
 #define IDE_NEW_CONFIRM                 329
+#define IDE_PASS_NEW_CONFIRM            329
 #define IDC_COMBO_KBLAYOUT              330
 #define IDC_COMBO_PASSES2               331
 #define IDC_PAGE1                       332
@@ -127,17 +132,25 @@
 #define IDC_STATIC_SECTOR               1027
 #define IDC_PASS2                       1027
 #define IDC_MNT_POINT                   1027
+#define IDC_NEW_PASS2                   1027
 #define IDC_STATIC_CONFIRM              1028
+#define IDC_PASS3                       1028
 #define IDC_NEW_CONFIRM                 1029
 #define IDC_EDIT_PASS                   1030
 #define IDC_NEW_CONFIRM2                1030
 #define IDC_EDIT_CONFIRM                1031
+#define IDC_NEW_CONFIRM3                1031
 #define IDE_PASS                        1032
 #define IDC_CHECK_SHOW                  1033
+#define IDC_NEW_CONFIRM4                1033
 #define IDC_LIST                        1034
+#define IDC_USE_KEYFILES                1034
 #define IDC_EXPLORER_ON_MOUNT           1035
+#define IDC_NEW_CONFIRM5                1035
 #define IDC_____                        1036
+#define IDC_CHECK_SHOW_CURRENT          1036
 #define IDC_MSG                         1037
+#define IDC_USE_KEYFILES_CURRENT        1037
 #define IDC_UNMOUNT_LOGOFF              1038
 #define IDC_STATIC_LIST                 1039
 #define IDC_STATIC_MAIN                 1040
@@ -190,6 +203,9 @@
 #define IDC_HEAD_CURRENT                1100
 #define IDC_HEAD_PASS                   1100
 #define IDC_HEAD_NEW                    1101
+#define IDC_HEAD_PASS_NEW               1101
+#define IDC_HEAD_PASS2                  1101
+#define IDC_HEAD_MOUNT_OPTIONS          1101
 #define IDC_COMBO_BOOT_INST             1102
 #define IDC_BOOT_DEVS                   1103
 #define IDB_BOOT_PREF                   1104
@@ -210,18 +226,17 @@
 #define IDC_GR_SPEC                     1122
 #define IDC_PAGE4                       1123
 #define IDC_ERR                         1124
+#define IDC_PASS_STATUS                 1124
 #define IDC_INFO_TABLE                  1125
 #define IDC_INF_TABLE                   1125
+#define IDC_PASS_STATUS_CURRENT         1125
 #define IDC_ACT_TABLE                   1126
 #define IDT_INFO                        1129
 #define IDB_ACT_PAUSE                   1130
 #define IDC_FRAME_RIGHT                 1133
 #define IDC_FRAME_LEFT                  1134
-#define IDC_INFO_LABEL                  1135
+#define IDC_FRAME_LEFT2                 1135
 #define IDC_INFO_BREAK                  1136
-#define IDC_STATIC_FILE                 1137
-#define IDC_INFO_SCANNED                1138
-#define IDB_SHRINK_CANCEL               1139
 #define IDC_COMBO_LOADER_TYPE           1140
 #define IDC_WZD_BOOT_DEVS               1141
 #define IDC_CHECK_CONFIG                1142
@@ -238,6 +253,7 @@
 #define IDC_COMBO_AUTH_TYPE             1152
 #define IDC_BT_ENTER_PASS_MSG           1154
 #define IDB_BT_CONF_EMB_PASS            1156
+#define IDB_BT_CONF_EMB_KEY             1156
 #define IDE_RICH_BOOTMSG                1157
 #define IDC_COMBO_AUTH_TMOUT            1158
 #define IDC_STATIC_AUTH_TYPE            1159
@@ -256,7 +272,9 @@
 #define IDC_ABOUT1                      1166
 #define IDC_ABOUT2                      1167
 #define IDC_ABOUT3                      1168
+#define IDC_ABOUT_URL1                  1168
 #define IDC_ABOUT4                      1169
+#define IDC_ABOUT_URL2                  1169
 #define IDC_SPEED                       1170
 #define IDC_DRIVES_HEAD                 1171
 #define IDC_BT_ACTION_NOPASS            1172
@@ -272,6 +290,19 @@
 #define IDC_COMBO_PRF                   1185
 #define IDC_BTN_CHANGE_CONF             1187
 #define IDC_BTN_UPDATE                  1188
+#define IDB_USE_KEYFILES                1189
+#define IDC_LIST_KEYFILES               1190
+#define IDB_USE_KEYFILES_CURRENT        1190
+#define IDB_ADD_FILE                    1191
+#define IDC_CHECK_SHOW_NEW              1192
+#define IDC_USE_KEYFILES_NEW            1193
+#define IDC_HEAD_PASS_CURRENT           1194
+#define IDB_USE_KEYFILES_NEW            1195
+#define IDE_PASS_CURRENT                1196
+#define IDC_LINE_BOTTOM                 1197
+#define IDC_STATIC_RIGHT                1198
+#define IDC_PASS_STATUS_NEW             1204
+#define IDC_RESIZING                    1205
 #define ID_FILE_EXIT                    40001
 #define ID_VOLUMES_ENCRYPT              40002
 #define ID_VOLUMES_DECRYPT              40003
@@ -346,9 +377,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        172
+#define _APS_NEXT_RESOURCE_VALUE        174
 #define _APS_NEXT_COMMAND_VALUE         40072
-#define _APS_NEXT_CONTROL_VALUE         1189
+#define _APS_NEXT_CONTROL_VALUE         1206
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

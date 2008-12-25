@@ -1,6 +1,8 @@
 #ifndef _BIOS_
 #define _BIOS_
 
+#include "e820.h"
+
 #pragma pack (push, 1)
 
 typedef struct _rm_ctx {
@@ -76,22 +78,17 @@ typedef struct _rm_ctx {
 
 } rm_ctx;
 
-typedef struct _ldr_info {
-	char   password[MAX_PASSWORD + 1]; /* bootauth password */
-} ldr_info;
-
-typedef struct _rb_data {	
+typedef struct _bd_data {	
 	u32      sign1;        /*  */
 	u32      sign2;        /*  */
-	u32      sign3;        /*  */
-	u32      rb_base;      /* real mode block base                            */
-	u32      rb_size;      /* real mode block size (including stack)          */
-	u32      pm_base;      /* pmode image base          */
-	u32      pm_size;      /* pmode image size          */
-	ldr_info info;
+	u32      bd_base;      /* boot data block base                            */
+	u32      bd_size;      /* boot data block size (including stack)          */
+	dc_pass  password;     /* bootauth password */
+	u32      old_int15;    /* old int15 handler         */
+	u32      old_int13;    /* old int13 handler         */
 	/* volatile data */
 	u32      ret_32;       /* return address for RM <-> PM jump               */
-	u16      sp_16;        /* real mode stack                                 */
+	u32      esp_16;       /* real mode stack                                 */
 	u16      ss_16;        /* real mode ss                                    */ 
 	u32      esp_32;       /* pmode stack                                     */	
 	u32      segoff;       /* real mode call seg/off    */	
@@ -99,29 +96,11 @@ typedef struct _rb_data {
 	void   (*call_rm)();   /* real mode call proc       */
 	void   (*hook_ints)(); /* hook interrupts proc      */
 	void    *int_cbk;      /* protected mode callback   */
-	u16      int_num;      /* interrupt number          */	
 	u8       boot_dsk;     /* boot disk number          */
-	u32      old_int15;    /* old int15 handler         */
-	u32      old_int13;    /* old int13 handler         */
 	rm_ctx   rmc;          /* real mode call context    */
 	u16      push_fl;      /* flags pushed to stack     */
-	u8       buff[32];     /* 32 bytes buffer */
-} rb_data;
-
-typedef struct _rb_legacy {
-	u32    sign1;        /*  */
-	u32    sign2;        /*  */
-	u32    ret_32;       /* return address for RM <-> PM jump               */
-	u32    esp_16;       /* real mode stack                                 */
-	u16    ss_16;        /* real mode ss                                    */ 
-	u32    esp_32;       /* pmode stack                                     */	
-	u32    rb_base;      /* real mode block base                            */
-	u32    rb_size;      /* real mode block size (including 2kb for stack)  */
-	u32    rb_code;      /* real mode block code area */
-	u32    pm_base;      /* pmode image base          */
-	u32    pm_size;      /* pmode image size          */	
-} rb_legacy;
-
+	e820map  mem_map;      /* new memory map */
+} bd_data;
 
 #pragma pack (pop)
 
@@ -147,21 +126,10 @@ typedef struct _rb_legacy {
  int  bios_call(int num, rm_ctx *ctx);
  void bios_jump_boot(u8 disk);
  void bios_reboot();
+ void bios_hook_ints();
 
- extern rb_data *rb_dat;
+ extern bd_data *bd_dat;
 #endif
-
-#define MTRRcap_MSR     0x0fe
-#define MTRRdefType_MSR 0x2ff
-
-#define MTRRphysBase_MSR(reg) (0x200 + 2 * (reg))
-#define MTRRphysMask_MSR(reg) (0x200 + 2 * (reg) + 1)
-
-#define CR0_CD      (1 << 30)
-#define MTRR_DEF_E  (1 << 11)
-#define MTRR_V      (1 << 11)
-#define CPUID_MTRR  (1 << 12)
-
 
 
 #endif

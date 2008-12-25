@@ -82,8 +82,7 @@ int enable_privilege(wchar_t *name)
 	do
 	{
 		OpenProcessToken(
-			GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &h_token
-			);
+			GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &h_token);
 
 		if (h_token == NULL) {
 			resl = ST_ACCESS_DENIED; break;
@@ -123,11 +122,8 @@ int is_admin()
 	do
 	{
 		AllocateAndInitializeSid(
-			&autort, 2,
-			SECURITY_BUILTIN_DOMAIN_RID, 
-			DOMAIN_ALIAS_RID_ADMINS,
-			0, 0, 0, 0, 0, 0, &adm_sid
-			);
+			&autort, 2, SECURITY_BUILTIN_DOMAIN_RID, 
+			DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adm_sid);
 
 		if (adm_sid == NULL) {
 			resl = ST_NOMEM; break;
@@ -158,8 +154,7 @@ int save_file(wchar_t *name, void *data, int size)
 	int    resl;
 
 	hfile = CreateFile(
-		name, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, 0, NULL
-		);
+		name, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, 0, NULL);
 
 	if (hfile != INVALID_HANDLE_VALUE) 
 	{
@@ -173,6 +168,40 @@ int save_file(wchar_t *name, void *data, int size)
 	return resl;
 }
 
+int load_file(wchar_t *name, void **data, int *size)
+{
+	HANDLE hfile;
+	u32    bytes;
+	int    resl;
+
+	do
+	{
+		hfile = CreateFile(
+			name, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+
+		if (hfile == INVALID_HANDLE_VALUE) {
+			hfile = NULL; resl = ST_ACCESS_DENIED; break;
+		}
+
+		*size = GetFileSize(hfile, NULL);
+		*data = malloc(*size);
+
+		if (*data == NULL) {
+			resl = ST_NOMEM; break;
+		}
+		if (ReadFile(hfile, *data, *size, &bytes, NULL) == 0) {
+			free(*data); resl = ST_IO_ERROR;
+		} else {
+			resl = ST_OK;
+		}
+	} while (0);
+
+	if (hfile != NULL) {
+		CloseHandle(hfile);
+	}
+
+	return resl;
+}
 
 void *secure_alloc(u32 size) 
 {
@@ -228,16 +257,14 @@ int is_wow64()
 	BOOL           is_wow = FALSE;
 
 	IsWow64Process = pv(GetProcAddress(
-		GetModuleHandleA("kernel32"), "IsWow64Process"
-		));
+		GetModuleHandleA("kernel32"), "IsWow64Process"));
 
 	if (IsWow64Process == NULL) {
 		return 0;
 	}
 
 	IsWow64Process(
-		GetCurrentProcess(), &is_wow
-		);
+		GetCurrentProcess(), &is_wow);
 
 	return (is_wow != FALSE);		
 }
@@ -269,14 +296,11 @@ HANDLE dc_disk_open(int dsk_num)
 	HANDLE  hdisk;
 
 	_snwprintf(
-		device, sizeof_w(device), L"\\\\.\\PhysicalDrive%d", dsk_num
-		);
+		device, sizeof_w(device), L"\\\\.\\PhysicalDrive%d", dsk_num);
 
 	hdisk = CreateFile(
-		device, GENERIC_READ | GENERIC_WRITE, 
-		FILE_SHARE_READ | FILE_SHARE_WRITE, 
-		NULL, OPEN_EXISTING, 0, NULL
-		);
+		device, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, 
+		NULL, OPEN_EXISTING, 0, NULL);
 
 	if (hdisk == INVALID_HANDLE_VALUE) {
 		hdisk = NULL;
@@ -291,8 +315,7 @@ int dc_disk_read(
 	u32 bytes;
 
 	SetFilePointer(
-		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN
-		);
+		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN);
 
 	if (ReadFile(hdisk, buff, size, &bytes, NULL) != 0) {
 		return ST_OK;
@@ -308,8 +331,7 @@ int dc_disk_write(
 	u32 bytes;
 
 	SetFilePointer(
-		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN
-		);
+		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN);
 
 	if (WriteFile(hdisk, buff, size, &bytes, NULL) != 0) {
 		return ST_OK;
@@ -337,14 +359,12 @@ int dc_get_hdd_name(
 		}
 
 		succs = DeviceIoControl(
-			hdisk, IOCTL_SCSI_GET_INQUIRY_DATA, NULL, 0, &bi, sizeof(bi), &bytes, NULL
-			);
+			hdisk, IOCTL_SCSI_GET_INQUIRY_DATA, NULL, 0, &bi, sizeof(bi), &bytes, NULL);
 
 		if (succs == 0) 
 		{
 			succs = DeviceIoControl(
-				hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL
-				);
+				hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL);
 
 			if (succs == 0) {
 				resl = ST_IO_ERROR; break;
@@ -353,13 +373,11 @@ int dc_get_hdd_name(
 			if (dg.MediaType == RemovableMedia) 
 			{
 				_snwprintf(
-					name, max_name, L"Removable Medium %d", dsk_num
-					);
+					name, max_name, L"Removable Medium %d", dsk_num);
 			} else
 			{
 				_snwprintf(
-					name, max_name, L"Hard disk %d", dsk_num
-					);
+					name, max_name, L"Hard disk %d", dsk_num);
 			}		
 		} else
 		{
@@ -410,8 +428,7 @@ void dc_format_byte_size(
 	if (num_bytes < 1024) 
 	{
 		_snwprintf(
-			wc_buf, wc_size, L"%d bytes", (u32)(num_bytes)
-			);
+			wc_buf, wc_size, L"%d bytes", (u32)(num_bytes));
 	} else 
 	{
 		for (i = 0; i < array_num(b_formats); i++) 
@@ -430,12 +447,10 @@ void dc_format_byte_size(
 		d_bytes = floor(d_bytes / b_formats[i].divisor) / b_formats[i].normaliser;
 
 		_snwprintf(
-			format, sizeof_w(format), L"%%-.%df %%cB", b_formats[i].decimals
-			);
+			format, sizeof_w(format), L"%%-.%df %%cB", b_formats[i].decimals);
 		
 		_snwprintf(
-			wc_buf, wc_size, format, d_bytes, b_formats[i].prefix
-			);		
+			wc_buf, wc_size, format, d_bytes, b_formats[i].prefix);		
 	}
 }
 
@@ -452,26 +467,6 @@ wchar_t *dc_get_cipher_name(int cipher_id)
 	};
 
 	return cp_names[cipher_id];
-}
-
-wchar_t *dc_get_mode_name(int mode_id)
-{
-	static wchar_t *md_names[] = {
-		L"XTS",
-		L"LRW"
-	};
-
-	return md_names[mode_id];
-}
-
-wchar_t *dc_get_prf_name(int prf_id)
-{
-	static wchar_t *prf_names[] = {
-		L"HMAC-SHA-512",
-		L"HMAC-SHA-1"
-	};
-
-	return prf_names[prf_id];
 }
 
 

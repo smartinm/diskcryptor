@@ -30,71 +30,19 @@
 
 static wchar_t drv_name[] = L"dcrypt";
 static wchar_t reg_key[] = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{71A27CDD-812A-11D0-BEC7-08002BE2092F}";
-static wchar_t reg_srv[] = L"SYSTEM\\CurrentControlSet\\Services";
-static wchar_t cnf_key[] = L"{9571C5B6-340C-4554-8FD9-2DA33629038D}";
-static wchar_t upf_str[] = L"UpperFilters";
+static wchar_t reg_srv[] = L"SYSTEM\\CurrentControlSet\\Services\\dcrypt\\config";
 static wchar_t lwf_str[] = L"LowerFilters";
-
-static int dc_get_old_drv_name(wchar_t *name, int n_max)
-{
-	HKEY    svc_key = NULL;	
-	wchar_t path[MAX_PATH];
-	int     resl, idx = 0;
-	HKEY    h_key;
-
-	do
-	{
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_srv, &svc_key) != 0) {
-			resl = ST_REG_ERROR; break;
-		}
-
-		resl = ST_NF_REG_KEY;
-
-		while (RegEnumKey(svc_key, idx++, name, n_max) == 0)
-		{
-			_snwprintf(
-				path, sizeof_w(path), L"%s\\%s", name, cnf_key
-				);
-
-			if (RegOpenKey(svc_key, path, &h_key) == 0) {
-				RegCloseKey(h_key);
-				resl = ST_OK; break;
-			}
-		}
-	} while (0);
-
-	if (svc_key != NULL) {
-		RegCloseKey(svc_key);
-	}
-
-	return resl;
-}
 
 int dc_load_conf(dc_conf_data *conf)
 {
-	wchar_t name[MAX_PATH];
-	wchar_t path[MAX_PATH];
 	dc_conf d_conf;
 	HKEY    h_key = NULL;
 	int     resl;
 	u32     cb;
 
-	/* get config registry key */
-	if (dc_get_old_drv_name(name, sizeof_w(name)) == ST_OK) 
-	{
-		_snwprintf(
-			path, sizeof_w(path), L"%s\\%s\\%s", reg_srv, name, cnf_key
-			);
-	} else 
-	{
-		_snwprintf(
-			path, sizeof_w(path), L"%s\\%s", reg_srv, drv_name
-			);
-	}
-
 	do
 	{
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, path, &h_key) != 0) {			
+		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_srv, &h_key) != 0) {			
 			resl = ST_REG_ERROR; break;
 		}
 
@@ -128,18 +76,14 @@ int dc_load_conf(dc_conf_data *conf)
 
 int dc_save_conf(dc_conf_data *conf)
 {
-	wchar_t path[MAX_PATH];
 	dc_conf d_conf;
 	HKEY    h_key = NULL;
+	u32     build = DC_DRIVER_VER;
 	int     resl;
 
 	do
 	{
-		_snwprintf(
-			path, sizeof(path), L"%s\\%s", reg_srv, drv_name
-			);
-
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, path, &h_key) != 0) {
+		if (RegCreateKey(HKEY_LOCAL_MACHINE, reg_srv, &h_key) != 0) {
 			resl = ST_REG_ERROR; break;
 		}
 
@@ -149,7 +93,11 @@ int dc_save_conf(dc_conf_data *conf)
 
 		if (RegSetValueEx(h_key, L"Hotkeys", 0, REG_BINARY, pv(&conf->hotkeys), sizeof(conf->hotkeys)) != 0) {
 			resl = ST_REG_ERROR; break;
-		}		
+		}
+		
+		if (RegSetValueEx(h_key, L"sysBuild", 0, REG_DWORD, pv(&build), sizeof(build)) != 0) {
+			resl = ST_REG_ERROR; break;
+		}
 
 		RegFlushKey(h_key);
 
@@ -200,8 +148,7 @@ static int rmv_from_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 				} else 
 				{
 					succs = RegSetValueEx(
-						h_key, v_name, 0, REG_MULTI_SZ, p8(buf1), cb
-						) == 0;
+						h_key, v_name, 0, REG_MULTI_SZ, p8(buf1), cb) == 0;
 				}
 				break;
 			}
@@ -230,21 +177,19 @@ static int set_to_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 	return RegSetValueEx(h_key, v_name, 0, REG_MULTI_SZ, p8(buf), cb) == 0;
 }
 
-static void dc_get_driver_path(wchar_t *name, wchar_t *path)
+static void dc_get_driver_path(wchar_t *path)
 {
 	wchar_t tmpb[MAX_PATH];
 
 	GetSystemDirectory(
-		tmpb, sizeof_w(tmpb)
-		);
+		tmpb, sizeof_w(tmpb));
 
 	_snwprintf(
-		path, MAX_PATH, L"%s\\drivers\\%s.sys", tmpb, name
-		);
+		path, MAX_PATH, L"%s\\drivers\\dcrypt.sys", tmpb);
 }
 
 
-static int dc_save_drv_file(wchar_t *name)
+static int dc_save_drv_file()
 {
 	wchar_t dest[MAX_PATH];
 	wchar_t path[MAX_PATH];
@@ -252,7 +197,7 @@ static int dc_save_drv_file(wchar_t *name)
 
 	do
 	{
-		dc_get_driver_path(name, dest);
+		dc_get_driver_path(dest);
 
 		if (dc_get_prog_path(path, sizeof_w(path) - 10) == 0) {
 			resl = ST_ERROR; break;
@@ -270,25 +215,15 @@ static int dc_save_drv_file(wchar_t *name)
 	return resl;
 }
 
-int dc_remove_driver(wchar_t *name)
+int dc_remove_driver()
 {
 	SC_HANDLE h_scm = NULL;
 	wchar_t   buf[MAX_PATH];
-	wchar_t   dnm[MAX_PATH];
 	HKEY      h_key = NULL;
 	int       resl;
 	SC_HANDLE h_svc;	
 
-	if (name == NULL) 
-	{
-		if (dc_get_old_drv_name(dnm, sizeof_w(dnm)) == ST_OK) {
-			name = dnm;
-		} else {
-			name = drv_name;
-		}
-	}
-	
-	dc_get_driver_path(name, buf);
+	dc_get_driver_path(buf);
 
 	do 
 	{
@@ -298,17 +233,16 @@ int dc_remove_driver(wchar_t *name)
 			resl = ST_SCM_ERROR; break;
 		}
 
-		if (h_svc = OpenService(h_scm, name, SERVICE_ALL_ACCESS)) {			
+		if (h_svc = OpenService(h_scm, drv_name, SERVICE_ALL_ACCESS)) {			
 			DeleteService(h_svc);
 			CloseServiceHandle(h_svc);
-		}		
-
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
-			resl = ST_REG_ERROR;
-			break;
 		}
 
-		if ( (rmv_from_val(h_key, upf_str, name) == 0) && (rmv_from_val(h_key, lwf_str, name) == 0) ) {
+		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
+			resl = ST_REG_ERROR; break;
+		}
+
+		if (rmv_from_val(h_key, lwf_str, drv_name) == 0) {
 			resl = ST_ERROR;
 		} else {
 			resl = ST_OK;
@@ -326,7 +260,7 @@ int dc_remove_driver(wchar_t *name)
 	return resl;
 }
 
-int dc_install_driver(wchar_t *name)
+int dc_install_driver()
 {
 	dc_conf_data conf;
 	wchar_t      buf[MAX_PATH];
@@ -335,15 +269,11 @@ int dc_install_driver(wchar_t *name)
 	HKEY         h_key = NULL;
 	int          resl;
 	
-	if (name == NULL) {
-		name = drv_name;
-	}
-
-	dc_get_driver_path(name, buf);
+	dc_get_driver_path(buf);
 
 	do 
 	{
-		if ( (resl = dc_save_drv_file(name)) != ST_OK ) {
+		if ( (resl = dc_save_drv_file()) != ST_OK ) {
 			break;
 		}	
 	
@@ -352,10 +282,9 @@ int dc_install_driver(wchar_t *name)
 		}
 
 		h_svc = CreateService(
-			h_scm, name, NULL, SERVICE_ALL_ACCESS, SERVICE_KERNEL_DRIVER,
+			h_scm, drv_name, NULL, SERVICE_ALL_ACCESS, SERVICE_KERNEL_DRIVER,
 			SERVICE_BOOT_START, SERVICE_ERROR_CRITICAL, buf, 
-			L"PnP Filter", NULL, NULL, NULL, NULL
-			);
+			L"PnP Filter", NULL, NULL, NULL, NULL);
 
 		if (h_svc == NULL) {
 			resl = ST_SCM_ERROR; break;
@@ -367,7 +296,7 @@ int dc_install_driver(wchar_t *name)
 			resl = ST_REG_ERROR; break;
 		}
 
-		if (set_to_val(h_key, lwf_str, name) == 0) {
+		if (set_to_val(h_key, lwf_str, drv_name) == 0) {
 			resl = ST_REG_ERROR; break;
 		}
 		
@@ -385,7 +314,7 @@ int dc_install_driver(wchar_t *name)
 	}
 
 	if (resl != ST_OK) {
-		dc_remove_driver(name);
+		dc_remove_driver();
 	}
 
 	return resl;
@@ -393,26 +322,15 @@ int dc_install_driver(wchar_t *name)
 
 int dc_driver_status()
 {
-	wchar_t  name[MAX_PATH];
-	wchar_t  path[MAX_PATH];
-	HANDLE   h_device;
-	wchar_t *dnm;
+	wchar_t path[MAX_PATH];
+	HANDLE  h_device;
 
-	/* check old driver */
-	if (dc_get_old_drv_name(name, sizeof_w(name)) == ST_OK) {
-		dnm = name;
-	} else {
-		dnm = drv_name;
-	}
-
-	/* check new driver */
-	dc_get_driver_path(dnm, path);
+	dc_get_driver_path(path);
 	
 	if (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES) 
 	{
 		h_device = CreateFile(
-			DC_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL
-			);
+			DC_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
 
 		if (h_device != INVALID_HANDLE_VALUE) {
 			CloseHandle(h_device);
@@ -427,78 +345,21 @@ int dc_driver_status()
 
 int dc_update_driver()
 {
-	wchar_t      path[MAX_PATH];
-	wchar_t      name[MAX_PATH];	
-	int          resl;
-	HKEY         key = NULL;
 	dc_conf_data conf;
-	
+	int          resl;
+
 	do
 	{
-		if (dc_get_old_drv_name(name, sizeof_w(name)) == ST_OK) 
-		{
-			/* 0.2-0.2.6 driver detected */
-			if (wcscmp(name, drv_name) == 0)
-			{   /* if driver name not changed, correct registry keys */
-				
-				/* change filter from UpperFilters to LowerFilters */
-				if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &key) != 0) {
-					resl = ST_REG_ERROR; break;
-				}
+		if ( (resl = dc_save_drv_file()) != ST_OK ) {
+			break;
+		}
 
-				rmv_from_val(key, upf_str, name);
-				rmv_from_val(key, lwf_str, name);
-				
-				if (set_to_val(key, lwf_str, name) == 0) {
-					resl = ST_REG_ERROR; break;
-				}
+		if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
+			break;
+		}
 
-				/* move settings to root key */
-				if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
-					break;
-				}
-				if ( (resl = dc_save_conf(&conf)) != ST_OK ) {
-					break;
-				}
-
-				/* delete old config key */
-				_snwprintf(
-					path, sizeof_w(path), L"%s\\%s\\%s", reg_srv, name, cnf_key
-					);	
-
-				RegDeleteKey(HKEY_LOCAL_MACHINE, path);
-
-				/* update driver file */
-				resl = dc_save_drv_file(name);
-			} else 
-			{
-				/* if driver name changed, full reinstall needed */
-
-				/* get program settings */
-				if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
-					break;
-				}
-
-				if ( (resl = dc_remove_driver(name)) != ST_OK ) {
-					break;
-				}
-
-				if ( (resl = dc_install_driver(NULL)) != ST_OK ) {
-					break;
-				}
-
-				/* save config */
-				resl = dc_save_conf(&conf);
-			}
-		} else {
-			/* if new driver detected, update driver file only */
-			resl = dc_save_drv_file(drv_name);
-		}		
+		resl = dc_save_conf(&conf);
 	} while (0);
-
-	if (key != NULL) {
-		RegCloseKey(key);
-	}
 
 	return resl;
 }

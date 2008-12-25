@@ -4,6 +4,8 @@
 #include "uicode.h"
 #include "main.h"
 
+#define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); }
+
 #define __msg_w(display, hwnd) (MessageBox( \
 	hwnd, display, L"Warning", MB_YESNO | MB_ICONWARNING) == IDYES)
 
@@ -38,7 +40,9 @@ void *_extract_rsrc(
 		int *size
 	);
 
-void _trailing_slash(wchar_t *path);
+void _set_trailing_slash(wchar_t *path);
 void _reboot( );
+
+int _bitcount(DWORD n);
 
 #endif

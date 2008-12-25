@@ -30,18 +30,190 @@
 #include "enc_dec.h"
 #include "driver.h"
 #include "fast_crypt.h"
+#include "debug.h"
 
-static void dc_decrypt_complete(PIRP irp, void *param)
+typedef struct _isc_ctx {
+	WORK_QUEUE_ITEM  wrk_item;
+	PDEVICE_OBJECT   dev_obj;
+	dev_hook        *hook;
+	PIRP             irp;
+	
+} isc_ctx;
+
+typedef aligned struct _io_packet
 {
+	PVOID     old_buf;
+	PMDL      old_mdl;	
+	dev_hook *hook;
+	CHAR      data[];
+	
+} io_packet;
+
+static
+NTSTATUS 
+  dc_encrypted_rw_block(
+    dev_hook *hook, u32 func, void *buff, u32 size, u64 offset, u32 flags, dc_key *enc_key
+	)
+{
+	NTSTATUS status;
+	void    *new_buf;
+
+	new_buf = NULL;
+	do
+	{
+		/* process IO with new memory buffer because 
+		   IoBuildSynchronousFsdRequest fails for some system buffers   
+		*/
+		if ( (new_buf = fast_alloc(size)) == NULL ) {
+			status = STATUS_INSUFFICIENT_RESOURCES; break;
+		}
+
+		if (func == IRP_MJ_WRITE) 
+		{
+			if (enc_key != NULL) {
+				dc_fast_encrypt(buff, new_buf, size, offset, enc_key);
+			} else {
+				fastcpy(new_buf, buff, size);
+			}
+		}
+
+		status = io_device_rw_block(
+			hook->orig_dev, func, new_buf, size, offset, flags);
+
+		if ( (NT_SUCCESS(status) != FALSE) && (func == IRP_MJ_READ) ) 
+		{
+			if (enc_key != NULL) {
+				dc_fast_decrypt(new_buf, buff, size, offset, enc_key);
+			} else {
+				fastcpy(buff, new_buf, size);
+			}
+		}
+	} while (0);
+
+	if (new_buf != NULL) {
+		fast_free(new_buf);
+	}
+
+	return status;
+}
+
+NTSTATUS 
+  dc_sync_encrypted_io(
+     dev_hook *hook, u8 *buff, u32 size, u64 offset, u32 flags, u32 funct
+	 )
+{
+	NTSTATUS status;
+	u64      o1, o2, o3;
+	u32      s1, s2, s3;
+	u8      *p2, *p3;
+
+	s1 = intersect(&o1, offset, size, 0, DC_AREA_SIZE);
+	
+	if (hook->flags & F_SYNC) {
+		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, (hook->tmp_size - DC_AREA_SIZE));
+		s3 = intersect(&o3, offset, size, hook->tmp_size, hook->dsk_size);		
+	} else {
+		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, hook->dsk_size);
+		s3 = 0;
+	}
+	p2 = buff + s1;
+	p3 = p2 + s2;
+
+	/*
+	   normal mode:
+	    o1:s1 - redirected part
+		o2:s2 - encrypted part
+		o3:s3 - unencrypted part
+	   reencrypt mode:
+	   o1:s1 - redirected part
+	   o2:s2 - key_1 encrypted part
+	   o3:s3 - key_2 encrypted part
+	*/
+
+	do
+	{
+		if (s1 != 0)
+		{
+			status = dc_sync_encrypted_io(
+				hook, buff, s1, hook->stor_off + o1, flags, funct);
+
+			if (NT_SUCCESS(status) == FALSE) {
+				break;
+			}
+		}
+		
+		if (s2 != 0)
+		{
+			status = dc_encrypted_rw_block(
+				hook, funct, p2, s2, o2, flags, &hook->dsk_key);
+
+			if (NT_SUCCESS(status) == FALSE) {
+				break;
+			}
+		}
+		
+		if (s3 != 0)
+		{
+			status = dc_encrypted_rw_block(
+				hook, funct, p3, s3, o3, flags, 
+				(hook->flags & F_REENCRYPT) ? hook->tmp_key : NULL);
+		}
+	} while (0);
+
+	return status;
+}
+
+void dc_sync_irp_io(dev_hook *hook, PIRP irp)
+{
+	PIO_STACK_LOCATION irp_sp;
+	u64                offset;
+	u8                *buff;
+	u32                length;
+	NTSTATUS           status;
+
+	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	buff   = dc_map_mdl_with_retry(irp->MdlAddress);
+
+	if (buff == NULL) {
+		dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+		return;
+	}
+
+	if (irp_sp->MajorFunction == IRP_MJ_READ) {
+		offset = irp_sp->Parameters.Read.ByteOffset.QuadPart;
+		length = irp_sp->Parameters.Read.Length;
+	} else {
+		offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
+		length = irp_sp->Parameters.Write.Length;		
+	}
+
+	if ( (length == 0) ||
+		 (length & (SECTOR_SIZE - 1)) || (offset + length > hook->use_size) )
+	{
+		dc_complete_irp(irp, STATUS_INVALID_PARAMETER, 0);
+		return;
+	}
+
+	status = dc_sync_encrypted_io(
+		hook, buff, length, offset, irp_sp->Flags, irp_sp->MajorFunction);
+
+	if (NT_SUCCESS(status) != FALSE) {
+		dc_complete_irp(irp, status, length);
+	} else {
+		dc_complete_irp(irp, status, 0);
+	}
+}
+
+static void dc_decrypt_complete(PIRP irp, dev_hook *hook)
+{
+	lock_dec(&hook->io_pending);
 	IoCompleteRequest(irp, IO_NO_INCREMENT);
 }
 
 static
 NTSTATUS
   dc_read_complete(
-    IN PDEVICE_OBJECT dev_obj,
-    IN PIRP           irp,
-    IN void          *param
+    PDEVICE_OBJECT dev_obj, PIRP irp, void *param
     )
 {
 	dev_hook          *hook   = dev_obj->DeviceExtension;
@@ -62,9 +234,8 @@ NTSTATUS
 			if (length >= F_OP_THRESOLD)
 			{
 				succs = dc_parallelized_crypt(
-					F_OP_DECRYPT, &hook->dsk_key, buff, buff, 
-					length, offset, dc_decrypt_complete, irp, NULL
-					);
+					F_OP_DECRYPT, &hook->dsk_key, 
+					buff, buff, length, offset, dc_decrypt_complete, irp, hook);
 
 				if (succs == 0) {
 					irp->IoStatus.Status      = STATUS_INSUFFICIENT_RESOURCES;
@@ -83,15 +254,14 @@ NTSTATUS
 		}
 	}
 
+	lock_dec(&hook->io_pending);
     return STATUS_SUCCESS;
 }
 
 static
 NTSTATUS
   dc_write_complete(
-    IN PDEVICE_OBJECT dev_obj,
-    IN PIRP           irp,
-    IN io_packet     *iopk
+    PDEVICE_OBJECT dev_obj, PIRP irp, io_packet *iopk
     )
 {
 	IoFreeMdl(irp->MdlAddress);
@@ -99,6 +269,7 @@ NTSTATUS
 	irp->MdlAddress = iopk->old_mdl;
 	irp->UserBuffer = iopk->old_buf;
 
+	lock_dec(&iopk->hook->io_pending);
 	fast_free(iopk);
 
 	if (irp->PendingReturned) {
@@ -106,156 +277,150 @@ NTSTATUS
     }
 
 	return STATUS_SUCCESS;
-}
+}	  
 
-
-NTSTATUS 
-  dc_read_irp(
-     IN dev_hook *hook,
-	 IN PIRP      irp
-	 )
+static NTSTATUS dc_read_irp(dev_hook *hook, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
 	PIO_STACK_LOCATION nxt_sp;
 
-	irp_sp  = IoGetCurrentIrpStackLocation(irp);
-	nxt_sp  = IoGetNextIrpStackLocation(irp);
+	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	nxt_sp = IoGetNextIrpStackLocation(irp);
 	
-	autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));
-
-	nxt_sp->Parameters.Read.ByteOffset.QuadPart += HEADER_SIZE;
-
+	autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));	
+		
 	IoSetCompletionRoutine(
-		irp, dc_read_complete, NULL, TRUE, TRUE, TRUE
-		);
+		irp, dc_read_complete, NULL, TRUE, TRUE, TRUE);
 
 	return IoCallDriver(hook->orig_dev, irp);
 }
 
-
 static void dc_encrypt_complete(
-			  PDEVICE_OBJECT device, PIRP irp
+			  PDEVICE_OBJECT dev_obj, PIRP irp
 			  )
 {
-	IoCallDriver(device, irp);
+	IoCallDriver(dev_obj, irp);
 }
 
-NTSTATUS 
-  dc_write_irp(
-     IN dev_hook *hook,
-	 IN PIRP      irp
-	 )
+static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
 	PIO_STACK_LOCATION nxt_sp;
-	ULONGLONG          offset;
-	ULONG              length;	
-	NTSTATUS           status = STATUS_INSUFFICIENT_RESOURCES;
-	PMDL               mdl    = NULL;
+	NTSTATUS           status;
+	u64                offset;
+	u32                length;
+	PMDL               nmdl;
 	PVOID              data;
 	io_packet         *iopk;
 	int                succs;
-		
-	irp_sp  = IoGetCurrentIrpStackLocation(irp);
-	nxt_sp  = IoGetNextIrpStackLocation(irp);
-	offset  = irp_sp->Parameters.Write.ByteOffset.QuadPart;
-	length  = irp_sp->Parameters.Write.Length;
-	data    = dc_map_mdl_with_retry(irp->MdlAddress);
+
+	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	nxt_sp = IoGetNextIrpStackLocation(irp);
+	offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
+	length = irp_sp->Parameters.Write.Length;
+	status = STATUS_INSUFFICIENT_RESOURCES;
 	
-	autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));
-
-	if ( (data != NULL) && 
-		 (iopk = fast_alloc(length + sizeof(io_packet))) )
+	nmdl = NULL; data = NULL; iopk = NULL; succs = 0;
+	do
 	{
-		if (mdl = dc_allocate_mdl_with_retry(iopk->data, length))
+		data = dc_map_mdl_with_retry(irp->MdlAddress);
+		iopk = fast_alloc(length + sizeof(io_packet));
+		nmdl = dc_allocate_mdl_with_retry(iopk->data, length);
+
+		if ( (data == NULL) || (iopk == NULL) || (nmdl == NULL) ) {
+			break;
+		}
+
+		/* copy IRP stack */
+		autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));
+
+		MmBuildMdlForNonPagedPool(nmdl);
+
+		iopk->old_buf   = irp->UserBuffer;
+		iopk->old_mdl   = irp->MdlAddress;
+		iopk->hook      = hook;
+		irp->UserBuffer = iopk->data;
+		irp->MdlAddress = nmdl;
+
+		IoSetCompletionRoutine(
+			irp, dc_write_complete,	iopk, TRUE, TRUE, TRUE);
+
+		if (length >= F_OP_THRESOLD) 
 		{
-			MmBuildMdlForNonPagedPool(mdl);
+			IoMarkIrpPending(irp);
 
-			iopk->old_buf   = irp->UserBuffer;
-			iopk->old_mdl   = irp->MdlAddress;
-			irp->UserBuffer = iopk->data;
-			irp->MdlAddress = mdl;
+			succs = dc_parallelized_crypt(
+				F_OP_ENCRYPT, &hook->dsk_key, data, 
+				iopk->data, length, offset, dc_encrypt_complete, hook->orig_dev, irp);
 
-			nxt_sp->Parameters.Write.ByteOffset.QuadPart += HEADER_SIZE;
-
-			IoSetCompletionRoutine(
-				irp, dc_write_complete,	iopk, TRUE, TRUE, TRUE);
-
-			if (length >= F_OP_THRESOLD) 
-			{
-				IoMarkIrpPending(irp);				
-
-				succs = dc_parallelized_crypt(
-					F_OP_ENCRYPT, &hook->dsk_key, data, iopk->data, 
-					length, offset, dc_encrypt_complete, hook->orig_dev, irp
-					);
-
-				if (succs == 0) 
-				{
-					irp->MdlAddress = iopk->old_mdl;
-					irp->UserBuffer = iopk->old_buf;
-
-					IoFreeMdl(mdl);
-					fast_free(iopk);
-
-					IoSetCompletionRoutine(
-						irp, NULL, NULL, FALSE, FALSE, FALSE);
-
-					dc_complete_irp(irp, status, 0);
-				} else {
-					status = STATUS_PENDING;
-				}
-			} else 
-			{
-				dc_cipher_encrypt(
-					data, iopk->data, length, offset, &hook->dsk_key);			
-
-				status = IoCallDriver(hook->orig_dev, irp);			
+			if (succs == 0) {
+				irp->MdlAddress = iopk->old_mdl;
+				irp->UserBuffer = iopk->old_buf;
+			} else {
+				status = STATUS_PENDING;
 			}
-		} else {
+		} else
+		{
+			dc_cipher_encrypt(
+				data, iopk->data, length, offset, &hook->dsk_key);
+
+			status = IoCallDriver(hook->orig_dev, irp);
+			succs  = 1;
+		}
+	} while (0);
+
+	if (succs == 0) 
+	{
+		if (nmdl != NULL) {
+			IoFreeMdl(nmdl);
+		}
+
+		if (iopk != NULL) {
 			fast_free(iopk);
-			dc_complete_irp(irp, status, 0);
-		}	
-	} else {
+		}
+
+		IoSetCompletionRoutine(
+			irp, NULL, NULL, FALSE, FALSE, FALSE);
+
+		lock_dec(&hook->io_pending);
 		dc_complete_irp(irp, status, 0);
 	}
 
 	return status;
 }
 
+static void dc_intersection_rw(isc_ctx *ictx)
+{
+	dc_sync_irp_io(ictx->hook, ictx->irp);
+	lock_dec(&ictx->hook->io_pending);
+	fast_free(ictx);
+}
 
 NTSTATUS
   dc_read_write_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	PIO_STACK_LOCATION irp_sp;
 	dev_hook          *hook;
+	isc_ctx           *ictx;
 	ULONGLONG          offset;
 	ULONG              length;
-	NTSTATUS           status;	
 
 	/* reseed RNG on first 1000 I/O operations for collect initial entropy */
 	if (lock_inc(&dc_io_count) < 1000) {
 		rnd_reseed_now();
 	}
-		
-	if (dev_obj == dc_device)
-	{
-		return dc_complete_irp(
-			      irp, STATUS_DRIVER_INTERNAL_ERROR, 0
-				  );
-	}
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	hook   = dev_obj->DeviceExtension;
 
-	if ( hook->flags & (F_DISABLE | F_FORMATTING) )
-	{
-		return dc_complete_irp(
-			      irp, STATUS_INVALID_DEVICE_STATE, 0
-				  );
+	/* increment pending IO counter */
+	lock_inc(&hook->io_pending);
+
+	if ( hook->flags & (F_DISABLE | F_FORMATTING) ) {
+		lock_dec(&hook->io_pending);
+		return dc_complete_irp(irp, STATUS_INVALID_DEVICE_STATE, 0);
 	}
 
 	if (hook->flags & F_SYNC)
@@ -263,50 +428,65 @@ NTSTATUS
 		IoMarkIrpPending(irp);
 
 		ExInterlockedInsertTailList (
-			&hook->sync_irp_queue, &irp->Tail.Overlay.ListEntry, &hook->sync_req_lock
-			);
+			&hook->sync_irp_queue, &irp->Tail.Overlay.ListEntry, &hook->sync_req_lock);
 
 		KeSetEvent(
-			&hook->sync_req_event, IO_DISK_INCREMENT, FALSE
-			);
+			&hook->sync_req_event, IO_DISK_INCREMENT, FALSE);
 
-		status = STATUS_PENDING;
-	} else 
+		return STATUS_PENDING;
+	}
+
+	if ( !(hook->flags & F_ENABLED) )
 	{
-		if ( !(hook->flags & F_ENABLED) ) 
-		{
-			/* probe for mount new volume */
-			if ( (hook->flags & (F_UNSUPRT | F_NO_AUTO_MOUNT)) || (hook->mnt_probed != 0) ) {
-				return dc_forward_irp(dev_obj, irp);
-			} else {
-				return dc_probe_mount(dev_obj, irp);
-			}
-		} else 
-		{
-			if (irp_sp->MajorFunction == IRP_MJ_READ) {
-				offset = irp_sp->Parameters.Read.ByteOffset.QuadPart;
-				length = irp_sp->Parameters.Read.Length;
-			} else {
-				offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
-				length = irp_sp->Parameters.Write.Length;
-			}
-
-			if ( (length == 0) ||
-				 (length & (SECTOR_SIZE - 1)) ||
-				 (offset + length > hook->use_size) )
-			{
-				return dc_complete_irp(
-					irp, STATUS_INVALID_PARAMETER, 0
-					); 
-			}
-
-			if (irp_sp->MajorFunction == IRP_MJ_READ) {
-				status = dc_read_irp(hook, irp);
-			} else {
-				status = dc_write_irp(hook, irp);
-			}
+		/* probe for mount new volume */
+		if ( (hook->flags & (F_UNSUPRT | F_NO_AUTO_MOUNT)) || (hook->mnt_probed != 0) ) {
+			lock_dec(&hook->io_pending);
+			return dc_forward_irp(dev_obj, irp);
+		} else {
+			return dc_probe_mount(hook, irp);
 		}
 	}
 
-	return status;
+	if (irp_sp->MajorFunction == IRP_MJ_READ) {
+		offset = irp_sp->Parameters.Read.ByteOffset.QuadPart;
+		length = irp_sp->Parameters.Read.Length;
+	} else {
+		offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
+		length = irp_sp->Parameters.Write.Length;
+	}
+
+	if ( (length == 0) ||
+		 (length & (SECTOR_SIZE - 1)) || (offset + length > hook->use_size) )
+	{
+		lock_dec(&hook->io_pending);
+		return dc_complete_irp(irp, STATUS_INVALID_PARAMETER, 0); 
+	}
+
+	if (offset >= DC_AREA_SIZE)
+	{
+		if (irp_sp->MajorFunction == IRP_MJ_READ) {
+			return dc_read_irp(hook, irp);
+		} else {
+			return dc_write_irp(hook, irp);
+		}
+	} 
+
+	if ( (ictx = fast_alloc(sizeof(sizeof(isc_ctx)))) == NULL ) {
+		lock_dec(&hook->io_pending);
+		return dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+	}
+
+	ictx->dev_obj = dev_obj;
+	ictx->irp     = irp;
+	ictx->hook    = hook;
+
+	IoMarkIrpPending(irp);
+
+	ExInitializeWorkItem(
+		&ictx->wrk_item, dc_intersection_rw, ictx);
+
+	ExQueueWorkItem(
+		&ictx->wrk_item, DelayedWorkQueue);
+
+	return STATUS_PENDING;
 }

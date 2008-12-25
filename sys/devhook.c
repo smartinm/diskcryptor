@@ -74,8 +74,7 @@ void dc_insert_hook(dev_hook *hook)
 	ExAcquireResourceExclusiveLite(&hooks_sync_resource, TRUE);
 
 	InsertTailList(
-		&hooks_list_head, &hook->hooks_list
-		);
+		&hooks_list_head, &hook->hooks_list);
 
 	ExReleaseResourceLite(&hooks_sync_resource);
 	KeLeaveCriticalRegion();

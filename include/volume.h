@@ -3,73 +3,63 @@
 
 #include "defines.h"
 
-#define DC_TRUE_SIGN 0x45555254
-#define DC_DTMP_SIGN 0x504D5444
-#define IS_DC_SIGN(x) ( ((x) == DC_TRUE_SIGN) || ((x) == DC_DTMP_SIGN) )
+#define DC_VOLM_SIGN 0x50524344
 
 // Header key derivation
 #define PKCS5_SALT_SIZE			64
 
 // Master key + secondary key (LRW mode)
 #define DISKKEY_SIZE			256
-#define LRW_TWEAK_SIZE          32
 #define MAX_KEY_SIZE            (32*3)
-#define PKCS_DERIVE_MAX         (max(LRW_TWEAK_SIZE+MAX_KEY_SIZE,MAX_KEY_SIZE*2))
-
-// Volume header byte offsets
-#define	HEADER_USERKEY_SALT		0
-#define HEADER_ENCRYPTEDDATA	PKCS5_SALT_SIZE
-#define	HEADER_DISKKEY			256
-
-// Volume header sizes
-#define HEADER_SIZE					512
-#define HEADER_ENCRYPTEDDATASIZE	(HEADER_SIZE - HEADER_ENCRYPTEDDATA)
+#define PKCS_DERIVE_MAX         (MAX_KEY_SIZE*2)
 
 #define SECTOR_SIZE                 512
-#define HIDDEN_VOL_HEADER_OFFSET	(HEADER_SIZE + SECTOR_SIZE * 2)	
 
 #define MIN_PASSWORD			1		// Minimum password length
-#define MAX_PASSWORD			64		// Maximum password length
+#define MAX_PASSWORD			128		// Maximum password length
 
-#define DC_RESERVED_SIZE        (15 * SECTOR_SIZE)
-#define DC_BACKUP_OFFSET(hook)  ((hook)->dsk_size - (SECTOR_SIZE * 2))
-
-#define TC_VOL_REQ_PROG_VERSION			0x0500
-#define TC_VOLUME_HEADER_VERSION		0x0003 
+#define DC_HDR_VERSION 1
 
 #define VF_NONE           0x00
 #define VF_TMP_MODE       0x01 /* temporary encryption mode */
-#define VF_SHRINK_PENDING 0x02 /* volume can be shrinked at next mount */
-#define VF_REENCRYPT      0x04 /* volume re-encryption in progress */
+#define VF_REENCRYPT      0x02 /* volume re-encryption in progress */
+#define VF_STORAGE_FILE   0x04 /* redirected area are placed in file */
 
 #define ENC_BLOCK_SIZE  (1280 * 1024)
 
 #pragma pack (push, 1)
 
+typedef struct _dc_pass {
+	int     size;
+	wchar_t pass[MAX_PASSWORD];
+} dc_pass;
+
 typedef struct _dc_header {
-	u8  salt[64];
-	u32 sign;
-	u16 version;
-	u16 req_ver;
-	u32 key_crc;
-	u8  reserved1[16];
-	u64 hidden_size;  /* hidden volume size */
-	u64 vol_size;     /* volume size */
-	u64 enc_start;    /* encrypted area start (for TC compatible, not used) */
-	u64 enc_size;     /* encrypted area size (for TC compatible, not used)  */
+	u8  salt[PKCS5_SALT_SIZE]; /* pkcs5.2 salt */
+	u32 sign;                  /* signature 'DCRP' */
+	u32 hdr_crc;               /* crc32 of decrypted volume header */
+	u16 version;               /* volume format version */
+	u32 flags;                 /* volume flags */
+	u32 disk_id;               /* unigue volume identifier */
+	int alg_1;                 /* crypt algo 1 */
+	u8  key_1[DISKKEY_SIZE];   /* crypt key 1  */
+	int alg_2;                 /* crypt algo 2 */
+	u8  key_2[DISKKEY_SIZE];   /* crypt key 2  */
 
-	u32 disk_id;      
-	u8  flags;        /* volume flags */
-	u8  tmp_wp_mode;  /* data wipe mode */
-	u64 tmp_size;     /* size of encrypted area */
-	u64 tmp_save_off; /* temporary buffer saving offset */
-	u16 shrink_off;   /* offset in FS header    */
-	u32 shrink_val;   /* new value in FS header */
+	u64 stor_off;    /* temporary storage offset */
+	u64 use_size;    /* user avalible volume size */
+	u64 tmp_size;    /* temporary part size      */
+	u8  tmp_wp_mode; /* data wipe mode */
 
-	u8  reserved2[104];
-	u8  key_data[256];
+	u8  reserved[1422 - 1];
 
 } dc_header;
+
+#define DC_AREA_SIZE         (2 * 1024)
+#define DC_AREA_SECTORS      (DC_AREA_SIZE / SECTOR_SIZE)
+#define DC_ENCRYPTEDDATASIZE (DC_AREA_SIZE - PKCS5_SALT_SIZE)
+#define DC_CRC_AREA_SIZE     (DC_ENCRYPTEDDATASIZE - 8)
+
 
 #pragma pack (pop)
 

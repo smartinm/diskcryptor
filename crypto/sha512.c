@@ -12,6 +12,8 @@
 #include "defines.h"
 #include "sha512.h"
 
+#ifndef NO_SHA512
+
 /* the K array */
 static aligned const u64 K[80] = 
 {
@@ -225,3 +227,5 @@ void sha512_done(sha512_ctx *ctx, unsigned char *out)
         PUTU64(out+(8*i), ctx->hash[i]);
     }
 }
+
+#endif /* NO_SHA512 */

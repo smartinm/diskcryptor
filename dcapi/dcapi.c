@@ -12,8 +12,7 @@ void *dc_extract_rsrc(int *size, int id)
 	PVOID   data = NULL;
 
 	hres = FindResource(
-		h_inst_dll, MAKEINTRESOURCE(id), L"EXEFILE"
-		);
+		h_inst_dll, MAKEINTRESOURCE(id), L"EXEFILE");
 	
 	if (hres != NULL) 
 	{
@@ -30,8 +29,7 @@ u32 dc_get_prog_path(wchar_t *path, u32 n_size)
 	u32 len;
 
 	len = GetModuleFileName(
-		h_inst_dll, path, n_size
-		);
+		h_inst_dll, path, n_size);
 
 	path[len] = 0;
 

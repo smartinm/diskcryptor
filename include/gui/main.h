@@ -14,7 +14,7 @@ extern list_entry __action;
 extern CRITICAL_SECTION crit_sect;
 extern int _tmr_elapse[ ];
 
-#define IDC_TIMER		 0x4100
+#define IDC_TIMER		  0x4100
 
 #define MAIN_TIMER    0x0000
 #define PROC_TIMER    0x0001
@@ -37,10 +37,12 @@ extern int _tmr_elapse[ ];
 #define ACT_REENCRYPT 0x0003
 #define ACT_FORMAT    0x0004
 
-typedef struct _timer_info {
+#define SPEED_STAT    40
+
+typedef struct _timer_info 
+{
 	int id;
 	int elapse;
-
 } timer_info;
 
 extern int __status;
@@ -48,64 +50,64 @@ extern dc_conf_data __config;
 
 static wchar_t drv_msk[ ] = L"%s\\drivers\\%s.sys";
 
-#define __execute(path) (ShellExecuteW(NULL, \
-	L"open", path, NULL, NULL, SW_SHOWNORMAL))
+#define __execute(path) (  \
+		ShellExecuteW(NULL, L"open", path, NULL, NULL, SW_SHOWNORMAL) \
+	)
 
-typedef struct __dact {	
-	list_entry list;	
+typedef struct __dact 
+{	
+	list_entry    list;	
 	LARGE_INTEGER begin;
-	HANDLE thread;
-	int act;
-	int status;
-	int wp_mode;
-	__int64 last_size;
-	wchar_t device[MAX_PATH];
+	HANDLE        thread;
+	int           act;
+	int           status;
+	int           wp_mode;
+	__int64       speed_stat[SPEED_STAT];
+	__int64       tmp_size;
+	wchar_t       device[MAX_PATH];
 
 } _dact;
 
-typedef struct __dmnt {	
+typedef struct __dmnt 
+{	
 	vol_inf info;
 	wchar_t label[MAX_PATH];
 	wchar_t fs[MAX_PATH];
 
 } _dmnt;
 
-typedef struct __droot {
+typedef struct __droot 
+{
 	list_entry vols;
-	u32 dsk_num;
-	drive_inf info;
-	wchar_t dsk_name[MAX_PATH];
+	u32        dsk_num;
+	drive_inf  info;
+	wchar_t    dsk_name[MAX_PATH];
 
 } _droot;
 
-typedef struct __dlg {
-	BOOL q_format;
+typedef struct __dlg 
+{
+	BOOL     q_format;
 	wchar_t *fs_name;
-	int act_type;
-	int rlt;
+	int      act_type;
+	int      rlt;
 
 } _dlg;
 
-typedef struct __dnode {
+typedef struct __dnode 
+{
 	list_entry list;	
-	BOOL is_root;
-	BOOL exists;
-	_droot root;
-	_dmnt mnt;
-	_dlg dlg;
+	BOOL       is_root;
+	BOOL       exists;
+	_droot     root;
+	_dmnt      mnt;
+	_dlg       dlg;
 
 } _dnode;
 
-typedef struct _shrink_thread_info {
-	vol_inf *vol;
-	int      rlt;
-	sh_data *shd;
-
-} shrink_thread_info;
-
-typedef struct _bench_item {
+typedef struct _bench_item 
+{
 	wchar_t *alg;
-	wchar_t *mode;
 	double   speed;
 
 } bench_item;
@@ -133,7 +135,6 @@ void _menu_unmountall( );
 void _menu_change_pass(_dnode *node);
 void _menu_clear_cache( );
 
-void _menu_update_volume(_dnode *node);
 void _menu_about( );
 
 void _menu_backup_header(_dnode *node);
@@ -153,86 +154,73 @@ BOOL _is_curr_in_group(HWND hwnd);
 BOOL _is_simple_list(HWND hwnd);
 BOOL _is_warning_item(LPARAM lparam);
 
-int _benchmark(
-		bench_item *bench,
-		int mode		
-	);
+int _benchmark(bench_item *bench);
 
 int _list_volumes(
 		list_entry *volumes
 	);
 
 void _load_diskdrives(
-		HWND hwnd,
+		HWND        hwnd,
 		list_entry *volumes,
-		char vcount
+		char        vcount
 	);
 
 void _list_devices(
 		HWND hlist,
 		BOOL fixed,
-		int sel
+		int  sel
 	);
 
 BOOL _list_part_by_disk_id(
 		HWND hwnd,
-		int disk_id
+		int  disk_id
 	);
 
 int _set_boot_loader(
 		HWND hwnd,
-		int dsk_num
+		int  dsk_num
 	);
 
 BOOL _is_boot_device(vol_inf *vol);
 BOOL _is_removable_media(int dsk_num);
 
-char *_get_pass(
-		HWND hwnd,
-		int edit_pass
-	);
-
-void _wipe_pass_control(
-		HWND hwnd,
-		int edit_pass
-	);
-
 _dact *_create_act_thread(
 		_dnode *node,
-		int act_type, /*-1 - search*/
-		int act_status
+		int     act_type, /*-1 - search*/
+		int     act_status
 	);
 
 void _set_timer(
-		int index,
+		int  index,
 		BOOL set,
 		BOOL refresh
 	);
 
 int _menu_set_loader_vol(
-		HWND hwnd,
+		HWND     hwnd,
 		wchar_t *vol,
-		int dsk_num,
-		int type
+		int      dsk_num,
+		int      type
 	);
 
 int _menu_unset_loader_mbr(
-		HWND hwnd,
+		HWND     hwnd,
 		wchar_t *vol,
-		int dsk_num,
-		int type
+		int      dsk_num,
+		int      type
 	);
 
 int _menu_update_loader(
-		HWND hwnd,
+		HWND     hwnd,
 		wchar_t *vol,
-		int dsk_num
+		int      dsk_num
 	);
 
 int _menu_set_loader_file(
-		HWND hwnd,
+		HWND     hwnd,
 		wchar_t *path,
-		BOOL iso
+		BOOL     iso
 	);
 
 int _drv_action(
@@ -241,9 +229,9 @@ int _drv_action(
 	);
 
 void _check_driver(
-		HWND hwnd,
+		HWND   hwnd,
 		size_t buff_size,
-		char set
+		char   set
 	);
 
 void _get_driver_path(

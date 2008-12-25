@@ -493,6 +493,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\include\sys\fs_filter.h"
+				>
+			</File>
+			<File
 				RelativePath="..\include\sys\io_control.h"
 				>
 			</File>
@@ -528,6 +532,10 @@
 				RelativePath="..\include\sys\readwrite.h"
 				>
 			</File>
+			<File
+				RelativePath="..\include\sys\storage.h"
+				>
+			</File>
 			<Filter
 				Name="crypto"
 				>
@@ -548,19 +556,11 @@
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\gf128mul.h"
-					>
-				</File>
-				<File
 					RelativePath="..\include\crypto\pkcs5.h"
 					>
 				</File>
 				<File
 					RelativePath="..\include\crypto\serpent.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\sha1.h"
 					>
 				</File>
 				<File
@@ -621,6 +621,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\fs_filter.c"
+				>
+			</File>
+			<File
 				RelativePath=".\io_control.c"
 				>
 			</File>
@@ -656,6 +660,10 @@
 				RelativePath=".\readwrite.c"
 				>
 			</File>
+			<File
+				RelativePath=".\storage.c"
+				>
+			</File>
 			<Filter
 				Name="crypto"
 				>
@@ -684,10 +692,6 @@
 					>
 				</File>
 				<File
-					RelativePath="..\crypto\sha1.c"
-					>
-				</File>
-				<File
 					RelativePath="..\crypto\sha512.c"
 					>
 				</File>
@@ -705,44 +709,6 @@
 					>
 					<File
 						RelativePath="..\crypto\i386\aes_x86.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\gf128mul_fast.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"

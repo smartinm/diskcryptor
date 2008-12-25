@@ -81,17 +81,18 @@
 				IgnoreImportLibrary="false"
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
-				AdditionalOptions="/STUB:stub.bin"
+				AdditionalOptions="/STUB:stub.bin /MERGE:.rdata=.text /MERGE:.data=.text"
 				OutputFile="bin\$(ProjectName).dll"
 				LinkIncremental="1"
 				GenerateManifest="false"
 				ManifestFile=""
 				IgnoreAllDefaultLibraries="true"
 				GenerateDebugInformation="false"
-				SubSystem="2"
+				SubSystem="6"
 				Driver="0"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
+				OptimizeForWindows98="0"
 				LinkTimeCodeGeneration="0"
 				EntryPointSymbol="bios_main"
 				SetChecksum="false"
@@ -126,7 +127,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy /B bin\stage1.bin+bin\boot.dll bin\dcldr"
+				CommandLine="copy /B bin\stage1.bin+bin\boot.dll bin\dcldr&#x0D;&#x0A;"
 			/>
 		</Configuration>
 	</Configurations>
@@ -214,15 +215,7 @@
 					>
 				</File>
 				<File
-					RelativePath="..\crypto\crc32.c"
-					>
-				</File>
-				<File
 					RelativePath="..\crypto\crypto.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\gf128mul.c"
 					>
 				</File>
 				<File
@@ -231,10 +224,6 @@
 				</File>
 				<File
 					RelativePath="..\crypto\serpent.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\sha1.c"
 					>
 				</File>
 				<File
@@ -249,24 +238,6 @@
 					RelativePath="..\crypto\twofish.c"
 					>
 				</File>
-				<Filter
-					Name="i386"
-					Filter="asm"
-					>
-					<File
-						RelativePath="..\crypto\i386\gf128mul_mini.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
 			</Filter>
 		</Filter>
 		<Filter
@@ -284,10 +255,6 @@
 			</File>
 			<File
 				RelativePath="..\include\boot\e820.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\boot\gf128mul.h"
 				>
 			</File>
 			<File
@@ -360,10 +327,6 @@
 				</File>
 				<File
 					RelativePath="..\include\crypto\serpent.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\sha1.h"
 					>
 				</File>
 				<File

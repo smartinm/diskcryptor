@@ -2,38 +2,48 @@
 #define _UICODE_
 
 #include <commctrl.h>
-#include "pass_check.h"
+#include "pass.h"
 #include "resource.h"
 
-#define IDS_MOUNT				   L"Mount"
-#define IDS_UNMOUNT		     L"Unmount"
-#define IDS_ENCRYPT			   L"Encrypt"
-#define IDS_DECRYPT			   L"Decrypt"
+#define IDS_MOUNT				      L"Mount"
+#define IDS_UNMOUNT		        L"Unmount"
+#define IDS_ENCRYPT			      L"Encrypt"
+#define IDS_DECRYPT			      L"Decrypt"
 
-#define IDS_FORMAT         L"Format"
-#define IDS_REENCRYPT      L"Reencrypt"
+#define IDS_FORMAT            L"Format"
+#define IDS_REENCRYPT         L"Reencrypt"
 
-#define IDS_CHPASS			   L"Change Password"
-#define IDS_UPD_VOL        L"Update to last volume format"
+#define IDS_CHPASS			      L"Change Password"
 
-#define IDS_BOOTINSTALL    L"Install Loader"
-#define IDS_BOOTREMOVE     L"Remove Loader"
-#define IDS_BOOTCREATE     L"Create Loader"
-#define IDS_SAVECHANGES    L"Save Changes"
+#define IDS_BOOTINSTALL       L"Install Loader"
+#define IDS_BOOTREMOVE        L"Remove Loader"
+#define IDS_BOOTCREATE        L"Create Loader"
+#define IDS_SAVECHANGES       L"Save Changes"
 
-#define IDS_BOOTUPDATE     L"Update Loader"
-#define IDS_BOOTCHANGECGF  L"Change Config"
+#define IDS_BOOTUPDATE        L"Update Loader"
+#define IDS_BOOTCHANGECGF     L"Change Config"
 
-#define IDS_MOUNTALL       L"Mount All"
-#define IDS_UNMOUNTALL     L"Unmount All"
+#define IDS_MOUNTALL          L"Mount All"
+#define IDS_UNMOUNTALL        L"Unmount All"
 
-#define IDS_SETTINGS       L"Settings"
-#define IDS_ABOUT          L"About"
-#define IDS_EXIT           L"Exit"
+#define IDS_SETTINGS          L"Settings"
+#define IDS_ABOUT             L"About"
+#define IDS_EXIT              L"Exit"
 
-#define DC_HOMEPAGE        L"http://freed0m.org/index.php/DiskCryptor"
-#define DC_FORUMPAGE       L"http://freed0m.org/forum"
-#define DC_NAME			  	   L"DiskCryptor"
+#define IDS_EMPTY_LIST        L"< .. list is empty .. >"
+
+#define IDS_USE_KEYFILES      L"Use Keyfiles"
+#define IDS_USE_KEYFILE       L"Use Keyfile"
+
+#define IDS_MODE_NAME         L"XTS"
+#define IDS_PRF_NAME          L"HMAC-SHA-512"
+
+#define DC_HOMEPAGE           L"http://diskcryptor.net/index.php/Main_Page"
+#define DC_FORUMPAGE          L"http://diskcryptor.net/forum"
+#define DC_NAME			  	      L"DiskCryptor"
+
+#define DC_MUTEX		  	      L"DC_UI_MUTEX"
+#define DC_CLASS		  	      L"DC_UI_DLG_CLASS"
 
 #define COL_SIZE              1
 #define COL_LABEL             2
@@ -48,9 +58,7 @@
 #define WM_APP_SHOW           2
 #define WM_APP_FILE           3
 
-#define MAX_PASS		          64
 #define WM_THEMECHANGED       794
-
 #define WM_USER_CLICK         WM_USER + 01 
 
 #define CL_WHITE              RGB(255,255,255)
@@ -63,64 +71,77 @@
 #define CL_WARNING_BG_LT      RGB(255,215,215)
 
 #define PRG_STEP				      9000
+#define MAIN_DLG_MIN_HEIGHT   380
 
-#define __set_check(hwnd, id, state) (SendMessage(GetDlgItem( \
+#define _set_check(hwnd, id, state) (SendMessage(GetDlgItem( \
 	hwnd, id), BM_SETCHECK, state, 0))
 
-#define __get_check(hwnd, id) (SendMessage(GetDlgItem( \
+#define _get_check(hwnd, id) (SendMessage(GetDlgItem( \
 	hwnd, id), BM_GETCHECK, 0, 0) == BST_CHECKED)
 
 #define _menu_onoff(enable) \
 	( enable ? MF_ENABLED : MF_GRAYED )
 
-typedef struct _colinfo {
+typedef struct _colinfo 
+{
 	wchar_t *name;
-	int width;
+	int      width;
 } colinfo;
 
-typedef struct _tblinfo {
-	int id;
+typedef struct _tblinfo 
+{
+	int      id;
 	wchar_t *items[5];
-	colinfo cols[2];
-	
+	colinfo  cols[2];	
 } tblinfo;
 
-typedef struct __wnd_data {
+typedef struct __wnd_data 
+{
 	WNDPROC old_proc;
-	BOOL state;
-	UINT vk;
-	HWND dlg;
-	void *data;
-
+	BOOL    state;
+	UINT    vk;
+	HWND    dlg;
+	void   *data;
 } _wnd_data, *_pwnd_data;
 
-typedef struct __tab_data {
+typedef struct __tab_data 
+{
 	HWND curr;
 	HWND active;
-
 } _tab_data;
 
-typedef struct __static_view {	
-	int id;
-	HWND hwnd;
+typedef struct __static_view 
+{
+	int      id;
+	HWND     hwnd;
 	COLORREF color;
-
 } _static_view;
 
-typedef struct __combo_list {
-	int val;
+typedef struct __init_list 
+{
+	int      val;
 	wchar_t *display;
+} _init_list;
 
-} _combo_list;
-
-typedef struct __ctl_init {
+typedef struct __ctl_init 
+{
 	wchar_t *display;
-	int id;
-	int val;
+	int      id;
+	int      val;
 } _ctl_init;
 
-typedef struct __wz_sheets {
+typedef struct __size_move_ctls 
+{
+	int anchor;
 	int id;
+	int val;
+	int dx;
+	int dy;
+} _size_move_ctls;
+
+
+typedef struct __wz_sheets {
+	int  id;
 	HWND hwnd;
 	BOOL show;
 } _wz_sheets;
@@ -142,23 +163,22 @@ extern colinfo _boot_headers[ ];
 extern colinfo _part_by_id_headers[ ];
 extern colinfo _benchmark_headers[ ];
 
-extern _combo_list wipe_modes[ ];
-extern _combo_list kb_layouts[ ];
+extern _init_list wipe_modes[ ];
+extern _init_list kb_layouts[ ];
 
-extern _combo_list boot_type_ext[ ];
-extern _combo_list boot_type_all[ ];
+extern _init_list boot_type_ext[ ];
+extern _init_list boot_type_all[ ];
 
-extern _combo_list show_pass[ ];
-extern _combo_list auth_tmount[ ];
+extern _init_list show_pass[ ];
+extern _init_list auth_tmount[ ];
 
-extern _combo_list bad_pass_act[ ];
-extern _combo_list auth_type[ ];
+extern _init_list bad_pass_act[ ];
+extern _init_list auth_type[ ];
 
-extern _combo_list cipher_names[ ];
-extern _combo_list mode_names[ ];
+extern _init_list cipher_names[ ];
+extern _init_list loader_type[ ];
 
-extern _combo_list prf_names[ ];
-extern _combo_list loader_type[ ];
+extern _init_list pass_status[ ];
 
 extern wchar_t *_info_table_items[ ];
 extern wchar_t *_act_table_items[ ];
@@ -170,31 +190,44 @@ extern _ctl_init hotks_static[ ];
 extern _static_view pass_gr_ctls[ ];
 extern _static_view pass_pe_ctls[ ];
 
+typedef struct __dlg_templateex {
+	WORD  dlgVer;
+	WORD  signature;
+	DWORD helpID;
+	DWORD exStyle;
+	DWORD style;
+	WORD  cDlgItems;
+	short x;
+	short y;
+	short cx;
+	short cy;
+} _dlg_templateex;
+
 BOOL _list_set_item(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text
 	);
 
 BOOL _list_insert_item(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text,
-		int state
+		int      state
 	);
 
 void _list_set_item_text(
-		HWND hlist,
-		DWORD item,
-		DWORD subitem,
+		HWND     hlist,
+		DWORD    item,
+		DWORD    subitem,
 		wchar_t *text
 	);
 
 BOOL _list_insert_col(
 		HWND hlist,
-		int cx
+		int  cx
 	);
 
 void _init_mount_points(
@@ -203,7 +236,7 @@ void _init_mount_points(
 
 LPARAM _get_item_index(
 		HWND hlist,
-		int index
+		int  index
 	);
 
 LPARAM _get_sel_item(HWND hlist);
@@ -215,13 +248,13 @@ void __unsub_class(HWND hwnd);
 void _draw_static(LPDRAWITEMSTRUCT itst);
 
 BOOL _folder_choice(
-		HWND hwnd, 
+		HWND     hwnd, 
 		wchar_t *path, 
 		wchar_t *title
 	);
 
 char *_get_item (
-		HWND hlist,
+		HWND  hlist,
 		DWORD item,
 		DWORD subitem
 	);
@@ -229,35 +262,40 @@ char *_get_item (
 void _relative_move(
 		HWND h_anchor,
 		HWND h_child,
-		int dy,
-		int dx
+		int  dt,
+		BOOL dy,
+		BOOL border_correct
+	);
+
+void _resize_ctl(
+		HWND h_ctl,
+		int  dy,
+		int  dx,
+		BOOL border_correct
 	);
 
 void _relative_rect(
-		HWND hwnd,
+		HWND  hwnd,
 		RECT *rc
 	);
 
-BOOL _input_verify(
-		HWND     ide_pass,
-		HWND     ide_verify,
-		int      kb_layout,
-		wchar_t  *err,
-		int      sym_len
-		
+void _middle_ctl(
+		HWND h_anchor,
+		HWND h_child,
+		BOOL border_correct
 	);
 
 INT_PTR _ctl_color(
-		WPARAM wparam,
+		WPARAM   wparam,
 		COLORREF color
 	);
 
 DWORD _cl(
-		int index,
+		int  index,
 		char prc
 	);
 
-_wnd_data *__sub_class(
+_wnd_data *_sub_class(
 		HWND hwnd,
 		HWND dlg,
 		char key
@@ -266,8 +304,8 @@ _wnd_data *__sub_class(
 LRESULT 
 CALLBACK 
 _key_proc(
-		HWND hwnd,
-		UINT msg,
+		HWND   hwnd,
+		UINT   msg,
 		WPARAM wparam,
 		LPARAM lparam
 	);
@@ -275,8 +313,8 @@ _key_proc(
 LRESULT 
 CALLBACK 
 _static_proc(
-		HWND hwnd,
-		UINT msg,
+		HWND   hwnd,
+		UINT   msg,
 		WPARAM wparam,
 		LPARAM lparam
 	);
@@ -284,76 +322,79 @@ _static_proc(
 BOOL 
 CALLBACK 
 __sub_enum(
-		HWND hwnd,
+		HWND   hwnd,
 		LPARAM lParam
 	);
 
 int _find_list_item(
-		HWND hlist,
+		HWND     hlist,
 		wchar_t *text,
-		int column
+		int      column
 	);
 
 void *wnd_get_long(
 		HWND wnd, 
-		int index
+		int  index
 	);
 
 void *wnd_set_long(
-		HWND wnd, 
-		int index, 
+		HWND  wnd, 
+		int   index, 
 		void *ptr
 	);
 
 BOOL 
 CALLBACK 
 _enum_proc(
-		HWND hwnd,
+		HWND   hwnd,
 		LPARAM lparam
 	);
 
 void _show_pass_group(
 		HWND hwnd,
-		int flags,
-		int layout
-	);
-
-void _draw_pass_rating(
-		HWND hwnd,
-		char *pass,
-		int kb_layout,
-		wchar_t *err,
-		int *entropy
+		int  flags,
+		int  layout
 	);
 
 void _get_item_text(
-		HWND hlist,
-		int item,
-		int subitem,
+		HWND     hlist,
+		int      item,
+		int      subitem,
 		wchar_t *text,
-		int chars
+		int      chars
 	);
 
-void _init_combo(
-		HWND hwnd, 
-		_combo_list *list,
-		int val,
-		BOOL or
+int _init_combo(
+		HWND        hwnd, 
+		_init_list *list,
+		DWORD       val,
+		BOOL        or,
+		int         bits
 	);
 
 void _enb_but_this(
 		HWND parent,
-		int skip,
+		int  skip,
 		BOOL enable
 	);
 
 void _init_list_headers(
-		HWND hwnd,
+		HWND     hwnd,
 		colinfo *cols
 	);
 
-int _get_combo_val(HWND hwnd, _combo_list *list);
-wchar_t *_get_text_name(int val, _combo_list *list);
+int _draw_proc(
+		int     message,
+		LPARAM lparam
+	);
+
+BOOL _is_duplicated_item(
+		HWND     h_list,
+		wchar_t *s_item
+	);
+
+int _get_combo_val(HWND hwnd, _init_list *list);
+wchar_t *_get_text_name(int val, _init_list *list);
 
 extern HINSTANCE __hinst;
 
@@ -369,7 +410,6 @@ extern HIMAGELIST __img;
 extern HIMAGELIST __dsk_img;
 
 extern HWND __dlg;
-extern HWND __dlg_shrink;
 extern HWND __dlg_act_info;
 
 #ifdef _WIN64

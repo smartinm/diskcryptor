@@ -31,8 +31,7 @@ list_entry prt_head;
 
 static 
 int hdd_chs_io(
-	   u8 dos_numb, void *buff, u16 sectors, u16 cyl, u8 head, u8 sect, int read
-	   )
+	   u8 dos_numb, void *buff, u16 sectors, u16 cyl, u8 head, u8 sect, int read)
 {
 	rm_ctx ctx;
 
@@ -54,8 +53,7 @@ int hdd_chs_io(
 
 static 
 int hdd_lba_io(
-	   u8 dos_numb, void *buff, u16 sectors, u64 start, int read
-	   )
+	   u8 dos_numb, void *buff, u16 sectors, u64 start, int read)
 {
 	u8     sbuf[32];
 	rm_ctx ctx;
@@ -128,8 +126,7 @@ static void hdd_get_geometry(hdd_inf *hdd)
 }
 
 int dc_bios_io(
-	  hdd_inf *hdd, void *buff, u16 sectors, u64 start, int read
-	  )
+	  hdd_inf *hdd, void *buff, u16 sectors, u64 start, int read)
 {
 	u32 soff, head;
 	u32 hoff, coff;
@@ -142,8 +139,7 @@ int dc_bios_io(
 		coff = head / hdd->max_head;
 		
 		return hdd_chs_io(
-			hdd->dos_numb, buff, sectors, d16(coff), d8(hoff), d8(soff), read
-			);
+			hdd->dos_numb, buff, sectors, d16(coff), d8(hoff), d8(soff), read);
 	} else {
 		return hdd_lba_io(hdd->dos_numb, buff, sectors, start, read);
 	}
@@ -154,20 +150,28 @@ static int dc_find_hdds()
 	hdd_inf *hdd;
 	u8      *mbr = pv(0x5000); /* free memory location */
 	int      num = 0;
-	int      i;
+	int      i, lba;
 
 	/* detect all HDDs */
 	for (i = 0x80; i < 0x8F; i++) 
 	{
 		/* probe to read drive MBR  */
-		if (hdd_chs_io(i, mbr, 1, 0, 0, 1, 1) == 0) {
-			break; /* no more HDDs */
+		if (lba = hdd_is_lba(i))
+		{
+			if (hdd_lba_io(i, mbr, 1, 0, 1) == 0) {
+				break; /* no more HDDs */
+			}
+		} else
+		{
+			if (hdd_chs_io(i, mbr, 1, 0, 0, 1, 1) == 0) {
+				break; /* no more HDDs */
+			}
 		}
 		
 		/* insert HDD to list */
 		hdd = malloc(sizeof(hdd_inf));
 		hdd->dos_numb = i;
-		hdd->lba_mode = hdd_is_lba(i);
+		hdd->lba_mode = lba;
 		_init_list_head(&hdd->part_head);
 		_insert_tail_list(&hdd_head, &hdd->entry);
 		/* get drive geometry */
@@ -200,10 +204,9 @@ hdd_inf *find_hdd(u8 num)
 	return NULL;
 }
 
-static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
+static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off, int level)
 {
-	u8      *buff = pv(0x5000); /* free memory location */
-	u8       mbr[SECTOR_SIZE];	
+	u8      *mbr = pv(0x5000 + (level << SECT_SHIFT)); /* free memory location */
 	pt_ent  *pt;
 	prt_inf *prt;
 	int      num;
@@ -214,12 +217,9 @@ static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 	do
 	{
 		/* read MBR */
-		if (dc_bios_io(hdd, buff, 1, off + ext_off, 1) == 0) {
+		if (dc_bios_io(hdd, mbr, 1, off + ext_off, 1) == 0) {
 			break;
 		}
-
-		/* copy MBR to stack */
-		autocpy(mbr, buff, sizeof(mbr));
 
 		/* check MBR signature */
 		if (p16(mbr+510)[0] != 0xAA55) {
@@ -245,18 +245,17 @@ static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 					ex_off = ext_off;
 				}
 
-				found += scan_hdd_off(hdd, pt_off, ex_off);
+				found += scan_hdd_off(hdd, pt_off, ex_off, ++level);
 			} else 
-			{				
+			{
 				prt = malloc(sizeof(prt_inf));
+				zeroauto(prt, sizeof(prt_inf));
 				prt->begin  = pt_off + off + ext_off;
 				prt->end    = prt->begin + pt->prt_size;
 				prt->size   = pt->prt_size;
 				prt->active = (pt->active == 0x80);
 				prt->extend = (ext_off != 0);			
-				prt->hdd    = hdd;
-				prt->d_key  = NULL; 
-				prt->o_key  = NULL; found++;
+				prt->hdd    = hdd; found++;
 
 				_insert_tail_list(&hdd->part_head, &prt->entry_hdd);
 				_insert_tail_list(&prt_head, &prt->entry_glb);				
@@ -267,174 +266,134 @@ static int scan_hdd_off(hdd_inf *hdd, u64 off, u64 ext_off)
 	return found;
 }
 
+static u16 intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2)
+{
+	u64 end, i;	
+	end = min(start1 + size1, start2 + size2);
+	*i_st = i = max(start1, start2);
+	return d16((i < end) ? end - i : 0);
+}
+
+static boot_key *last_k;
+static dc_key    benc_k;
+
 static
-int dc_partition_enc_read(
-	  prt_inf *prt, void *buff, u16 sectors, u64 start, dc_key *key
+int dc_partition_enc_io(
+	  prt_inf *prt, u8 *buff, u16 sectors, u64 start, int read, boot_key *key
 	  )
 {
 	int res;
 
-	res = dc_bios_io(
-		prt->hdd, buff, sectors, start + prt->begin + 1, 1
-		);
-
-	if (res != 0) {
-		dc_cipher_decrypt(buff, buff, (sectors << 9), (start << 9), key); 
+	if (key != last_k) 
+	{
+		dc_cipher_init(
+			&benc_k, key->alg, key->key_d);
+		last_k = key;
 	}
-	
+
+	if (read != 0)
+	{
+		res = dc_bios_io(
+			prt->hdd, buff, sectors, prt->begin + start, 1);
+
+		if (res != 0) {
+			dc_cipher_decrypt(buff, buff, (sectors << SECT_SHIFT), (start << SECT_SHIFT), &benc_k);
+		}
+	} else 
+	{
+		/* encrypt buffer */
+		dc_cipher_encrypt(buff, buff, (sectors << SECT_SHIFT), (start << SECT_SHIFT), &benc_k);
+
+		/* write buffer to disk */
+		res = dc_bios_io(
+			prt->hdd, buff, sectors, start + prt->begin, 0);
+
+		/* decrypt buffer to save original data */
+		dc_cipher_decrypt(buff, buff, (sectors << SECT_SHIFT), (start << SECT_SHIFT), &benc_k);	
+	}
+
 	return res;
 }
-
-static
-int dc_partition_enc_write(
-	  prt_inf *prt, void *buff, u16 sectors, u64 start, dc_key *key
-	  )
-{
-	int res;
-
-	/* encrypt buffer */
-	dc_cipher_encrypt(buff, buff, (sectors << 9), (start << 9), key);
-
-	/* write buffer to disk */
-	res = dc_bios_io(
-		prt->hdd, buff, sectors, start + prt->begin + 1, 0
-		);
-
-	/* decrypt buffer to save original data */
-	dc_cipher_decrypt(buff, buff, (sectors << 9), (start << 9), key);
-
-	return res;
-}
-
 
 int dc_partition_io(
-	  prt_inf *prt, void *buff, 
-	  u16 sectors, u64 start, int read
+	  prt_inf *prt, u8 *buff, u16 sectors, u64 start, int read
 	  )
 {
-	u64  o1, o3;
-	u16  s1, s2, s3;	
-	u8  *p1, *p2, *p3;
-	u64  tmp, end;
-	int  res;
+	u64 o1, o2, o3;
+	u16 s1, s2, s3;
+	u8 *p2, *p3; 
+	int res;
 
-	if (prt->d_key != NULL)
+	if (prt->mnt_ok == 0)
 	{
-		if (prt->flags & VF_TMP_MODE) 
+		return dc_bios_io(
+			prt->hdd, buff, sectors, prt->begin + start, read);
+	}
+
+	s1 = intersect(&o1, start, sectors, 0, DC_AREA_SECTORS);
+	
+	if (prt->flags & VF_TMP_MODE) {
+		s2 = intersect(&o2, start, sectors, DC_AREA_SECTORS, (prt->tmp_size - DC_AREA_SECTORS));
+		s3 = intersect(&o3, start, sectors, prt->tmp_size, prt->size);		
+	} else {
+		s2 = intersect(&o2, start, sectors, DC_AREA_SECTORS, prt->size);
+		s3 = 0;
+	}
+	p2 = buff + (s1 * SECTOR_SIZE);
+	p3 = p2   + (s2 * SECTOR_SIZE);
+
+	/*
+	   normal mode:
+	    o1:s1 - redirected part
+		o2:s2 - encrypted part
+		o3:s3 - unencrypted part
+	   reencrypt mode:
+	   o1:s1 - redirected part
+	   o2:s2 - key_1 encrypted part
+	   o3:s3 - key_2 encrypted part
+	*/
+	do
+	{
+		if (s1 != 0)
 		{
-			o1  = o3 = 0;
-			s1  = s2 = s3 = 0;
-			p1  = p2 = p3 = NULL;
-			tmp = prt->tmp_size;
-			end = start + sectors;
+			res = dc_partition_io(
+				prt, buff, s1, prt->stor_off + o1, read);
 
-			if (prt->flags & VF_REENCRYPT)
-			{
-				if (start >= tmp) {
-					o3 = start; s3 = sectors; p3 = buff;
-				} else
-				{
-					if ( (start+sectors) > tmp )
-					{
-						o1 = start; s1 = (u16)(tmp - start); p1 = buff;
-						o3 = start + s1; s3 = sectors - s1; p3 = p1 + (s1 * SECTOR_SIZE);
-					} else {
-						o1 = start; s1 = sectors; p1 = buff;
-					}
-				}
-
-				if (read != 0)
-				{
-					if (s1 != 0) {
-						res = dc_partition_enc_read(prt, p1, s1, o1, prt->d_key);
-					}
-
-					if (o3 != 0) {
-						res = dc_partition_enc_read(prt, p3, s3, o3, prt->o_key);
-					}
-				} else
-				{
-					if (s1 != 0) {
-						res = dc_partition_enc_write(prt, p1, s1, o1, prt->d_key);
-					}
-
-					if (o3 != 0) {
-						res = dc_partition_enc_write(prt, p3, s3, o3, prt->o_key);
-					}
-				}
-
-				return res;
+			if (res == 0) {
+				break;
 			}
+		}
 
-			if (start > tmp) {
-				o3 = start; s3 = sectors; p3 = buff;
-			} else
-			{
-				if ( (start <= tmp) && ((start+sectors) > tmp) )
-				{
-					o1 = start; s1 = (u16)(tmp - start); p1 = buff;
-					s2 = 1; p2 = p1 + (s1 * SECTOR_SIZE);
-					o3 = start + s1 + s2; s3 = sectors - s1 - s2; p3 = p2 + (s2 * SECTOR_SIZE);
-				} else {
-					o1 = start; s1 = sectors; p1 = buff;
-				}				
+		if (s2 != 0)
+		{
+			res = dc_partition_enc_io(
+				prt, p2, s2, o2, read, &prt->d_key);
+
+			if (res == 0) {
+				break;
 			}
+		}
 
-			if (read != 0)
+		if (s3 != 0)
+		{
+			if (prt->flags & VF_REENCRYPT) 
 			{
-				/* read encrypted part */
-				if (s1 != 0) {
-					res = dc_partition_enc_read(prt, p1, s1, o1, prt->d_key);
-				}
-
-				/* read temporary part */
-				if (s2 != 0) {					
-					res = dc_bios_io(prt->hdd, p2, s2, prt->tmp_save_off + prt->begin, 1);
-				}
-
-				/* read unencrypted part */
-				if (s3 != 0) {	
-					res = dc_bios_io(prt->hdd, p3, s3, o3 + prt->begin, 1);
-				}
+				res = dc_partition_enc_io(
+					prt, p3, s3, o3, read, &prt->o_key);
 			} else 
 			{
-				/* write encrypted part */
-				if (s1 != 0) {
-					res = dc_partition_enc_write(prt, p1, s1, o1, prt->d_key);
-				}
-
-				/* write temporary part */
-				if (s2 != 0) {
-					res = dc_bios_io(prt->hdd, p2, s2, prt->tmp_save_off + prt->begin, 0);
-				}
-
-				/* write unencrypted part */
-				if (s3 != 0) {				
-					res = dc_bios_io(prt->hdd, p3, s3, o3 + prt->begin, 0);
-				}
+				res = dc_bios_io(
+					prt->hdd, p3, s3, prt->begin + o3, read);
 			}
-		} else 
-		{
-			if (read != 0) {
-				res = dc_partition_enc_read(prt, buff, sectors, start, prt->d_key);
-			} else {
-				res = dc_partition_enc_write(prt, buff, sectors, start, prt->d_key);
-			}
-		}		
-	} else {
-		res = dc_bios_io(
-			    prt->hdd, buff, sectors, start + prt->begin, read
-				);
-	}
+		}
+	} while (0);
 
 	return res;
 }
 
 
 int dc_disk_io(
-	  hdd_inf *hdd, void *buff, 
-	  u16      sectors, u64 start,
-	  int      read
+	  hdd_inf *hdd, void *buff, u16 sectors, u64 start, int read
 	  )
 {
 	list_entry *entry;
@@ -480,8 +439,7 @@ int dc_disk_io(
 		if ( (start >= prt->begin) && (start + sectors < prt->end) )
 		{
 			res = dc_partition_io(
-				prt, buff, sectors, start - prt->begin, read
-				);
+				prt, buff, sectors, start - prt->begin, read);
 			found = 1; break;
 		}  
 	}
@@ -532,7 +490,7 @@ int dc_scan_partitions()
 		{
 			hdd   = contain_record(entry, hdd_inf, entry);
 			entry = entry->flink;
-			found += scan_hdd_off(hdd, 0, 0);
+			found += scan_hdd_off(hdd, 0, 0, 0);
 		}
 	}
 

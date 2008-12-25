@@ -434,6 +434,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\console.c"
+				>
+			</File>
+			<File
 				RelativePath=".\main.c"
 				>
 			</File>
@@ -445,6 +449,10 @@
 			>
 			<File
 				RelativePath="..\include\dccon\boot_menu.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\dccon\console.h"
 				>
 			</File>
 			<File

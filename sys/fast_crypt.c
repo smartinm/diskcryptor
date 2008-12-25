@@ -11,33 +11,17 @@
 typedef struct _wt_item {
 	LIST_ENTRY       entry;
 	int              operation;
-	struct _wt_item *main_req;
+	struct _wt_item *main;
 	u32              blocks;
 	callback_ex      on_complete;
 	void            *param1;
 	void            *param2;
 
-	union
-	{
-		struct {
-			dc_key  *key;
-			u8      *src_buf;
-			u8      *dst_buf;
-			u64      offset;
-			size_t   length;
-		} crypt;
-
-		struct {
-			int         prf_id;
-			int         done;
-			char       *pass;
-			size_t      pass_len;
-			dc_header  *header;
-			crypt_info *crypt;
-			dc_key    **res_key;
-
-		} dec_hdr;
-	};
+	dc_key  *key;
+	u8      *src_buf;
+	u8      *dst_buf;
+	u64      offset;
+	size_t   length;
 
 } wt_item;
 
@@ -56,77 +40,6 @@ static wt_data              *pool_free;
 static int                   pool_num;
 static int                   pool_enabled;
 
-static void dc_dec_header_req(
-			  int prf_id, wt_item *m_req
-			  )
-{
-	u8         dk[DISKKEY_SIZE];
-	dc_key    *hdr_key;
-	dc_header  hcopy, *header;
-	int        i, j;
-
-	if (m_req->dec_hdr.done != 0) {
-		return;
-	}
-
-	if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
-		return;
-	}
-
-	header = m_req->dec_hdr.header;
-
-	pkcs5_2_prf(
-		prf_id, -1, m_req->dec_hdr.pass, m_req->dec_hdr.pass_len, 
-		header->salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX
-		);
-
-	for (i = 0; i < CF_CIPHERS_NUM; i++)
-	{
-		for (j = 0; j < EM_NUM; j++)
-		{
-			if (m_req->dec_hdr.done != 0) {
-				goto brute_done;
-			}
-
-			dc_cipher_init(hdr_key, i, j, dk);
-
-			dc_cipher_decrypt(
-				pv(&header->sign), pv(&hcopy.sign), 
-				HEADER_ENCRYPTEDDATASIZE, 0, hdr_key 
-				);
-			
-			/* Magic 'TRUE' or 'DTMP' */
-			if (IS_DC_SIGN(hcopy.sign) == 0) {
-				continue;
-			}
-
-			/* Check CRC of the key set */
-			if (BE32(hcopy.key_crc) != crc32(hcopy.key_data, DISKKEY_SIZE)) {
-				continue;
-			}
-
-			/* setup encryption params */
-			m_req->dec_hdr.done = 1;
-			m_req->dec_hdr.crypt->cipher_id = i;
-			m_req->dec_hdr.crypt->mode_id = j;
-			m_req->dec_hdr.crypt->prf_id = prf_id;
-			m_req->dec_hdr.res_key[0] = hdr_key;
-			hdr_key = NULL;
-			/* copy decrypted part to output */
-			autocpy(&header->sign, &hcopy.sign, HEADER_ENCRYPTEDDATASIZE);
-		}
-	}
-
-brute_done:;
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	zeroauto(dk, sizeof(dk));
-	zeroauto(&hcopy, sizeof(hcopy));
-}
-
 static void dc_worker_thread(wt_data *w_data)
 {
 	PLIST_ENTRY entry;
@@ -141,31 +54,16 @@ static void dc_worker_thread(wt_data *w_data)
 			if (entry = ExInterlockedRemoveHeadList(&w_data->io_list_head, &w_data->io_spin_lock))
 			{
 				c_req = CONTAINING_RECORD(entry, wt_item, entry);
-				m_req = c_req->main_req;
+				m_req = c_req->main;
 
-				switch (m_req->operation)
+				if (m_req->operation == F_OP_ENCRYPT)
 				{
-					case F_OP_ENCRYPT:
-						{
-							dc_cipher_encrypt(
-								c_req->crypt.src_buf, c_req->crypt.dst_buf, c_req->crypt.length, 
-								c_req->crypt.offset, c_req->crypt.key
-								);
-						}
-					break;
-					case F_OP_DECRYPT:
-						{
-							dc_cipher_decrypt(
-								c_req->crypt.src_buf, c_req->crypt.dst_buf, c_req->crypt.length, 
-								c_req->crypt.offset, c_req->crypt.key
-								);
-						}
-					break;
-					case F_OP_DEC_HEADER:
-						{
-							dc_dec_header_req(c_req->dec_hdr.prf_id, m_req);
-						}							
-					break;
+					dc_cipher_encrypt(
+						c_req->src_buf, c_req->dst_buf, c_req->length, c_req->offset, c_req->key);
+				} else 
+				{
+					dc_cipher_decrypt(
+						c_req->src_buf, c_req->dst_buf, c_req->length, c_req->offset, c_req->key);
 				}
 
 				if (lock_dec(&m_req->blocks) == 0) {
@@ -203,12 +101,10 @@ static void dc_send_work_item(wt_item *req)
 	lock_inc(&thread->io_count);
 
 	ExInterlockedInsertTailList (
-		&thread->io_list_head, &req->entry, &thread->io_spin_lock
-		);
+		&thread->io_list_head, &req->entry, &thread->io_spin_lock);
 
 	KeSetEvent(
-		&thread->io_msg_event, IO_DISK_INCREMENT, FALSE
-		);
+		&thread->io_msg_event, IO_DISK_INCREMENT, FALSE);
 }
 
 int dc_parallelized_crypt(
@@ -217,18 +113,15 @@ int dc_parallelized_crypt(
 	  callback_ex on_complete, void *param1, void *param2
 	  )
 {
-	wt_item      *req, *main_req;
-	size_t        mb_size, cb_size;
-	size_t        x_off;
-	u32           m_cpu;
-	LARGE_INTEGER time;
-	u32           timeout;
+	wt_item *req, *main_req;
+	size_t   mb_size, cb_size;
+	size_t   x_off;
+	u32      m_cpu, timeout;
 	
 	mb_size = _align(io_size / pool_num, F_MIN_REQ);
 	m_cpu   = (u32)((io_size / mb_size) + ((io_size % mb_size) != 0));
 	x_off   = 0;
-	time.QuadPart = DC_MEM_RETRY_TIME * -10000;
-	
+		
 goto begin;
 	do
 	{
@@ -247,8 +140,7 @@ begin:;
 				break;
 			}
 
-			KeDelayExecutionThread(KernelMode, FALSE, &time);
-			timeout -= DC_MEM_RETRY_TIME;
+			dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
 		} while (timeout != 0);
 
 		if (req == NULL) {
@@ -265,12 +157,12 @@ begin:;
 			req->param2      = param2;
 		}
 
-		req->main_req      = main_req;			
-		req->crypt.key     = key;
-		req->crypt.src_buf = io_src + x_off;
-		req->crypt.dst_buf = io_dst + x_off;
-		req->crypt.offset  = io_offs + x_off;
-		req->crypt.length  = cb_size;
+		req->main    = main_req;			
+		req->key     = key;
+		req->src_buf = io_src + x_off;
+		req->dst_buf = io_dst + x_off;
+		req->offset  = io_offs + x_off;
+		req->length  = cb_size;
 
 		dc_send_work_item(req);
 	} while (1);
@@ -314,68 +206,6 @@ docrypt:;
 		}
 	}
 }
-
-
-dc_key *dc_fast_dec_header(
-		  dc_header *header, crypt_info *crypt, char *password
-		  )
-{
-	dc_key  *hdr_key = NULL;
-	wt_item *req, *main_req;
-	KEVENT   sync_event;
-	int      i, succs;
-
-	if (pool_num > 1)
-	{
-		KeInitializeEvent(
-			&sync_event, NotificationEvent, FALSE
-			);
-
-		for (i = 0; i < PRF_NUM; i++) 
-		{
-			if ( (req = ExAllocateFromNPagedLookasideList(&pool_req_mem)) == NULL ) {
-				break;
-			}
-
-			if (i == 0) 
-			{
-				main_req              = req;
-				req->operation        = F_OP_DEC_HEADER;
-				req->blocks           = PRF_NUM;
-				req->on_complete      = dc_fast_op_complete;
-				req->param1           = &sync_event;
-				req->dec_hdr.done     = 0;
-				req->dec_hdr.header   = header;
-				req->dec_hdr.crypt    = crypt;
-				req->dec_hdr.res_key  = &hdr_key;
-				req->dec_hdr.pass     = password;
-				req->dec_hdr.pass_len = strlen(password);
-			}
-
-			req->main_req       = main_req;
-			req->dec_hdr.prf_id = i;
-
-			dc_send_work_item(req);
-		}
-
-		wait_object_infinity(&sync_event);
-	} else 
-	{
-		if (hdr_key = mem_alloc(sizeof(dc_key))) 
-		{
-			succs = dc_decrypt_header(hdr_key, header, crypt, password);
-
-			if (succs == 0) {
-				zeroauto(hdr_key, sizeof(dc_key));
-				mem_free(hdr_key);
-				hdr_key = NULL;
-			}
-		}
-	}
-
-	return hdr_key;
-}
-
 
 void dc_free_fast_crypt()
 {

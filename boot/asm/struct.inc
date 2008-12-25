@@ -49,34 +49,42 @@ struct rm_ctx
   es	 dw ?
 ends
 
-struct ldr_info
- password  rb 65  ; bootauth password
+struct dc_pass
+ size dd ?
+ pass rw 128 
 ends
 
-struct rb_data
+struct e820_entry
+  base dq ?
+  size dq ?
+  type dd ?
+ends
+
+struct e820_map
+  n_map dd ?
+  map	rb (32 * sizeof.e820_entry)
+ends
+
+struct bd_data
   sign1     dd 0FE0AC0AAh ; 01F53F55h
   sign2     dd 061BC9E1Bh ; 9E4361E4h
-  sign3     dd 013B3F73Dh
-  rb_base   dd ?     ; real mode block base
-  rb_size   dd ?     ; real mode block size (including 4kb for stack)
-  pm_base   dd ?     ; pmode image base
-  pm_size   dd ?     ; pmode image size
-  info	    ldr_info
+  bd_base   dd ?     ; boot data block base
+  bd_size   dd ?     ; boot data block size (including 2kb for stack)
+  password  dc_pass  ; bootauth password
+  old_int15 dd ?     ; old int15 handler
+  old_int13 dd ?     ; old int13 handler
   ; volatile data
-  ret_32    dd ?   ; return address for RM <-> PM jump
-  sp_16     dw ?   ; real mode stack
-  ss_16     dw ?   ; real mode ss
-  esp_32    dd ?   ; pmode stack
-  segoff    dd ?   ; real mode call seg/off
-  jump_rm   dd ?   ; real mode jump proc
-  call_rm   dd ?   ; real mode call proc
-  hook_ints dd ?   ; hook interrupts proc
-  int_cbk   dd ?   ; protected mode callback
-  int_num   dw ?   ; interrupt number
-  boot_dsk  db ?   ; boot disk number
-  old_int15 dd ?   ; old int15 handler
-  old_int13 dd ?   ; old int13 handler
-  rmc	    rm_ctx ; real mode call context
-  push_fl   dw ?   ; flags pushed to stack
-  buff	    rb 32  ; 32 bytes buffer
+  ret_32    dd ?     ; return address for RM <-> PM jump
+  esp_16    dd ?     ; real mode stack
+  ss_16     dw ?     ; real mode ss
+  esp_32    dd ?     ; pmode stack
+  segoff    dd ?     ; real mode call seg/off
+  jump_rm   dd ?     ; real mode jump proc
+  call_rm   dd ?     ; real mode call proc
+  hook_ints dd ?     ; hook interrupts proc
+  int_cbk   dd ?     ; protected mode callback
+  boot_dsk  db ?     ; boot disk number
+  rmc	    rm_ctx   ; real mode call context
+  push_fl   dw ?     ; flags pushed to stack
+  mem_map   e820_map ; new memory map
 ends

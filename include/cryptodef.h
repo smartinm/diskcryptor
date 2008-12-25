@@ -12,9 +12,9 @@
  #define CRYPT_TESTS
 #ifdef _M_IX86 
  #define AES_ASM
- #define GFMUL_ASM
 #endif  /* _M_IX86 */
 #endif  /* IS_DRIVER */
+
 
 #ifdef ASM_CRYPTO
  #define pcall stdcall
@@ -25,5 +25,5 @@
 #ifdef SMALL_CODE
  #define memcpy mincpy
 #endif
-
 #endif
+

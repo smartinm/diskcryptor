@@ -41,16 +41,21 @@ start:
  mov   ss, ax
  mov   sp, 4000h
  sti
+ ; check int13 hook installed by another bootloader copy
+ mov   bx, [ds:4Ch]
+ mov   es, [ds:4Eh]
+ cmp   dword [es:bx+2], 6D4701BBh
+ jz    boot_active
  ; read stage1 code to 2000:0
  call  read_sectors
- jc    read_error
+ jc    boot_active
  ; jump to loaded image
  xor   bx, bx
  push  es
  push  bx
  retf
 
-read_error:
+boot_active:
  mov   bp, 7C00h
  ; copy self to 1FE0:7C00
  mov   ax, 1FE0h

@@ -21,7 +21,6 @@
 #include "defines.h"
 #include "cryptodef.h"
 #include "tests.h"
-#include "sha1.h"
 #include "pkcs5.h"
 #include "gf128mul.h"
 #include "crc32.h"
@@ -86,98 +85,6 @@ static struct {
 		  0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f },
 		{ 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f },
 		{ 0xde,0x26,0x9f,0xf8,0x33,0xe4,0x32,0xb8,0x5b,0x2e,0x88,0xd2,0x70,0x1c,0xe7,0x5c }
-	}
-};
-
-static struct {
-	u8  cipher_k[32];
-	u8  tweak_k[16];
-	u8  index[8];
-	u32 size;
-	u8 *plaintext;
-	u8 *ciphertext;	
-} lrw_vectors[] = {
-	{
-		{ 0xf8, 0xd4, 0x76, 0xff, 0xd6, 0x46, 0xee, 0x6c, 0x23, 0x84, 0xcb, 
-		  0x1c, 0x77, 0xd6, 0x19, 0x5d, 0xfe, 0xf1, 0xa9, 0xf3, 0x7b, 0xbc, 
-		  0x8d, 0x21, 0xa7, 0x9c, 0x21, 0xf8, 0xcb, 0x90, 0x02, 0x89 },
-		{ 0xa8, 0x45, 0x34, 0x8e, 0xc8, 0xc5, 0xb5, 0xf1, 0x26, 0xf5, 0x0e, 0x76, 0xfe, 0xfd, 0x1b, 0x1e },
-		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
-		16,
-		"\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x41\x42\x43\x44\x45\x46",
-		"\xbd\x06\xb8\xe1\xdb\x98\x89\x9e\xc4\x98\xe4\x91\xcf\x1c\x70\x2b"
-	},
-	{
-		{ 0xf8, 0xd4, 0x76, 0xff, 0xd6, 0x46, 0xee, 0x6c, 0x23, 0x84, 0xcb, 0x1c, 0x77, 0xd6, 0x19, 0x5d,
-		  0xfe, 0xf1, 0xa9, 0xf3, 0x7b, 0xbc, 0x8d, 0x21, 0xa7, 0x9c, 0x21, 0xf8, 0xcb, 0x90, 0x02, 0x89 },
-		{ 0xa8, 0x45, 0x34, 0x8e, 0xc8, 0xc5, 0xb5, 0xf1, 0x26, 0xf5, 0x0e, 0x76, 0xfe, 0xfd, 0x1b, 0x1e },
-		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
-		512,
-		"\x05\x11\xb7\x18\xab\xc6\x2d\xac\x70\x5d\xf6\x22\x94\xcd\xe5\x6c"
-		"\x17\x6b\xf6\x1c\xf0\xf3\x6e\xf8\x50\x38\x1f\x71\x49\xb6\x57\xd6"
-		"\x8f\xcb\x8d\x6b\xe3\xa6\x29\x90\xfe\x2a\x62\x82\xae\x6d\x8b\xf6"
-		"\xad\x1e\x9e\x20\x5f\x38\xbe\x04\xda\x10\x8e\xed\xa2\xa4\x87\xab"
-		"\xda\x6b\xb4\x0c\x75\xba\xd3\x7c\xc9\xac\x42\x31\x95\x7c\xc9\x04"
-		"\xeb\xd5\x6e\x32\x69\x8a\xdb\xa6\x15\xd7\x3f\x4f\x2f\x66\x69\x03"
-		"\x9c\x1f\x54\x0f\xde\x1f\xf3\x65\x4c\x96\x12\xed\x7c\x92\x03\x01"
-		"\x6f\xbc\x35\x93\xac\xf1\x27\xf1\xb4\x96\x82\x5a\x5f\xb0\xa0\x50"
-		"\x89\xa4\x8e\x66\x44\x85\xcc\xfd\x33\x14\x70\xe3\x96\xb2\xc3\xd3"
-		"\xbb\x54\x5a\x1a\xf9\x74\xa2\xc5\x2d\x64\x75\xdd\xb4\x54\xe6\x74"
-		"\x8c\xd3\x9d\x9e\x86\xab\x51\x53\xb7\x93\x3e\x6f\xd0\x4e\x2c\x40"
-		"\xf6\xa8\x2e\x3e\x9d\xf4\x66\xa5\x76\x12\x73\x44\x1a\x56\xd7\x72"
-		"\x88\xcd\x21\x8c\x4c\x0f\xfe\xda\x95\xe0\x3a\xa6\xa5\x84\x46\xcd"
-		"\xd5\x3e\x9d\x3a\xe2\x67\xe6\x60\x1a\xe2\x70\x85\x58\xc2\x1b\x09"
-		"\xe1\xd7\x2c\xca\xad\xa8\x8f\xf9\xac\xb3\x0e\xdb\xca\x2e\xe2\xb8"
-		"\x51\x71\xd9\x3c\x6c\xf1\x56\xf8\xea\x9c\xf1\xfb\x0c\xe6\xb7\x10"
-		"\x1c\xf8\xa9\x7c\xe8\x53\x35\xc1\x90\x3e\x76\x4a\x74\xa4\x21\x2c"
-		"\xf6\x2c\x4e\x0f\x94\x3a\x88\x2e\x41\x09\x6a\x33\x7d\xf6\xdd\x3f"
-		"\x8d\x23\x31\x74\x84\xeb\x88\x6e\xcc\xb9\xbc\x22\x83\x19\x07\x22"
-		"\xa5\x2d\xdf\xa5\xf3\x80\x85\x78\x84\x39\x6a\x6d\x6a\x99\x4f\xa5"
-		"\x15\xfe\x46\xb0\xe4\x6c\xa5\x41\x3c\xce\x8f\x42\x60\x71\xa7\x75"
-		"\x08\x40\x65\x8a\x82\xbf\xf5\x43\x71\x96\xa9\x4d\x44\x8a\x20\xbe"
-		"\xfa\x4d\xbb\xc0\x7d\x31\x96\x65\xe7\x75\xe5\x3e\xfd\x92\x3b\xc9"
-		"\x55\xbb\x16\x7e\xf7\xc2\x8c\xa4\x40\x1d\xe5\xef\x0e\xdf\xe4\x9a"
-		"\x62\x73\x65\xfd\x46\x63\x25\x3d\x2b\xaf\xe5\x64\xfe\xa5\x5c\xcf"
-		"\x24\xf3\xb4\xac\x64\xba\xdf\x4b\xc6\x96\x7d\x81\x2d\x8d\x97\xf7"
-		"\xc5\x68\x77\x84\x32\x2b\xcc\x85\x74\x96\xf0\x12\x77\x61\xb9\xeb"
-		"\x71\xaa\x82\xcb\x1c\xdb\x89\xc8\xc6\xb5\xe3\x5c\x7d\x39\x07\x24"
-		"\xda\x39\x87\x45\xc0\x2b\xbb\x01\xac\xbc\x2a\x5c\x7f\xfc\xe8\xce"
-		"\x6d\x9c\x6f\xed\xd3\xc1\xa1\xd6\xc5\x55\xa9\x66\x2f\xe1\xc8\x32"
-		"\xa6\x5d\xa4\x3a\x98\x73\xe8\x45\xa4\xc7\xa8\xb4\xf6\x13\x03\xf6"
-		"\xe9\x2e\xc4\x29\x0f\x84\xdb\xc4\x21\xc4\xc2\x75\x67\x89\x37\x0a",
-
-		"\x1a\x1d\xa9\x30\xad\xf9\x2f\x9b\xb6\x1d\xae\xef\xf0\x2f\xf8\x5a"
-		"\x39\x3c\xbf\x2a\xb2\x45\xb2\x23\x1b\x63\x3c\xcf\xaa\xbe\xcf\x4e"
-		"\xfa\xe8\x29\xc2\x20\x68\x2b\x3c\x2e\x8b\xf7\x6e\x25\xbd\xe3\x3d"
-		"\x66\x27\xd6\xaf\xd6\x64\x3e\xe3\xe8\x58\x46\x97\x39\x51\x07\xde"
-		"\xcb\x37\xbc\xa9\xc0\x5f\x75\xc3\x0e\x84\x23\x1d\x16\xd4\x1c\x59"
-		"\x9c\x1a\x02\x55\xab\x3a\x97\x1d\xdf\xdd\xc7\x06\x51\xd7\x70\xae"
-		"\x23\xc6\x8c\xf5\x1e\xa0\xe5\x82\xb8\xb2\xbf\x04\xa0\x32\x8e\x68"
-		"\xeb\xaf\x6e\x2d\x94\x22\x2f\xce\x4c\xb5\x59\xe2\xa2\x2f\xa0\x98"
-		"\x1a\x97\xc6\xd4\xb5\x00\x59\xf2\x84\x14\x72\xb1\x9a\x6e\xa3\x7f"
-		"\xea\x20\xe7\xcb\x65\x77\x3a\xdf\xc8\x97\x67\x15\xc2\x2a\x27\xcc"
-		"\x18\x55\xa1\x24\x0b\x24\x24\xaf\x5b\xec\x68\xb8\xc8\xf5\xba\x63"
-		"\xff\xed\x89\xce\xd5\x3d\x88\xf3\x25\xef\x05\x7c\x3a\xef\xeb\xd8"
-		"\x7a\x32\x0d\xd1\x1e\x58\x59\x99\x90\x25\xb5\x26\xb0\xe3\x2b\x6c"
-		"\x4c\xa9\x8b\x84\x4f\x5e\x01\x50\x41\x30\x58\xc5\x62\x74\x52\x1d"
-		"\x45\x24\x6a\x42\x64\x4f\x97\x1c\xa8\x66\xb5\x6d\x79\xd4\x0d\x48"
-		"\xc5\x5f\xf3\x90\x32\xdd\xdd\xe1\xe4\xa9\x9f\xfc\xc3\x52\x5a\x46"
-		"\xe4\x81\x84\x95\x36\x59\x7a\x6b\xaa\xb3\x60\xad\xce\x9f\x9f\x28"
-		"\xe0\x01\x75\x22\xc4\x4e\xa9\x62\x5c\x62\x0d\x00\xcb\x13\xe8\x43"
-		"\x72\xd4\x2d\x53\x46\xb5\xd1\x16\x22\x18\xdf\x34\x33\xf5\xd6\x1c"
-		"\xb8\x79\x78\x97\x94\xff\x72\x13\x4c\x27\xfc\xcb\xbf\x01\x53\xa6"
-		"\xb4\x50\x6e\xde\xdf\xb5\x43\xa4\x59\xdf\x52\xf9\x7c\xe0\x11\x6f"
-		"\x2d\x14\x8e\x24\x61\x2c\xe1\x17\xcc\xce\x51\x0c\x19\x8a\x82\x30"
-		"\x94\xd5\x3d\x6a\x53\x06\x5e\xbd\xb7\xeb\xfa\xfd\x27\x51\xde\x85"
-		"\x1e\x86\x53\x11\x53\x94\x00\xee\x2b\x8c\x08\x2a\xbf\xdd\xae\x11"
-		"\xcb\x1e\xa2\x07\x9a\x80\xcf\x62\x9b\x09\xdc\x95\x3c\x96\x8e\xb1"
-		"\x09\xbd\xe4\xeb\xdb\xca\x70\x7a\x9e\xfa\x31\x18\x45\x3c\x21\x33"
-		"\xb0\xb3\x2b\xea\xf3\x71\x2d\xe1\x03\xad\x1b\x48\xd4\x67\x27\xf0"
-		"\x62\xe4\x3d\xfb\x9b\x08\x76\xe7\xdd\x2b\x01\x39\x04\x5a\x58\x7a"
-		"\xf7\x11\x90\xec\xbd\x51\x5c\x32\x6b\xd7\x35\x39\x02\x6b\xf2\xa6"
-		"\xd0\x0d\x07\xe1\x06\xc4\x5b\x7d\xe4\x6a\xd7\xee\x15\x1f\x83\xb4"
-		"\xa3\xa7\x5e\xc3\x90\xb7\xef\xd3\xb7\x4f\xf8\x92\x4c\xb7\x3c\x29"
-		"\xcd\x7e\x2b\x5d\x43\xea\x42\xe7\x74\x3f\x7d\x58\x88\x75\xde\x3e"
 	}
 };
 
@@ -272,53 +179,6 @@ static struct { /* see IEEE 1619 */
 	}
 };
 
-static struct {
-	u8 *msg;
-	u8  hash[20];
-} sha1_vectors[] = {
-	{
-		"abc",
-        { 0xa9, 0x99, 0x3e, 0x36, 0x47, 0x06, 0x81, 0x6a, 0xba, 0x3e, 
-	      0x25, 0x71, 0x78, 0x50, 0xc2, 0x6c, 0x9c, 0xd0, 0xd8, 0x9d }
-	},
-    { 
-		"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
-		{ 0x84, 0x98, 0x3E, 0x44, 0x1C, 0x3B, 0xD2, 0x6E, 0xBA, 0xAE, 
-		  0x4A, 0xA1, 0xF9, 0x51, 0x29, 0xE5, 0xE5, 0x46, 0x70, 0xF1 }
-	}
-};
-
-static struct {
-	u8 *key;
-	u8 *data;
-	u8 *hmac;
-} sha1_hmac_vectors[] = {
-	{
-		"\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f\x60\x61\x62\x63\x64\x65\x66\x67\x68"
-		"\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f\x80\x81"
-		"\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a"
-		"\x9b\x9c\x9d\x9e\x9f\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf\xb0\xb1\xb2\xb3",
-		"Sample #3",
-		"\xbc\xf4\x1e\xab\x8b\xb2\xd8\x02\xf3\xd0\x5c\xaf\x7c\xb0\x92\xec\xf8\xd1\xa3\xaa",
-	}, 
-	{
-		"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b",		
-		"Hi There",
-		"\xb6\x17\x31\x86\x55\x05\x72\x64\xe2\x8b\xc0\xb6\xfb\x37\x8c\x8e\xf1\x46\xbe\x00"
-	},
-	{
-		"Jefe",
-		"what do ya want for nothing?",
-		"\xef\xfc\xdf\x6a\xe5\xeb\x2f\xa2\xd2\x74\x16\xd5\xf1\x84\xdf\x9c\x25\x9a\x7c\x79"
-	},
-	{
-		"\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA",
-		"\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD"
-		"\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD"
-		"\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD\xDD",
-		"\x12\x5d\x73\x42\xb9\xac\x11\xcd\x91\xa3\x9a\xf4\x8a\xa1\x7b\x4f\x63\xf1\x75\xd3"
-	}
-};
 
 static struct {
       u8 *msg;
@@ -379,65 +239,18 @@ static struct {
 
 static struct {
 	int cipher;
-	int mode;
 	u32 e_crc;
 	u32 d_crc;
 
 } buff_vectors[] = {
-	{ CF_AES,                 EM_LRW, 0xb7b7f02f, 0x9b64a2dc },
-	{ CF_AES,                 EM_XTS, 0x20f5a0f3, 0x85798968 },
-	{ CF_TWOFISH,             EM_LRW, 0xc59ea9a9, 0x2f81ef84 },
-	{ CF_TWOFISH,             EM_XTS, 0x82dff1ba, 0x68dfab29 },
-	{ CF_SERPENT,             EM_LRW, 0xcd287412, 0x96211ac4 },
-	{ CF_SERPENT,             EM_XTS, 0x045f2a0a, 0x81629363 },
-	{ CF_AES_TWOFISH,         EM_LRW, 0x571cea92, 0x2a2e16aa },
-	{ CF_AES_TWOFISH,         EM_XTS, 0x5c3295fe, 0xf0c83ab2 },
-	{ CF_TWOFISH_SERPENT,     EM_LRW, 0xdbca9940, 0xbdb84207 },
-	{ CF_TWOFISH_SERPENT,     EM_XTS, 0x0c92219c, 0xf31b49b0 },
-	{ CF_SERPENT_AES,         EM_LRW, 0x6032a40c, 0x30a49ae9 },
-	{ CF_SERPENT_AES,         EM_XTS, 0xc38963c7, 0x2f284d24 },
-	{ CF_AES_TWOFISH_SERPENT, EM_LRW, 0x1cb80f5e, 0xaa255e35 },
-	{ CF_AES_TWOFISH_SERPENT, EM_XTS, 0xf6331949, 0x0fc8b7d3 }
+	{ CF_AES,                 0x20f5a0f3, 0x85798968 },
+	{ CF_TWOFISH,             0x82dff1ba, 0x68dfab29 },
+	{ CF_SERPENT,             0x045f2a0a, 0x81629363 },
+	{ CF_AES_TWOFISH,         0x5c3295fe, 0xf0c83ab2 },
+	{ CF_TWOFISH_SERPENT,     0x0c92219c, 0xf31b49b0 },
+	{ CF_SERPENT_AES,         0xc38963c7, 0x2f284d24 },
+	{ CF_AES_TWOFISH_SERPENT, 0xf6331949, 0x0fc8b7d3 }
 };
-
-static int test_sha1()
-{
-	sha1_ctx ctx;	
-	u8      *msg, *key, *dat;
-	u8       hash[SHA1_DIGEST_SIZE];
-	int      i;
-
-	/* test sha1 hash */
-	for (i = 0; i < array_num(sha1_vectors); i++)
-	{
-		msg = sha1_vectors[i].msg;
-
-		sha1_init(&ctx);
-		sha1_hash(&ctx, msg, strlen(msg));
-		sha1_done(&ctx, hash);
-
-		if (memcmp(hash, sha1_vectors[i].hash, sizeof(hash)) != 0) {
-			return 0;
-		}
-	}
-
-	/* test HMAC-SHA-1 */
-	for (i = 0; i < array_num(sha1_hmac_vectors); i++)
-	{
-		key = sha1_hmac_vectors[i].key;
-		dat = sha1_hmac_vectors[i].data;
-
-		make_hmac(
-			PRF_HMAC_SHA1, key, strlen(key), dat, strlen(dat), hash
-			);
-
-		if (memcmp(hash, sha1_hmac_vectors[i].hmac, sizeof(hash)) != 0) {
-			return 0;
-		}
-	}
-
-	return 1;
-}
 
 static int test_sha512()
 {
@@ -466,9 +279,8 @@ static int test_sha512()
 		key = sha512_hmac_vectors[i].key;
 		dat = sha512_hmac_vectors[i].data;
 
-		make_hmac(
-			PRF_HMAC_SHA512, key, strlen(key), dat, strlen(dat), hash
-			);
+		sha512_hmac(
+			key, strlen(key), dat, strlen(dat), hash);
 
 		if (memcmp(hash, sha512_hmac_vectors[i].hmac, sizeof(hash)) != 0) {
 			return 0;
@@ -479,19 +291,14 @@ static int test_sha512()
 }
 
 static struct {
-  int  prf_id;
   int  i_count;
   u8  *password;
   u8  *salt;
   int  dklen;
   u8  *key;
 } pkcs5_vectors[] = {
-	{ PRF_HMAC_SHA1, 1, "password", "ATHENA.MIT.EDUraeburn", 16, "\xCD\xED\xB5\x28\x1B\xB2\xF8\x01\x56\x5A\x11\x22\xB2\x56\x35\x15"},
-	{ PRF_HMAC_SHA1, 2, "password", "ATHENA.MIT.EDUraeburn", 16, "\x01\xdb\xee\x7f\x4a\x9e\x24\x3e\x98\x8b\x62\xc7\x3c\xda\x93\x5d"},	
-	{ PRF_HMAC_SHA1, 5, "password", "\x12\x34\x56\x78\x78\x56\x34\x12", 32, "\xd1\xda\xa7\x86\x15\xf2\x87\xe6\xa1\xc8\xb1\x20"
-	"\xd7\x06\x2a\x49\x3f\x98\xd2\x03\xe6\xbe\x49\xa6\xad\xf4\xfa\x57\x4b\x6e\x64\xee"},
-	{ PRF_HMAC_SHA512, 5, "password", "\x12\x34\x56\x78", 4, "\x13\x64\xae\xf8" },
-	{ PRF_HMAC_SHA512, 5, "password", "\x12\x34\x56\x78", 144, "\x13\x64\xae\xf8\x0d\xf5\x57\x6c\x30\xd5\x71\x4c\xa7\x75\x3f"
+	{ 5, "password", "\x12\x34\x56\x78", 4, "\x13\x64\xae\xf8" },
+	{ 5, "password", "\x12\x34\x56\x78", 144, "\x13\x64\xae\xf8\x0d\xf5\x57\x6c\x30\xd5\x71\x4c\xa7\x75\x3f"
 	"\xfd\x00\xe5\x25\x8b\x39\xc7\x44\x7f\xce\x23\x3d\x08\x75\xe0\x2f\x48\xd6\x30\xd7\x00\xb6\x24\xdb\xe0\x5a\xd7\x47\xef\x52"
 	"\xca\xa6\x34\x83\x47\xe5\xcb\xe9\x87\xf1\x20\x59\x6a\xe6\xa9\xcf\x51\x78\xc6\xb6\x23\xa6\x74\x0d\xe8\x91\xbe\x1a\xd0\x28"
 	"\xcc\xce\x16\x98\x9a\xbe\xfb\xdc\x78\xc9\xe1\x7d\x72\x67\xce\xe1\x61\x56\x5f\x96\x68\xe6\xe1\xdd\xf4\xbf\x1b\x80\xe0\x19"
@@ -511,10 +318,8 @@ static int test_pkcs5()
 		salt  = pkcs5_vectors[i].salt;
 		dklen = pkcs5_vectors[i].dklen;
 
-		pkcs5_2_prf(
-			pkcs5_vectors[i].prf_id, pkcs5_vectors[i].i_count,
-			pass, strlen(pass), salt, strlen(salt), dk, dklen
-			);
+		sha512_pkcs5_2(
+			pkcs5_vectors[i].i_count, pass, strlen(pass), salt, strlen(salt), dk, dklen);
 
 		if (memcmp(dk, pkcs5_vectors[i].key, dklen) != 0) {
 			return 0;
@@ -533,9 +338,13 @@ static int test_ciphers()
 
 	do
 	{
+#ifdef BOOT_LDR
+		key = pv(0x5000);
+#else
 		if ( (key = mem_alloc(sizeof(cipher_key))) == NULL) {
 			break;
 		}
+#endif
 
 		/* test AES */
 		for (i = 0; i < array_num(aes256_vectors); i++) 
@@ -594,61 +403,13 @@ static int test_ciphers()
 		resl = 1;
 	} while (0);
 exit:;
+#ifndef BOOT_LDR
 	if (key != NULL) {
 		mem_free(key);
 	}
+#endif
 	
 	return resl;	
-}
-
-static int test_lrw_mode()
-{
-	u8      key[DISKKEY_SIZE];
-	u8      tmp[SECTOR_SIZE];
-	dc_key *d_key = NULL;
-	int     resl  = 0;
-	u8     *ct, *pt;
-	int     i, size;
-	u64     index;
-
-	do
-	{
-		if ( (d_key = mem_alloc(sizeof(dc_key))) == NULL ) {
-			break;
-		}
-
-		for (i = 0; i < array_num(lrw_vectors); i++)
-		{
-			ct    = lrw_vectors[i].ciphertext;
-			pt    = lrw_vectors[i].plaintext;
-			size  = lrw_vectors[i].size;
-			index = BE64(p64(lrw_vectors[i].index)[0]);
-
-			autocpy(key, lrw_vectors[i].tweak_k, 16);
-			autocpy(key + 32, lrw_vectors[i].cipher_k, 32);
-
-			dc_cipher_init(d_key, CF_AES, EM_LRW, key);
-
-			dc_cipher_encrypt(pt, tmp, size, index, d_key);
-
-			if (memcmp(tmp, ct, size) != 0) {
-				goto exit;
-			}
-
-			dc_cipher_decrypt(ct, tmp, size, index, d_key);
-
-			if (memcmp(tmp, pt, size) != 0) {
-				goto exit;
-			}
-		}
-		resl = 1;
-	} while (0);
-exit:;
-	if (d_key != NULL) {
-		mem_free(d_key);
-	}
-
-	return resl;
 }
 
 static int test_xts_mode()
@@ -662,9 +423,13 @@ static int test_xts_mode()
 
 	do
 	{
+#ifdef BOOT_LDR
+		d_key = pv(0x5000);
+#else
 		if ( (d_key = mem_alloc(sizeof(dc_key))) == NULL ) {
 			break;
 		}
+#endif
 
 		for (i = 0; i < SECTOR_SIZE; i++) {
 			pt[i] = (u8)i;
@@ -679,7 +444,7 @@ static int test_xts_mode()
 			autocpy(key + 0, xts_vectors[i].key1, 32);
 			autocpy(key + 32, xts_vectors[i].key2, 32);
 
-			dc_cipher_init(d_key, CF_AES, EM_XTS, key);
+			dc_cipher_init(d_key, CF_AES, key);
 
 			dc_cipher_encrypt(pt, tmp, SECTOR_SIZE, offset, d_key);
 
@@ -696,9 +461,11 @@ static int test_xts_mode()
 		resl = 1;
 	} while (0);
 exit:;
+#ifndef BOOT_LDR
 	if (d_key != NULL) {
 		mem_free(d_key);
 	}
+#endif
 
 	return resl;
 }
@@ -714,9 +481,13 @@ static int test_buff_crypt()
 
 	do
 	{
+#ifdef BOOT_LDR
+		d_key = pv(0x5000);
+#else
 		if ( (d_key = mem_alloc(sizeof(dc_key))) == NULL ) {
 			break;
 		}
+#endif
 
 		for (i = 0; i < DISKKEY_SIZE; i++) {
 			key[i] = i % DISKKEY_SIZE;
@@ -728,8 +499,7 @@ static int test_buff_crypt()
 		for (i = 0; i < array_num(buff_vectors); i++)
 		{
 			dc_cipher_init(
-				d_key, buff_vectors[i].cipher, buff_vectors[i].mode, key
-				);
+				d_key, buff_vectors[i].cipher, key);
 
 			dc_cipher_encrypt(pt, buf, sizeof(buf), 0x1234, d_key);
 			e_crc = crc32(buf, sizeof(buf));
@@ -743,9 +513,11 @@ static int test_buff_crypt()
 		resl = 1;
 	} while (0);
 exit:;
+#ifndef BOOT_LDR
 	if (d_key != NULL) {
 		mem_free(d_key);
 	}
+#endif
 
 	return resl;
 }
@@ -769,11 +541,6 @@ int crypto_self_test()
 		return 0;
 	}
 
-	if (test_sha1() == 0) {
-		DbgMsg("sha1 test fails\n");
-		return 0;
-	}
-
 	if (test_sha512() == 0) {
 		DbgMsg("sha512 test fails\n");
 		return 0;
@@ -786,11 +553,6 @@ int crypto_self_test()
 
 	if (test_ciphers() == 0) {
 		DbgMsg("ciphers test fails\n");
-		return 0;
-	}
-
-	if (test_lrw_mode() == 0) {
-		DbgMsg("LRW mode test fails\n");
 		return 0;
 	}
 

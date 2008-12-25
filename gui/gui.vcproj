@@ -73,7 +73,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib ntdll.lib"
+				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib ntdll.lib user32.lib"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
 				GenerateManifest="false"
@@ -438,7 +438,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\pass_check.c"
+				RelativePath=".\pass.c"
 				>
 			</File>
 			<File
@@ -451,6 +451,10 @@
 			</File>
 			<File
 				RelativePath=".\uicode.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ukeyfiles.c"
 				>
 			</File>
 		</Filter>
@@ -476,7 +480,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\pass_check.h"
+				RelativePath="..\include\gui\pass.h"
 				>
 			</File>
 			<File
@@ -493,6 +497,10 @@
 			</File>
 			<File
 				RelativePath="..\include\gui\uicode.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\ukeyfiles.h"
 				>
 			</File>
 		</Filter>

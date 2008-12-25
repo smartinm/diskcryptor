@@ -173,13 +173,11 @@ int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
 	do
 	{
 		if (size > ctx->size) {
-			resl = ST_INV_DATA_SIZE;
-			break;
+			resl = ST_INV_DATA_SIZE; break;
 		}
 
 		if (mode == NULL) {
-			resl = ST_OK;
-			break;
+			resl = ST_OK; break;
 		}
 
 		for (i = 0; i < mode->passes; i++) 
@@ -194,9 +192,7 @@ int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
 			}
 
 			resl = dc_device_rw(
-				ctx->hook, IRP_MJ_WRITE,
-				buff, size, offset
-				);
+				ctx->hook, IRP_MJ_WRITE, buff, size, offset);
 
 			if (resl != ST_OK) {
 				break;

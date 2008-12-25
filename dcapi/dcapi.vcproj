@@ -46,7 +46,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;DCAPI_DLL;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -139,7 +139,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;DCAPI_DLL;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -237,7 +237,7 @@
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
 				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
@@ -344,7 +344,7 @@
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
 				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
@@ -438,6 +438,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\keyfiles.c"
+				>
+			</File>
+			<File
 				RelativePath=".\mbrinst.c"
 				>
 			</File>
@@ -450,7 +454,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\shrink.c"
+				RelativePath="..\crypto\sha512.c"
 				>
 			</File>
 		</Filter>
@@ -483,6 +487,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\include\dcapi\keyfiles.h"
+				>
+			</File>
+			<File
 				RelativePath="..\include\dcapi\mbrinst.h"
 				>
 			</File>
@@ -500,10 +508,6 @@
 			</File>
 			<File
 				RelativePath=".\resource.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\dcapi\shrink.h"
 				>
 			</File>
 			<File

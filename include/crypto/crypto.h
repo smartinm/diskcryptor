@@ -2,7 +2,7 @@
 #define _CRYPTO_
 
 #include "defines.h"
-#include "..\sys\driver.h"
+#include "volume.h"
 #include "gf128mul.h"
 #include "aes.h"
 #include "twofish.h"
@@ -16,10 +16,6 @@
 #define CF_SERPENT_AES         5
 #define CF_AES_TWOFISH_SERPENT 6
 #define CF_CIPHERS_NUM         7
-
-#define EM_XTS 0
-#define EM_LRW 1
-#define EM_NUM 2
 
 typedef void (*c_setkey_proc)(u8 *data, void *key);
 
@@ -54,22 +50,11 @@ typedef aligned union _cipher_key {
 
 typedef aligned struct _dc_key
 {
-	union 
-	{
-		struct {
-#ifndef SMALL_CODE
-			gf128mul_32k gf_ctx;
-			be128        inctab[64];
-#else
-			u8           gf_key[16];
-#endif
-		} lrw;
-		struct {
-			cipher_key   tweak_k;
-			c_crypt_proc encrypt;			
-		} xts;
-	} mode_k;
-	
+	struct {
+		cipher_key   tweak_k;
+		c_crypt_proc encrypt;	
+	} xts;
+		
 	c_crypt_proc encrypt;
 	c_crypt_proc decrypt;
 	cipher_key   cipher_k;
@@ -77,12 +62,11 @@ typedef aligned struct _dc_key
 	e_mode_proc  mode_decrypt;
 #ifndef SMALL_CODE
 	int          cipher;
-	int          mode;
 #endif
 } dc_key;
 
 void dc_cipher_init(
-	   dc_key *key, int cipher, int mode, char *d_key
+	   dc_key *key, int cipher, char *d_key
 	   );
 
 #ifndef SMALL_CODE
@@ -98,8 +82,7 @@ void dc_cipher_init(
 }
 
 int dc_decrypt_header(
-	  dc_key    *hdr_key,
-	  dc_header *header, crypt_info *crypt, char *password
+	  dc_key *hdr_key, dc_header *header, dc_pass *password
 	  );
 
 #define dc_init_crypto() { \

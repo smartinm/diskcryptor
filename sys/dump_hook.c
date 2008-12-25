@@ -27,15 +27,18 @@
 #include "misc.h"
 #include "mount.h"
 #include "mem_lock.h"
+#include "debug.h"
 
 typedef struct _dump_context
 {
     PDUMP_DRIVER_OPEN          OpenRoutine;
 	PDUMP_DRIVER_WRITE         WriteRoutine;
-    PDUMP_DRIVER_WRITE_PENDING WritePendingRoutine;
+	PDUMP_DRIVER_WRITE_PENDING WritePendingRoutine;
 	PDUMP_DRIVER_FINISH        FinishRoutine;
 	dev_hook                  *hook;
-	u64                        part_offset;
+	int                        pg_init;
+	int                        pg_pending;
+	void                      *a_data;
 
 } dump_context;
 
@@ -103,141 +106,187 @@ PLDR_DATA_TABLE_ENTRY
 		entry = entry->Flink;
 
 		if (table->DllBase == img_base) {
-			found = table;
-			break;
+			found = table; break;
 		}
 	}
 
 	return found;
 }
 
+
 static
-void dump_encrypt_buffer(
-	      IN dev_hook *hook,
-		  IN u64       offset, 
-		  IN PMDL      mdl
-		  )
+NTSTATUS 
+  dump_mem_write(dump_context *dump, u32 size, u64 offset)
 {
-	PVOID buff = mdl->MappedSystemVa;
-	ULONG size = MmGetMdlByteCount(mdl);
+	NTSTATUS status;
 
-	if (size > DUMP_MEM_SIZE) {
-		KeBugCheck(STATUS_BUFFER_OVERFLOW);
+	MmInitializeMdl(dump_mdl, dump_mem, size);
+
+	dump_mdl->MappedSystemVa = dump_mem;
+	dump_mdl->MdlFlags       = MDL_SOURCE_IS_NONPAGED_POOL;
+
+	if (dump->pg_init != 0) 
+	{
+		if (dump->pg_pending != 0) 
+		{
+			status = dump->WritePendingRoutine(
+				IO_DUMP_WRITE_FINISH, NULL, NULL, dump->a_data);			
+
+			if (NT_SUCCESS(status) != FALSE) {
+				dump->pg_pending = 0;
+			}
+		}
+
+		status = dump->WritePendingRoutine(
+			IO_DUMP_WRITE_START, pv(&offset), dump_mdl, dump->a_data);
+
+		if (NT_SUCCESS(status) != FALSE) {
+			dump->pg_pending = 1;
+		}
+	} else {
+		status = dump->WriteRoutine(pv(&offset), dump_mdl);
+		zeroauto(dump_mem, DUMP_MEM_SIZE);
 	}
-	
-	dc_cipher_encrypt(
-		buff, dump_mem, size, offset, &hook->dsk_key
-		); 
-		
-	MmInitializeMdl(
-		dump_mdl, dump_mem, size
-		);
 
-	dump_mdl->MdlFlags = mdl->MdlFlags;
+	return status;
+}
+
+static
+NTSTATUS 
+  dump_disk_write(
+      dump_context *dump, void *buff, u32 size, u64 offset
+	  )
+{
+	fastcpy(dump_mem, buff, size);
+
+	return dump_mem_write(dump, size, offset);
+}
+
+static
+NTSTATUS 
+  dump_single_write(
+      dump_context *dump, void *buff, u32 size, u64 offset, dc_key *key
+	  )
+{
+	dc_cipher_encrypt(
+		buff, dump_mem, size, offset, key);
+
+	return dump_mem_write(dump, size, offset);
+}
+
+static
+NTSTATUS 
+  dump_encrypted_write(
+      dump_context *dump, u8 *buff, u32 size, u64 offset
+	  )
+{
+	dev_hook *hook = dump->hook;
+	NTSTATUS  status;
+	u64       o1, o2, o3;
+	u32       s1, s2, s3;
+	u8       *p2, *p3;
+	
+	s1 = intersect(&o1, offset, size, 0, DC_AREA_SIZE);
+	
+	if (hook->flags & F_SYNC) {
+		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, (hook->tmp_size - DC_AREA_SIZE));
+		s3 = intersect(&o3, offset, size, hook->tmp_size, hook->dsk_size);		
+	} else {
+		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, hook->dsk_size);
+		s3 = 0;
+	}
+	p2 = buff + s1;
+	p3 = p2 + s2;
+
+	/*
+	   normal mode:
+	    o1:s1 - redirected part
+		o2:s2 - encrypted part
+		o3:s3 - unencrypted part
+	   reencrypt mode:
+	   o1:s1 - redirected part
+	   o2:s2 - key_1 encrypted part
+	   o3:s3 - key_2 encrypted part
+	*/
+
+	do
+	{
+		if (s1 != 0)
+		{
+			status = dump_encrypted_write(
+				dump, buff, s1, hook->stor_off + o1);
+
+			if (NT_SUCCESS(status) == FALSE) {
+				break;
+			}
+		}
+
+		if (s2 != 0)
+		{
+			status = dump_single_write(
+				dump, p2, s2, o2, &hook->dsk_key);
+
+			if (NT_SUCCESS(status) == FALSE) {
+				break;
+			}
+		}
+
+		if (s3 != 0)
+		{
+			if (hook->flags & F_REENCRYPT) {
+				status = dump_single_write(dump, p3, s3, o3, hook->tmp_key);
+			} else {
+				status = dump_disk_write(dump, p3, s3, o3);
+			}
+		}
+	} while (0);
+
+	return status;
 }
 
 static
 NTSTATUS
    dump_write_routine(
-       IN PLARGE_INTEGER disk_offset,
-	   IN PMDL           mdl,
-	   IN int            index
+       dump_context *dump, u64 offset, PMDL mdl, void *a_data
 	   )
 {
-	dev_hook     *hook = dump_ctx[index].hook;
-	LARGE_INTEGER offs;
-	PMDL          nmdl;
-	NTSTATUS      status;
+	void    *buff = mdl->MappedSystemVa;
+	u32      size = mdl->ByteCount;
+	NTSTATUS status;
 
-	if (hook->flags & F_ENABLED) 
-	{
-		dump_encrypt_buffer(
-			hook, disk_offset->QuadPart, mdl
-			);
-
-		offs.QuadPart = disk_offset->QuadPart + HEADER_SIZE;
-		nmdl          = dump_mdl;
-	} else  {
-		offs.QuadPart = disk_offset->QuadPart;
-		nmdl          = mdl;
+	if (size > DUMP_MEM_SIZE) {
+		KeBugCheck(STATUS_BUFFER_OVERFLOW);
 	}
 
-	status = dump_ctx[index].WriteRoutine(&offs, nmdl);
+	dump->a_data = a_data;
 
-	zeroauto(dump_mem, DUMP_MEM_SIZE);
-
-	return status;
-}
-
-static
-NTSTATUS
-   dump_write_pend_routine(
-       IN LONG           action,
-	   IN PLARGE_INTEGER disk_offset,
-	   IN PMDL           mdl,
-	   IN PVOID          local_data,
-	   IN int            index
-	   )
-{
-	dev_hook     *hook = dump_ctx[index].hook;
-	LARGE_INTEGER offs;
-	PMDL          nmdl;
-	NTSTATUS      status;
-	
-	if (disk_offset && mdl) 
-	{
-		if (hook->flags & F_ENABLED) 
-		{
-			dump_encrypt_buffer(
-				hook, disk_offset->QuadPart, mdl
-				);
-
-			offs.QuadPart = disk_offset->QuadPart + HEADER_SIZE;
-			nmdl          = dump_mdl;
-		} else {
-			offs.QuadPart = disk_offset->QuadPart;
-			nmdl          = mdl;
-		}
-
-		status = dump_ctx[index].WritePendingRoutine(
-			         action, &offs, nmdl, local_data
-					 );
-
-		if (status == STATUS_SUCCESS) {
-			zeroauto(dump_mem, DUMP_MEM_SIZE);
-		}
+	if (dump->hook->flags & F_ENABLED) {
+		status = dump_encrypted_write(dump, buff, size, offset);
 	} else {
-		status = dump_ctx[index].WritePendingRoutine(
-			         action, disk_offset, mdl, local_data
-					 );
+		status = dump_disk_write(dump, buff, size, offset);
 	}
 
 	return status;
 }
-
 
 static
 NTSTATUS
    dump_crash_write(
-       IN PLARGE_INTEGER disk_offset,
-	   IN PMDL           mdl
+       PLARGE_INTEGER disk_offset, PMDL mdl
 	   )
 {
-	return dump_write_routine(
-		disk_offset, mdl, 0
-		);
+	return dump_write_routine(		
+		&dump_ctx[0], disk_offset->QuadPart, mdl, NULL);
 }
 
 static
 NTSTATUS
    dump_hiber_write(
-       IN PLARGE_INTEGER disk_offset,
-	   IN PMDL           mdl
+       PLARGE_INTEGER disk_offset, PMDL mdl
 	   )
 {
-	return dump_write_routine(
-		disk_offset, mdl, 1
-		);
+	return dump_write_routine(		
+		&dump_ctx[1], disk_offset->QuadPart, mdl, NULL);
 }
 
 static
@@ -249,11 +298,24 @@ NTSTATUS
 	   IN PVOID          local_data
 	   )
 {
-	return dump_write_pend_routine(
-		action, disk_offset, mdl, local_data, 0
-		);
-}
+	dump_context *dump = &dump_ctx[0];
+	NTSTATUS      status;
+	
+	if (action == IO_DUMP_WRITE_START) {
+		status = dump_write_routine(dump, disk_offset->QuadPart, mdl, local_data);	
+	} else
+	{
+		status = dump->WritePendingRoutine(action, disk_offset, dump_mdl, local_data);
 
+		if (NT_SUCCESS(status) != FALSE)
+		{
+			dump->pg_init    |=  (action == IO_DUMP_WRITE_INIT);
+			dump->pg_pending &= ~(action == IO_DUMP_WRITE_FINISH);
+		}	
+	}
+
+	return status;
+}
 
 static
 NTSTATUS
@@ -264,9 +326,23 @@ NTSTATUS
 	   IN PVOID          local_data
 	   )
 {
-	return dump_write_pend_routine(
-		action, disk_offset, mdl, local_data, 1
-		);
+	dump_context *dump = &dump_ctx[1];
+	NTSTATUS      status;
+	
+	if (action == IO_DUMP_WRITE_START) {
+		status = dump_write_routine(dump, disk_offset->QuadPart, mdl, local_data);	
+	} else
+	{
+		status = dump->WritePendingRoutine(action, disk_offset, dump_mdl, local_data);
+
+		if (NT_SUCCESS(status) != FALSE)
+		{
+			dump->pg_init    |=  (action == IO_DUMP_WRITE_INIT);
+			dump->pg_pending &= ~(action == IO_DUMP_WRITE_FINISH);
+		}	
+	}
+
+	return status;
 }
 
 static void dump_crash_finish(void)
@@ -292,6 +368,10 @@ static void dump_hiber_finish(void)
 	dc_clean_locked_mem(NULL);
 	dc_clean_keys();
 
+	dump_ctx[1].pg_init    = 0;
+	dump_ctx[1].pg_pending = 0;
+	dump_ctx[1].a_data     = NULL;
+
 	zeroauto(dump_mem, DUMP_MEM_SIZE);	
 }
 
@@ -313,13 +393,9 @@ BOOLEAN
        IN LARGE_INTEGER part_offs
 	   )
 {
-	int allow = 1;
+	int allow = (dc_dump_disable == 0);
 
 	/* prevent dumping if memory contain sensitive data */
-	if (dc_data_lock != 0) {
-		allow = 0;
-	}
-
 	if (is_dump_crypt() == 0) 
 	{
 		if (dc_num_mount() == 0) {
@@ -367,8 +443,8 @@ NTSTATUS
 		}
 
 		dump_ctx[idx].OpenRoutine         = init->OpenRoutine;
-		dump_ctx[idx].WriteRoutine        = init->WriteRoutine;
-		dump_ctx[idx].WritePendingRoutine = init->WritePendingRoutine;		
+		dump_ctx[idx].WriteRoutine        = init->WriteRoutine;	
+		dump_ctx[idx].WritePendingRoutine = init->WritePendingRoutine;
 		dump_ctx[idx].FinishRoutine       = init->FinishRoutine;
 		
 		if (idx == 0) 
@@ -389,7 +465,6 @@ NTSTATUS
 			if (init->WritePendingRoutine) {
 				init->WritePendingRoutine = dump_hiber_write_pend;
 			}
-
 			init->FinishRoutine = dump_hiber_finish;
 		}
 	}
@@ -397,8 +472,7 @@ NTSTATUS
 	return status;
 }
 
-static
-void hook_dump_entry()
+static void hook_dump_entry()
 {
 	PLDR_DATA_TABLE_ENTRY table;
 	entry_hook           *ehook;
@@ -522,8 +596,7 @@ int dump_hook_init()
 		}
 
 		dump_mdl = IoAllocateMdl(
-			dump_mem, DUMP_MEM_SIZE, FALSE, FALSE, NULL
-			); 
+			dump_mem, DUMP_MEM_SIZE, FALSE, FALSE, NULL); 
 
 		if (dump_mdl == NULL) {
 			break;

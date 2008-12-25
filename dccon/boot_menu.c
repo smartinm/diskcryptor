@@ -27,6 +27,7 @@
 #include "boot\boot.h"
 #include "dcapi\misc.h"
 #include "dcapi\mbrinst.h"
+#include "console.h"
 
 static int onoff_req()
 {
@@ -48,19 +49,13 @@ static void menu_0_1(ldr_config *conf)
 		if (conf->options & OP_EPS_TMO) 
 		{
 			_snwprintf(
-				auth, sizeof_w(auth), L"%d seconds", conf->timeout
-				);
+				auth, sizeof_w(auth), L"%d seconds", conf->timeout);
 		} else {
 			wcscpy(auth, L"disabled");
 		}
 
-		if (conf->logon_type & LT_DSP_PASS)
-		{
-			if (conf->logon_type & LT_MASK_PASS) {
-				dp_type = L"display \"*\"";
-			} else {
-				dp_type = L"display plain text";
-			}
+		if (conf->logon_type & LT_DSP_PASS) {
+			dp_type = L"display \"*\"";
 		} else {
 			dp_type = L"disabled";
 		}
@@ -69,17 +64,16 @@ static void menu_0_1(ldr_config *conf)
 			L"1 - On/Off \"enter password\" message (%s)\n"
 			L"2 - Change display password type (%s)\n"
 			L"3 - Change password prompt text (%S)\n"
-			L"4 - Enable embedded bootauth password (%s)\n"
+			L"4 - Enable embedded keyfile (%s)\n"
 			L"5 - Change authentication timeout (%s)\n"
 			L"6 - Cancel timeout if any key pressed (%s)\n"
 			L"7 - Return to main menu\n\n",
 			on_off(conf->logon_type & LT_MESSAGE),
 			dp_type,
 			conf->eps_msg,
-			conf->pass_buf[0] != 0 ? L"enabled":L"disabled",
+			conf->logon_type & LT_EMBED_KEY ? L"enabled":L"disabled",
 			auth,
-			on_off(conf->options & OP_TMO_STOP)
-			);
+			on_off(conf->options & OP_TMO_STOP));
 
 		if ( (ch = getchr('1', '7')) == '7' ) {
 			break;
@@ -88,24 +82,19 @@ static void menu_0_1(ldr_config *conf)
 		if (ch == '1') 
 		{
 			set_flag(
-				conf->logon_type, LT_MESSAGE, onoff_req()
-				);
+				conf->logon_type, LT_MESSAGE, onoff_req());
 		}
 
 		if (ch == '2')
 		{
-			conf->logon_type &= ~(LT_DSP_PASS | LT_MASK_PASS);
-
 			wprintf(
 				L"1 - disabled\n"
-				L"2 - display \"*\"\n"
-				L"3 - display plain text\n"
-				);
+				L"2 - display \"*\"\n");
 
-			switch (getchr('1', '3'))
-			{
-				case '2': conf->logon_type |= (LT_DSP_PASS | LT_MASK_PASS); break;
-				case '3': conf->logon_type |= LT_DSP_PASS; break;
+			if (getchr('1', '2') == '2') {
+				conf->logon_type |= LT_DSP_PASS;
+			} else {
+				conf->logon_type &= ~LT_DSP_PASS;
 			}
 		}
 
@@ -121,17 +110,32 @@ static void menu_0_1(ldr_config *conf)
 
 		if (ch == '4')
 		{
-			char *pass;
+			wchar_t path[MAX_PATH];
+			u8     *keyfile;
+			u32     keysize;
 
-			wprintf(L"Enter embedded password: ");
+			wprintf(L"Please enter path to keyfile: ");
 
-			if (pass = dc_get_password(0)) {
-				strcpy(conf->pass_buf, pass);
-				set_flag(conf->logon_type, LT_GET_PASS, 0);
-				secure_free(pass);
-			} else {
-				zeroauto(conf->pass_buf, sizeof(conf->pass_buf));
-				set_flag(conf->logon_type, LT_GET_PASS, 1);
+			zeroauto(&conf->emb_key, sizeof(conf->emb_key));
+			set_flag(conf->logon_type, LT_EMBED_KEY, 0);
+			
+			if (s_wgets(path, sizeof(path)) != 0)
+			{
+				if (load_file(path, &keyfile, &keysize) != ST_OK) {
+					wprintf(L"keyfile not loaded\n");
+					Sleep(1000);
+				} else
+				{
+					if (keysize != 64) {
+						wprintf(L"Embedded keyfile must be 64byte size\n");						
+						Sleep(1000);
+					} else {
+						autocpy(&conf->emb_key, keyfile, sizeof(conf->emb_key));
+						set_flag(conf->logon_type, LT_EMBED_KEY, 1);
+					}
+					zeromem(keyfile, keysize);
+					free(keyfile);
+				}
 			}
 		}
 
@@ -144,15 +148,13 @@ static void menu_0_1(ldr_config *conf)
 			}
 
 			set_flag(
-				conf->options, OP_EPS_TMO, (conf->timeout != 0)
-				);
+				conf->options, OP_EPS_TMO, (conf->timeout != 0));
 		}
 
 		if (ch == '6') 
 		{
 			set_flag(
-				conf->options, OP_TMO_STOP, onoff_req()
-				);
+				conf->options, OP_TMO_STOP, onoff_req());
 		}
 	} while (1);
 }
@@ -200,8 +202,7 @@ static void menu_0_2(ldr_config *conf)
 			L"3 - Invalid password message (%S)\n"
 			L"4 - Return to main menu\n\n",
 			on_off(conf->error_type & ET_MESSAGE),
-			action, inv_msg
-			);
+			action, inv_msg);
 
 		if ( (ch = getchr('1', '4')) == '4' ) {
 			break;
@@ -210,8 +211,7 @@ static void menu_0_2(ldr_config *conf)
 		if (ch == '1') 
 		{
 			set_flag(
-				conf->error_type, ET_MESSAGE, onoff_req()
-				);
+				conf->error_type, ET_MESSAGE, onoff_req());
 		}
 
 		if (ch == '2')
@@ -221,8 +221,7 @@ static void menu_0_2(ldr_config *conf)
 				L"2 - reboot system\n"
 				L"3 - boot from active partition\n"
 				L"4 - exit to BIOS\n"
-				L"5 - retry authentication\n"
-				);
+				L"5 - retry authentication\n");
 
 			msgf = (conf->error_type & ET_MESSAGE);
 
@@ -278,8 +277,7 @@ static u32 disk_id_select()
 
 			wprintf(
 				L"%d - pt%d (%s) (%s)\n", 
-				idn, i, vol->status.mnt_point, s_size
-				);		
+				idn, i, vol->status.mnt_point, s_size);		
 		}
 	}
 
@@ -323,13 +321,11 @@ static void menu_0_3(ldr_config *conf)
 						if ( (vol->status.flags & F_ENABLED) && (vol->status.disk_id == conf->disk_id) ) 
 						{
 							dc_format_byte_size(
-								s_size, sizeof_w(s_size), vol->status.dsk_size
-								);
+								s_size, sizeof_w(s_size), vol->status.dsk_size);
 
 							_snwprintf(
 								part, sizeof_w(part), L"boot from pt%d (%s) (%s)", 
-								i, vol->status.mnt_point, s_size
-								);
+								i, vol->status.mnt_point, s_size);
 							found = 1;
 						}
 					}
@@ -337,8 +333,7 @@ static void menu_0_3(ldr_config *conf)
 					if (found == 0) 
 					{
 						_snwprintf(
-							part, sizeof_w(part), L"boot from unknown partition, id %0.8x", conf->disk_id
-							);
+							part, sizeof_w(part), L"boot from unknown partition, id %0.8x", conf->disk_id);
 					}
 					methd = part;
 				}
@@ -353,8 +348,7 @@ static void menu_0_3(ldr_config *conf)
 				L"2 - Set \"boot from first partition with appropriate password\"\n"
 				L"3 - Set \"boot from specified partition\"\n"
 				L"4 - Return to main menu\n\n",
-				methd
-				);
+				methd);
 		} else 
 		{
 			wprintf(
@@ -365,8 +359,7 @@ static void menu_0_3(ldr_config *conf)
 				L"4 - Set \"boot from first partition with appropriate password\"\n"
 				L"5 - Set \"boot from specified partition\"\n"
 				L"6 - Return to main menu\n\n",
-				methd
-				);
+				methd);
 		}
 
 		if (conf->options & OP_EXTERNAL)
@@ -435,8 +428,7 @@ static void menu_0_4(ldr_config *conf)
 			L"2 - Set layout to \"QWERTZ\"\n"
 			L"3 - Set layout to \"AZERTY\"\n"
 			L"4 - Return to main menu\n\n",
-			layout
-			);
+			layout);
 
 		if ( (ch = getchr('1', '4')) == '4' ) {
 			break;
@@ -470,8 +462,7 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 			L"4 - Set booting method\n"
 			L"5 - Set bootauth keyboard layout\n"
 			L"6 - Save changes and exit\n\n",
-			on_off(conf->options & OP_NOPASS_ERROR)
-			);
+			on_off(conf->options & OP_NOPASS_ERROR));
 
 		if ( (ch = getchr('1', '6')) == '6' ) {
 			break;
@@ -484,8 +475,7 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 			case '3': 
 				{
 					set_flag(
-						conf->options, OP_NOPASS_ERROR, onoff_req()
-						);
+						conf->options, OP_NOPASS_ERROR, onoff_req());
 				}
 			break;
 			case '4': menu_0_3(conf); break;
@@ -522,8 +512,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			wprintf(
 				L"--------------------------------------------------------------\n"
 				L"HDD |          name          |  size   | bootable | bootloader\n" 
-				L"----+------------------------+---------+----------+-----------\n"
-				);
+				L"----+------------------------+---------+----------+-----------\n");
 
 			if (dc_get_boot_disk(&bootd) != ST_OK) {
 				bootd = -1;
@@ -534,8 +523,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				if (size = dc_dsk_get_size(i, 0)) 
 				{
 					dc_format_byte_size(
-						s_size, sizeof_w(s_size), size
-						);
+						s_size, sizeof_w(s_size), size);
 
 					if (dc_get_hdd_name(i, h_name, sizeof_w(h_name)) != ST_OK) {
 						h_name[0] = 0;
@@ -549,8 +537,7 @@ int boot_menu(int argc, wchar_t *argv[])
 
 					wprintf(
 						L"hd%d | %-22s | %-8s| %-8s | %s\n", 
-						i, h_name, s_size, i == bootd ? L"yes":L"no", str
-						);
+						i, h_name, s_size, i == bootd ? L"yes":L"no", str);
 				} 
 			}
 			resl = ST_OK; break;

@@ -26,24 +26,26 @@
 #include "kbd_layout.h"
 #include "pkcs5.h"
 #include "malloc.h"
+#include "sha512.h"
 
 ldr_config conf = {
-	CFG_SIGN1, CFG_SIGN2, CFG_SIGN3, CFG_SIGN4,
+	CFG_SIGN1, CFG_SIGN2,
 	DC_BOOT_VER, 
-	LT_GET_PASS | LT_MESSAGE | LT_DSP_PASS | LT_MASK_PASS,
+	LT_GET_PASS | LT_MESSAGE | LT_DSP_PASS,
 	ET_MESSAGE | ET_RETRY,
 	BT_MBR_BOOT,
 	0, 
 	0,         /* options         */
 	KB_QWERTY, /* keyboard layout */
-	{ 0 },
 	"enter password: ",
 	"password incorrect\n",
-	{ 0 }, { 0 },
-	0 /* timeout */
+	{ 0 }, 
+	0, /* timeout */
+	{ 0 } /* embedded key */
 };
 
-u8  boot_dsk;
+extern bd_data *bd_dat;
+       u8       boot_dsk;
 
 int on_int13(rm_ctx *ctx)
 {
@@ -83,8 +85,7 @@ int on_int13(rm_ctx *ctx)
 	{
 		res = dc_disk_io(
 			    hdd, buff, numb, start, 
-				(func == 0x02) || (func == 0x42)
-				);
+				(func == 0x02) || (func == 0x42));
 
 		if (res != 0) 
 		{
@@ -160,7 +161,7 @@ static int dc_get_password()
 				if (conf.logon_type & LT_DSP_PASS) {
 					puts("\x8 \x8");
 				}
-				conf.pass_buf[--pos] = 0;
+				bd_dat->password.pass[--pos] = 0;
 			}			
 			continue;
 		}
@@ -169,15 +170,10 @@ static int dc_get_password()
 			continue;
 		}
 
-		conf.pass_buf[pos++] = ch;
+		bd_dat->password.pass[pos++] = ch;
 
-		if (conf.logon_type & LT_DSP_PASS) 
-		{
-			if (conf.logon_type & LT_MASK_PASS) {
-				_putch('*');
-			} else {
-				_putch(ch);
-			}
+		if (conf.logon_type & LT_DSP_PASS) {
+			_putch('*');
 		}
 	}
 ep_exit:;
@@ -185,9 +181,7 @@ ep_exit:;
 		_putch('\n');
 	}
 
-	if (pos != 0) {
-		conf.pass_buf[pos] = 0;
-	}
+	bd_dat->password.size = pos * 2; 
 
 	/* clear BIOS keyboard buffer to prevent password leakage */
 	/* see http://www.ouah.org/Bios_Information_Leakage.txt for more details */
@@ -199,13 +193,11 @@ ep_exit:;
 
 static int dc_mount_parts()
 {
-	dc_header    *header  = pv(0x5000); /* free memory location */
-	dc_key       *hdr_key = pv(0x5000 + sizeof(dc_header));
-	crypt_info    crypt;
-	list_entry   *entry;
-	prt_inf      *prt;
-	dc_key       *d_key, *o_key;
-	int           n_mount;
+	dc_header  *header  = pv(0x5000); /* free memory location */
+	dc_key     *hdr_key = pv(0x5000 + sizeof(dc_header));
+	list_entry *entry;
+	prt_inf    *prt;
+	int         n_mount;
 
 	/* mount partitions on all disks */
 	n_mount = 0;
@@ -219,56 +211,29 @@ static int dc_mount_parts()
 		do
 		{
 			/* read volume header */
-			if (dc_partition_io(prt, header, 1, 0, 1) == 0) {					
+			if (dc_partition_io(prt, header, DC_AREA_SECTORS, 0, 1) == 0) {					
 				break;
 			}
 
-			if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) 
-			{
-				/* probe mount volume with backup header */
-				if (dc_partition_io(prt, header, 1, prt->size - 2, 1) == 0) {					
-					break;
-				}
-
-				if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) {
-					break;
-				}
+			if (dc_decrypt_header(hdr_key, header, &bd_dat->password) == 0) {
+				break;
 			}
 
-			prt->disk_id = header->disk_id; 
-			prt->flags   = header->flags;
-
-			if ( prt->flags & VF_TMP_MODE ) {
-				prt->tmp_size     = header->tmp_size / SECTOR_SIZE;
-				prt->tmp_save_off = header->tmp_save_off / SECTOR_SIZE;			
+			if (header->flags & VF_REENCRYPT) {
+				prt->o_key.key_d = malloc(PKCS_DERIVE_MAX);
+				autocpy(prt->o_key.key_d, header->key_2, PKCS_DERIVE_MAX);
 			}
-		
-			/* initialize disk key */
-			dc_cipher_init(
-				d_key = malloc(sizeof(dc_key)),
-				crypt.cipher_id, crypt.mode_id, header->key_data
-				);			
 
-			if (prt->flags & VF_REENCRYPT) 
-			{
-				/* read old volume header */
-				if (dc_partition_io(prt, header, 1, prt->tmp_save_off, 1) == 0) {				
-					break;
-				}
+			prt->d_key.key_d = malloc(PKCS_DERIVE_MAX);
+			autocpy(prt->d_key.key_d, header->key_1, PKCS_DERIVE_MAX);
 
-				/* decrypt header */
-				if (dc_decrypt_header(hdr_key, header, &crypt, conf.pass_buf) == 0) {
-					break;
-				}
-
-				/* initialize old volume key */
-				dc_cipher_init(
-					o_key = malloc(sizeof(dc_key)),
-					crypt.cipher_id, crypt.mode_id, header->key_data
-					);
-			}
-			
-			prt->d_key = d_key; prt->o_key = o_key; n_mount++;
+			prt->flags     = header->flags;
+			prt->tmp_size  = header->tmp_size / SECTOR_SIZE;
+			prt->stor_off  = header->stor_off / SECTOR_SIZE;
+			prt->disk_id   = header->disk_id; 
+			prt->d_key.alg = header->alg_1;
+			prt->o_key.alg = header->alg_2;
+			prt->mnt_ok   = 1; n_mount++;
 		} while (0);
 	}
 
@@ -356,7 +321,7 @@ void boot_main()
 	hdd_inf    *hdd;
 	prt_inf    *prt, *active;
 	char       *error;
-	int         login;
+	int         login, i;
 	int         n_mount;
 
 	active = NULL; error = NULL;
@@ -364,7 +329,7 @@ void boot_main()
 
 	/* init crypto */
 	dc_init_crypto();
-	
+
 	/* prepare MBR copy buffer */
 	autocpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
 
@@ -372,7 +337,7 @@ void boot_main()
 		error = "partitions not found\n";
 		goto error;
 	}
-	
+
 	if (hdd = find_hdd(boot_dsk))
 	{
 		/* find active partition on boot disk */
@@ -406,14 +371,36 @@ retry_auth:;
 		}
 	}
 
-	if (conf.pass_buf[0] != 0) 
+	/* add embedded keyfile to password buffer */
+	if (conf.logon_type & LT_EMBED_KEY) 
 	{
-		n_mount = dc_mount_parts();
+		sha512_ctx sha;
+		u8         hash[SHA512_DIGEST_SIZE];
 
-		/* copy bootauth password to low memory */
-		autocpy(rb_dat->info.password, conf.pass_buf, MAX_PASSWORD);
-		/* clear password in high memory */
-		zeroauto(conf.pass_buf, MAX_PASSWORD);
+		sha512_init(&sha);
+		sha512_hash(&sha, conf.emb_key, sizeof(conf.emb_key));
+		sha512_done(&sha, hash);
+
+		/* mix the keyfile hash and password */
+		for (i = 0; i < (SHA512_DIGEST_SIZE / sizeof(u32)); i++) {
+			p32(bd_dat->password.pass)[i] += p32(hash)[i];
+		}
+		bd_dat->password.size = max(bd_dat->password.size, SHA512_DIGEST_SIZE);
+
+		/* prevent leaks */
+		zeroauto(hash, sizeof(hash));
+		zeroauto(&sha, sizeof(sha));
+	}
+
+	if (bd_dat->password.size != 0) 
+	{
+		if (n_mount = dc_mount_parts()) {
+			/* hook BIOS interrupts */
+			bios_hook_ints();
+		} else {
+			/* clean password buffer to prevent leaks */
+			zeroauto(&bd_dat->password, sizeof(dc_pass));
+		}
 	}
 
 	if ( (n_mount == 0) && (login != 0) ) 
@@ -468,7 +455,7 @@ retry_auth:;
 				  prt   = contain_record(entry, prt_inf, entry_glb);
 				  entry = entry->flink;
 
-				  if ( (prt->extend == 0) && (prt->d_key != NULL) ) {
+				  if ( (prt->extend == 0) && (prt->mnt_ok != 0) ) {
 					  boot_from_partition(prt);
 				  }
 			  }
@@ -487,7 +474,7 @@ retry_auth:;
 				  prt   = contain_record(entry, prt_inf, entry_glb);
 				  entry = entry->flink;
 
-				  if ( (prt->extend == 0) && (prt->d_key != NULL) &&
+				  if ( (prt->extend == 0) && (prt->mnt_ok != 0) &&
 					   (prt->disk_id == conf.disk_id) ) 
 				  {
 					  boot_from_partition(prt);

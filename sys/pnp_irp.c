@@ -35,15 +35,12 @@
 static
 NTSTATUS
   dc_pnp_remove_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	dev_hook *hook = dev_obj->DeviceExtension;
 	NTSTATUS  status;
-	
-	DbgMsg("dc_pnp_remove_irp\n");
-	
+		
 	IoReleaseRemoveLockAndWait(&hook->remv_lock, irp);
 
 	if (NT_SUCCESS(status = dc_forward_irp(dev_obj, irp))) 
@@ -61,8 +58,7 @@ NTSTATUS
 static
 NTSTATUS
   dc_pnp_usage_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	DEVICE_USAGE_NOTIFICATION_TYPE usage;
@@ -88,18 +84,13 @@ NTSTATUS
 		if (usage == DeviceUsageTypeHibernation) 
 		{
 			/* preventing hibernate if memory contain sensitive data */
-			if (dc_data_lock != 0) {
-				status = STATUS_UNSUCCESSFUL; complete = 1;
-			} else 
+			if (is_hiber_crypt() == 0) 
 			{
-				if (is_hiber_crypt() == 0) 
-				{
-					if (dc_num_mount() != 0) {
-						status = STATUS_UNSUCCESSFUL; complete = 1;
-					} else {
-						/* clear pass cache to prevent leaks */
-						dc_clean_pass_cache();
-					}
+				if (dc_num_mount() != 0) {
+					status = STATUS_UNSUCCESSFUL; complete = 1;
+				} else {
+					/* clear pass cache to prevent leaks */
+					dc_clean_pass_cache();
 				}
 			}		
 			
@@ -143,8 +134,7 @@ NTSTATUS
 		if (NT_SUCCESS(status)) 
 		{
 			IoAdjustPagingPathCount(
-				&hook->paging_count, inpath
-				);
+				&hook->paging_count, inpath);
 
 			if ( (inpath == TRUE) && (hook->paging_count == 1) ) {
 				/* first paging file addition */
@@ -160,13 +150,11 @@ NTSTATUS
 		/* set the event so the next one can occur. */
 
 		KeSetEvent(
-			&hook->paging_count_event, IO_NO_INCREMENT, FALSE
-			);
+			&hook->paging_count_event, IO_NO_INCREMENT, FALSE);
 
 		/* and complete the irp */
 		dc_complete_irp(
-			irp, status, irp->IoStatus.Information
-			);
+			irp, status, irp->IoStatus.Information);
 	}
 
 	return status;
@@ -174,8 +162,7 @@ NTSTATUS
 
 NTSTATUS
   dc_pnp_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 )
 {
 	PIO_STACK_LOCATION irp_sp;
@@ -183,13 +170,6 @@ NTSTATUS
 	NTSTATUS           status;
 	USHORT             funct;
 		
-	if (dev_obj == dc_device)
-	{
-		return dc_complete_irp(
-			      irp, STATUS_DRIVER_INTERNAL_ERROR, 0
-				  );
-	}
-
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	hook   = dev_obj->DeviceExtension;
 	funct  = irp_sp->MinorFunction;
@@ -220,39 +200,22 @@ NTSTATUS
 
 
 NTSTATUS
-   dc_add_device(
-      IN PDRIVER_OBJECT drv_obj,
-      IN PDEVICE_OBJECT dev_obj
-      )
+  dc_add_device(
+     PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT dev_obj
+	 )
 {
-	NTSTATUS                 status;
-	ULONG                    size;
-	CHAR                     buf[512];
-	POBJECT_NAME_INFORMATION inf      = (void*)buf;
-	PDEVICE_OBJECT           hook_dev = NULL;
-	dev_hook                *hook     = NULL;
-	int                      succs    = 0;
+	PDEVICE_OBJECT hook_dev = NULL;
+	dev_hook      *hook     = NULL;
+	int            succs    = 0;
+	NTSTATUS       status;
 
 	rnd_reseed_now();
 
 	do
 	{
-		zeroauto(buf, sizeof(buf));
-
-		status = ObQueryNameString(
-			       dev_obj, inf, sizeof(buf), &size
-				   );
-
-		if (NT_SUCCESS(status) == FALSE) {
-			break;
-		}	
-
-		DbgMsg("add device %ws\n", inf->Name.Buffer);
-
 		status = IoCreateDevice(
 			drv_obj, sizeof(dev_hook), NULL, FILE_DEVICE_DISK, 
-			FILE_DEVICE_SECURE_OPEN, FALSE, &hook_dev
-			);
+			FILE_DEVICE_SECURE_OPEN, FALSE, &hook_dev);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			break;
@@ -261,6 +224,7 @@ NTSTATUS
 		zeroauto(hook_dev->DeviceExtension, sizeof(dev_hook));
 
 		hook           = hook_dev->DeviceExtension;
+		hook->ext_type = DC_DEVEXT_HOOKDEV;
 		hook->hook_dev = hook_dev;
 		hook->pdo_dev  = dev_obj;
 		hook->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, dev_obj);
@@ -280,12 +244,14 @@ NTSTATUS
 		IoInitializeRemoveLock(&hook->remv_lock, 0, 0, 0);
 
 		KeInitializeEvent(
-			&hook->paging_count_event, NotificationEvent, TRUE
-			);
+			&hook->paging_count_event, NotificationEvent, TRUE);
 
 		KeInitializeMutex(&hook->busy_lock, 0);
 
-		wcscpy(hook->dev_name, inf->Name.Buffer);
+		dc_query_object_name(
+			dev_obj, hook->dev_name, sizeof(hook->dev_name));
+
+		DbgMsg("add device %ws\n", hook->dev_name);
 
 		hook_dev->Flags &= ~DO_DEVICE_INITIALIZING;
 

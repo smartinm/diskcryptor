@@ -180,10 +180,7 @@ void rnd_get_bytes(u8 *buf, int len)
 	/* in RNG not have sufficient entropy, then collect it now */
 	while (reseed_cnt < 256) 
 	{
-		LARGE_INTEGER wait_time;
-
-		wait_time.QuadPart = -10000; /* wait 1 millisecond */
-		KeDelayExecutionThread(KernelMode, FALSE, &wait_time);
+		dc_delay(1); /* wait 1 millisecond */
 		rnd_reseed_now();
 	}
 
@@ -191,15 +188,13 @@ void rnd_get_bytes(u8 *buf, int len)
 
 	/* derive AES key from key pool */
 	aes256_set_key(
-		key_pool, rnd_key
-		);
+		key_pool, rnd_key);
 
 	/* mix pool state before get data from it */
 	rnd_pool_mix();
 
 	/* idx - position for extraction pool data */
 	idx = 0;
-
 	do
 	{
 		c_len      = min(len, SHA512_DIGEST_SIZE);
@@ -284,8 +279,7 @@ void rnd_fast_rand(rnd_ctx *ctx, u8 *buf, int len)
 	{
 		/* encrypt counter with AES in CTR mode */
 		aes256_encrypt(
-			pv(&ctx->index), buff, &ctx->key
-			);
+			pv(&ctx->index), buff, &ctx->key);
 
 		/* increment counter */
 		if (++ctx->index.b == 0) {

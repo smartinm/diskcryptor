@@ -12,9 +12,10 @@
 
 typedef aligned struct _dev_hook
 {
+	u32            ext_type;    /* device extention type */
 	PDEVICE_OBJECT orig_dev;
-	PDEVICE_OBJECT pdo_dev;
 	PDEVICE_OBJECT hook_dev;
+	PDEVICE_OBJECT pdo_dev;
 	IO_REMOVE_LOCK remv_lock;
 	LIST_ENTRY     hooks_list;
 
@@ -25,6 +26,7 @@ typedef aligned struct _dev_hook
 	u32            flags;
 	u32            disk_id;
 	u16            vf_version;   /* volume format version */
+	u32            io_pending;   /* number of pending I/O requests */
 
 	KEVENT         paging_count_event;
 	LONG           paging_count;
@@ -42,13 +44,11 @@ typedef aligned struct _dev_hook
 	dc_key        *hdr_key;
 	dc_key        *tmp_key;
 	dc_header      tmp_header;
-    dc_header      old_header;
-	char           tmp_pass[MAX_PASSWORD + 1];
 
-	u64            tmp_size;
 	u64            dsk_size;
+	u64            tmp_size;
 	u64            use_size;
-	u64            tmp_save_off;
+	u64            stor_off;
 
 	KMUTEX         busy_lock;
 

@@ -34,20 +34,16 @@ int dc_api dc_update_boot(int dsk_num);
 int dc_api dc_get_boot_disk(int *dsk_num);
 
 int dc_api dc_get_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  );
+	  int dsk_num, wchar_t *file, ldr_config *conf);
 
 int dc_api dc_set_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  );
+	  int dsk_num, wchar_t *file, ldr_config *conf);
 
 int dc_api dc_mbr_config_by_partition(
-      wchar_t *root, int set_conf, ldr_config *conf
-	  );
+      wchar_t *root, int set_conf, ldr_config *conf);
 
 int dc_api dc_get_drive_info(
-	  wchar_t *w32_name, drive_inf *info
-	  );
+	  wchar_t *w32_name, drive_inf *info);
 
 u64 dc_api dc_dsk_get_size(int dsk_num, int precision);
 
@@ -57,9 +53,7 @@ typedef struct _dc_mbr {
 	u8    jump[2];
 	u32   sign;
 	lba_p set;
-	u8    data1[402];
-	u32   old_sign;
-	u32   old_offs;
+	u8    data1[410];
 	union 
 	{
 		u8  data2[78];

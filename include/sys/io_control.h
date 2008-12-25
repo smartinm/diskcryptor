@@ -3,8 +3,12 @@
 
 NTSTATUS
   dc_io_control_irp(
-     IN PDEVICE_OBJECT dev_obj, 
-	 IN PIRP           irp
+     PDEVICE_OBJECT dev_obj, PIRP irp
+	 );
+
+NTSTATUS
+  dc_drv_control_irp(
+     PDEVICE_OBJECT dev_obj, PIRP irp
 	 );
 
 #endif

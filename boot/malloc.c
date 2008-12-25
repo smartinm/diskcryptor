@@ -24,7 +24,7 @@
 #include "malloc.h"
 #include "crypto.h"
 
-static u8  mem_buff[206 * 1024]; /* reserve 206k for bootloader memory */
+static u8  mem_buff[8 * 1024]; /* reserve 8k for bootloader memory */
 static u8 *mem_base = mem_buff;
 
 void *malloc(int size)
