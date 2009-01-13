@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9,00"
-	Name="driver"
-	ProjectGUID="{EA6284CE-8C7E-4461-BBED-CC3D5E95513B}"
-	RootNamespace="driver"
+	Name="dc_fsf"
+	ProjectGUID="{DB1BFE08-57DB-4071-A721-0E0A3715B114}"
+	RootNamespace="dc_fsf"
 	Keyword="CustomAppWizProj"
 	AssemblyReferenceSearchPaths="&quot;c:\WinDDK\6000\inc\ddk&quot;"
 	TargetFrameworkVersion="131072"
@@ -59,7 +59,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\dc_fsf"
 				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
@@ -88,7 +88,7 @@
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
+				OutputFile="$(OutDir)\dc_fsf.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
 				GenerateManifest="false"
 				GenerateDebugInformation="false"
@@ -163,7 +163,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\dc_fsf"
 				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
@@ -193,7 +193,7 @@
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
+				OutputFile="$(OutDir)\dc_fsf.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
 				GenerateManifest="false"
 				IgnoreAllDefaultLibraries="true"
@@ -268,7 +268,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\dc_fsf"
 				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
@@ -297,7 +297,7 @@
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
+				OutputFile="$(OutDir)\dc_fsf.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
 				GenerateManifest="false"
 				GenerateDebugInformation="true"
@@ -372,7 +372,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\dc_fsf"
 				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				ExceptionHandling="0"
@@ -402,7 +402,7 @@
 				LinkLibraryDependencies="false"
 				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
-				OutputFile="$(OutDir)\dcrypt.sys"
+				OutputFile="$(OutDir)\dc_fsf.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
 				GenerateManifest="false"
 				IgnoreAllDefaultLibraries="true"
@@ -449,388 +449,36 @@
 			Name="Header Files"
 			>
 			<File
-				RelativePath="..\include\sys\benchmark.h"
+				RelativePath="..\include\dc_fsf\dc_fsf.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\boot_pass.h"
+				RelativePath="..\include\dc_fsf\fs_filter.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\data_wipe.h"
+				RelativePath="..\include\dc_fsf\misc.h"
 				>
 			</File>
-			<File
-				RelativePath="..\include\sys\debug.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\defines.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\devhook.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\driver.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\dump_hook.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\enc_dec.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\fast_crypt.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\fastmem.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\fsf_control.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\io_control.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\mem_lock.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\misc.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\misc_irp.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\misc_volume.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\mount.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\pnp_irp.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\prng.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\readwrite.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\storage.h"
-				>
-			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\include\crypto\aes.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\aes_tab.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\crc32.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\crypto.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\pkcs5.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\serpent.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\sha512.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\tests.h"
-					>
-				</File>
-				<File
-					RelativePath="..\include\crypto\twofish.h"
-					>
-				</File>
-			</Filter>
 		</Filter>
 		<Filter
 			Name="Source Files"
 			>
 			<File
-				RelativePath=".\benchmark.c"
+				RelativePath=".\dc_fsf.c"
 				>
 			</File>
 			<File
-				RelativePath=".\boot_pass.c"
-				>
-			</File>
-			<File
-				RelativePath=".\data_wipe.c"
-				>
-			</File>
-			<File
-				RelativePath=".\debug.c"
-				>
-			</File>
-			<File
-				RelativePath=".\devhook.c"
-				>
-			</File>
-			<File
-				RelativePath=".\driver.c"
-				>
-			</File>
-			<File
-				RelativePath=".\dump_hook.c"
-				>
-			</File>
-			<File
-				RelativePath=".\enc_dec.c"
-				>
-			</File>
-			<File
-				RelativePath=".\fast_crypt.c"
-				>
-			</File>
-			<File
-				RelativePath=".\fastmem.c"
-				>
-			</File>
-			<File
-				RelativePath=".\fsf_control.c"
-				>
-			</File>
-			<File
-				RelativePath=".\io_control.c"
-				>
-			</File>
-			<File
-				RelativePath=".\mem_lock.c"
+				RelativePath=".\fs_filter.c"
 				>
 			</File>
 			<File
 				RelativePath=".\misc.c"
 				>
 			</File>
-			<File
-				RelativePath=".\misc_irp.c"
-				>
-			</File>
-			<File
-				RelativePath=".\misc_volume.c"
-				>
-			</File>
-			<File
-				RelativePath=".\mount.c"
-				>
-			</File>
-			<File
-				RelativePath=".\pnp_irp.c"
-				>
-			</File>
-			<File
-				RelativePath=".\prng.c"
-				>
-			</File>
-			<File
-				RelativePath=".\readwrite.c"
-				>
-			</File>
-			<File
-				RelativePath=".\storage.c"
-				>
-			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\aes.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\crc32.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\crypto.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\gf128mul.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\pkcs5.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\serpent.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\sha512.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\tests.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\twofish.c"
-					>
-				</File>
-				<Filter
-					Name="i386"
-					Filter="asm"
-					>
-					<File
-						RelativePath="..\crypto\i386\aes_x86.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\twofish-i586.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
-				<Filter
-					Name="amd64"
-					Filter="asm"
-					>
-					<File
-						RelativePath="..\crypto\amd64\twofish-x86_64.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
-			</Filter>
 		</Filter>
 		<File
-			RelativePath=".\driver.rc"
+			RelativePath=".\dc_fsf.rc"
 			>
 		</File>
 	</Files>

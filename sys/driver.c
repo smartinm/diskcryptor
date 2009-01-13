@@ -43,7 +43,7 @@
 #include "mem_lock.h"
 #include "fast_crypt.h"
 #include "debug.h"
-#include "fs_filter.h"
+#include "fsf_control.h"
 
 PDRIVER_OBJECT dc_driver;
 PDEVICE_OBJECT dc_device;
@@ -52,6 +52,7 @@ u32            dc_io_count;
 u32            dc_dump_disable;
 u32            dc_conf_flags; /* config flags readed from registry */
 u32            dc_load_flags; /* other flags setted by driver      */
+
 
 static PDRIVER_DISPATCH hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_forward_irp,    /* IRP_MJ_CREATE */
@@ -115,43 +116,6 @@ static PDRIVER_DISPATCH control_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_invalid_irp       /* IRP_MJ_PNP */
 };
 
-static PDRIVER_DISPATCH fsfilt_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
-	dc_fsf_create,  /* IRP_MJ_CREATE */
-	dc_forward_irp, /* IRP_MJ_CREATE_NAMED_PIPE */
-	dc_forward_irp, /* IRP_MJ_CLOSE */
-	dc_forward_irp, /* IRP_MJ_READ */
-	dc_forward_irp, /* IRP_MJ_WRITE */
-	dc_forward_irp, /* IRP_MJ_QUERY_INFORMATION */
-	dc_forward_irp, /* IRP_MJ_SET_INFORMATION */
-	dc_forward_irp, /* IRP_MJ_QUERY_EA */
-	dc_forward_irp, /* IRP_MJ_SET_EA */
-	dc_forward_irp, /* IRP_MJ_FLUSH_BUFFERS */
-	dc_forward_irp, /* IRP_MJ_QUERY_VOLUME_INFORMATION */
-	dc_forward_irp, /* IRP_MJ_SET_VOLUME_INFORMATION */
-	dc_forward_irp, /* IRP_MJ_DIRECTORY_CONTROL */
-	dc_fsf_fsctl,   /* IRP_MJ_FILE_SYSTEM_CONTROL */
-	dc_forward_irp, /* IRP_MJ_DEVICE_CONTROL*/
-	dc_forward_irp, /* IRP_MJ_INTERNAL_DEVICE_CONTROL */
-	dc_forward_irp, /* IRP_MJ_SHUTDOWN */
-	dc_forward_irp, /* IRP_MJ_LOCK_CONTROL */
-	dc_forward_irp, /* IRP_MJ_CLEANUP */
-	dc_forward_irp, /* IRP_MJ_CREATE_MAILSLOT */
-	dc_forward_irp, /* IRP_MJ_QUERY_SECURITY */
-	dc_forward_irp, /* IRP_MJ_SET_SECURITY */
-	dc_forward_irp, /* IRP_MJ_POWER */
-	dc_forward_irp, /* IRP_MJ_SYSTEM_CONTROL */
-	dc_forward_irp, /* IRP_MJ_DEVICE_CHANGE */
-	dc_forward_irp, /* IRP_MJ_QUERY_QUOTA */
-	dc_forward_irp, /* IRP_MJ_SET_QUOTA */
-	dc_forward_irp  /* IRP_MJ_PNP */
-};
-
-static PDRIVER_DISPATCH *irp_dispatches[] = {
-	control_procs, /* DC_DEVEXT_CONTROL */
-	hookdev_procs, /* DC_DEVEXT_HOOKDEV */
-	fsfilt_procs   /* DC_DEVEXT_FSFILT  */
-};
-
 static
 NTSTATUS
   dc_dispatch_irp(
@@ -164,12 +128,18 @@ NTSTATUS
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	funct  = irp_sp->MajorFunction;
 
-	return irp_dispatches[
-		p32(dev_obj->DeviceExtension)[0]][funct](dev_obj, irp);
+	if (dev_obj != dc_device) {
+		return hookdev_procs[funct](dev_obj, irp);		
+	} else {
+		return control_procs[funct](dev_obj, irp);		
+	}
 }
 
 static void dc_automount_thread(void *param)
 {
+	/* connect to FS filter */
+	dc_fsf_connect(1);
+
 	/* wait 0.5 sec */
 	dc_delay(500);
 
@@ -248,24 +218,20 @@ static void dc_load_config(
 
 static int dc_create_control_device()
 {
-	UNICODE_STRING dev_name_u;	
+	UNICODE_STRING dev_name_u;
 	UNICODE_STRING dos_name_u;
 	NTSTATUS       status;
 	HANDLE         handle;
 	int            resl;
 
-	RtlInitUnicodeString(
-		&dev_name_u, DC_DEVICE_NAME);
-
-	RtlInitUnicodeString(
-		&dos_name_u, DC_LINK_NAME);
+	RtlInitUnicodeString(&dev_name_u, DC_DEVICE_NAME);
+	RtlInitUnicodeString(&dos_name_u, DC_LINK_NAME);
 
 	handle = NULL;
 	do
 	{
 		status = IoCreateDevice(
-			dc_driver, sizeof(u32), &dev_name_u, 
-			FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device);
+			dc_driver, 0, &dev_name_u, FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
@@ -282,7 +248,6 @@ static int dc_create_control_device()
 			break;
 		}
 
-		p32(dc_device->DeviceExtension)[0] = DC_DEVEXT_CONTROL;
 		dc_device->Flags               |= DO_BUFFERED_IO;
 		dc_device->AlignmentRequirement = FILE_WORD_ALIGNMENT;
 		dc_device->Flags               &= ~DO_DEVICE_INITIALIZING;
@@ -311,6 +276,7 @@ static int dc_create_control_device()
 
 	return resl;
 }
+
 
 NTSTATUS 
   DriverEntry(
@@ -379,8 +345,6 @@ NTSTATUS
 			break;
 		}
 		status = STATUS_SUCCESS;
-		/* register FS filter */
-		dc_init_fsf();
 		/* register reinit routine for complete automounting and clear cached passwords */
 		IoRegisterDriverReinitialization(dc_driver, dc_reinit_routine, NULL);
 	} while (0);

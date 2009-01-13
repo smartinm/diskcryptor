@@ -1,8 +1,8 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2008 
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * Copyright (c) 2008-2009
+    * ntldr <PGP key ID - 0xC48251EB4F8E4E6E>
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,9 @@
 #include <ntifs.h>
 #include <stdio.h>
 #include "defines.h"
-#include "driver.h"
-#include "misc_irp.h"
-#include "misc.h"
 #include "fs_filter.h"
-#include "devhook.h"
+#include "misc.h"
+#include "dc_fsf.h"
 
 static
 BOOLEAN  
@@ -270,20 +268,11 @@ static FAST_IO_DISPATCH fast_io_hook = {
     NULL,
 };
 
-extern PDRIVER_OBJECT dc_driver;
+extern PDRIVER_OBJECT dc_fsf_driver;
+extern PDEVICE_OBJECT dc_fsf_device;
+extern GETDEVFLAGS    dc_get_flags;
 static LIST_ENTRY     fs_hooks_list_head;
 static KMUTEX         fs_hooks_lock;
-
-typedef aligned struct _dc_fs_hook {
-	u32            ext_type;
-	PDEVICE_OBJECT orig_dev;
-	PDEVICE_OBJECT hook_dev;
-	PDRIVER_OBJECT fs_drv;
-	LIST_ENTRY     entry_list;
-	u32            flags;
-	wchar_t        dev_name[MAX_DEVICE + 1];
-
-} dc_fs_hook;
 
 typedef struct _fsctl_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
@@ -292,13 +281,21 @@ typedef struct _fsctl_ctx {
 	
 } fsctl_ctx;
 
-#define is_device_ok(d) (p32((d)->DeviceExtension)[0] == DC_DEVEXT_FSFILT)
+typedef struct _op_irp_ctx {
+	WORK_QUEUE_ITEM  wrk_item;
+	dc_fs_hook      *fs_h;
+	PIRP             irp;
+	PDEVICE_OBJECT   dev_obj;
+	u64              open_id;
+
+} op_irp_ctx;
+
+#define is_device_ok(d) ((d) != dc_fsf_device)
 
 #define is_fastio_ok(fastio, _io) ( \
 	((fastio) != NULL) && \
 	((fastio)->SizeOfFastIoDispatch >= FIELD_OFFSET(FAST_IO_DISPATCH, _io) + sizeof(void*)) && \
     ((fastio)->_io != NULL) )
-                                    
 
 static
 BOOLEAN  
@@ -609,8 +606,6 @@ BOOLEAN
 		return FALSE;
 	}
 }
-
-
 
 static
 BOOLEAN 
@@ -925,8 +920,6 @@ BOOLEAN
 }
 
 
-
-
 static
 void dcFastIoDetachDevice( 
        PDEVICE_OBJECT SourceDevice, 
@@ -954,6 +947,41 @@ void dcFastIoDetachDevice(
 }
 
 
+static void dc_fsf_irp_worker(op_irp_ctx *oic)
+{
+	FILE_INTERNAL_INFORMATION info;
+	IO_STATUS_BLOCK           iosb;
+	HANDLE                    h_file = NULL;
+	dc_fs_hook               *fs_h = oic->fs_h;
+	PIRP                      irp  = oic->irp;
+	NTSTATUS                  status;	
+
+	if (fs_h->dcsys_id == 0)
+	{
+		fs_h->my_thread = PsGetCurrentThread();		
+
+		if (h_file = dc_open_storage(fs_h->dev_name))
+		{
+			status = ZwQueryInformationFile(
+				h_file, &iosb, &info, sizeof(info), FileInternalInformation);
+
+			if (NT_SUCCESS(status) != FALSE) {
+				fs_h->dcsys_id = info.IndexNumber.QuadPart;
+			}
+
+			ZwClose(h_file);
+		}
+
+		fs_h->my_thread = NULL;
+	}
+
+	if ( (fs_h->dcsys_id != 0) && (oic->open_id == fs_h->dcsys_id ) ) {
+		dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
+	} else {
+		dc_forward_irp(oic->dev_obj, irp);
+	}
+	mem_free(oic);
+}
 
 NTSTATUS
   dc_fsf_create(
@@ -965,47 +993,79 @@ NTSTATUS
 	int                denied;
 	wchar_t           *buff;
 	u16                length;
+	int                delayed;
+	op_irp_ctx        *oic;
 
 	fs_h   = dev_obj->DeviceExtension;
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	buff   = irp_sp->FileObject->FileName.Buffer;
 	length = irp_sp->FileObject->FileName.Length;
-	denied = 0;
+	denied = 0; delayed = 0;
 
-	if (fs_h->flags & F_PROTECT_DCSYS)
+	if ( (dc_get_flags == NULL) || (fs_h->flags & F_PROTECT_DCSYS) )
 	{
-		if ( (length != 0) && (buff[0] == L'\\') ) {
-			buff++, length -= sizeof(wchar_t);
-		}
-
-		if ( (buff != NULL) && 
-			 (length >= 14) && ((length == 14) || (buff[7] == L':')) ) 
+		if (irp_sp->Parameters.Create.Options & FILE_OPEN_BY_FILE_ID)
 		{
-			denied = (_wcsnicmp(buff, L"$dcsys$", 7) == 0);
+			if (fs_h->dcsys_id != 0) {
+				denied = (length == 8) && (p64(buff)[0] == fs_h->dcsys_id);				
+			} else {
+				delayed = (length == 8);
+			}
+		} else 
+		{
+			if ( (length != 0) && (buff[0] == L'\\') ) {
+				buff++, length -= sizeof(wchar_t);
+			}
+
+			if ( (length >= 14) && ((length == 14) || (buff[7] == L':')) ) 
+			{
+				denied = (_wcsnicmp(buff, L"$dcsys$", 7) == 0) && 
+					     ( (fs_h->my_thread == NULL) || (irp->Tail.Overlay.Thread != fs_h->my_thread) );
+			}
 		}
 	}
-	
-	if (denied == 0) {
-		return dc_forward_irp(dev_obj, irp);
-	} else {
+
+	if (denied != 0) {
 		return dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
 	}
+
+	if (delayed == 0) {
+		return dc_forward_irp(dev_obj, irp);
+	}
+
+	if ( (oic = mem_alloc(sizeof(op_irp_ctx))) == NULL ) {
+		return dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+	}
+
+	oic->fs_h    = fs_h;
+	oic->irp     = irp;
+	oic->dev_obj = dev_obj;
+	oic->open_id = p64(buff)[0];
+
+	IoMarkIrpPending(irp);
+
+	ExInitializeWorkItem(
+		&oic->wrk_item, dc_fsf_irp_worker, oic);
+
+	ExQueueWorkItem(
+		&oic->wrk_item, DelayedWorkQueue);
+
+	return STATUS_PENDING;
 }
 
 static
-void dc_fsf_attach_device(
-	   PDEVICE_OBJECT fs_dev, int is_volume, wchar_t *dev_name
-	   )
+dc_fs_hook *dc_fsf_attach_device(
+			  PDEVICE_OBJECT fs_dev, int is_volume, wchar_t *dev_name)
 {
 	
 	PDEVICE_OBJECT hook_dev;
 	NTSTATUS       status;
-	dc_fs_hook    *fs_h;
+	dc_fs_hook    *fs_h = NULL;
 	
 	do
 	{
 		status = IoCreateDevice(
-			dc_driver, sizeof(dc_fs_hook), NULL, fs_dev->DeviceType, 0, FALSE, &hook_dev);
+			dc_fsf_driver, sizeof(dc_fs_hook), NULL, fs_dev->DeviceType, 0, FALSE, &hook_dev);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			break;
@@ -1018,12 +1078,11 @@ void dc_fsf_attach_device(
 		hook_dev->Flags           &= ~DO_DEVICE_INITIALIZING;
 
 		fs_h           = hook_dev->DeviceExtension;
-		fs_h->ext_type = DC_DEVEXT_FSFILT;
 		fs_h->hook_dev = hook_dev;
 		fs_h->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, fs_dev);
-				
+						
 		if (fs_h->orig_dev == NULL) {
-			IoDeleteDevice(hook_dev); break;
+			IoDeleteDevice(hook_dev); fs_h = NULL; break;
 		} else {
 			fs_h->fs_drv = fs_h->orig_dev->DriverObject;
 		}
@@ -1033,8 +1092,9 @@ void dc_fsf_attach_device(
 			InsertTailList(&fs_hooks_list_head, &fs_h->entry_list);
 		}
 	} while (0);
-}
 
+	return fs_h;
+}
 
 static 
 void dc_mount_complete_worker(fsctl_ctx *fctx)
@@ -1068,8 +1128,11 @@ void dc_mount_complete_worker(fsctl_ctx *fctx)
 			dc_query_object_name(
 				fctx->dev_obj, dev_name, sizeof(dev_name));
 
-			dc_fsf_attach_device(dev_obj, 1, dev_name);
-			dc_fsf_sync_flags(dev_name);
+			fs_h = dc_fsf_attach_device(dev_obj, 1, dev_name);
+
+			if ( (fs_h != NULL) && (dc_get_flags != NULL) ) {
+				fs_h->flags = dc_get_flags(dev_name);			
+			}
 		}
 
 		KeReleaseMutex(&fs_hooks_lock, FALSE);
@@ -1158,7 +1221,7 @@ void dc_fs_change_notification(
 	{
 		while (our_dev = dev_obj->AttachedDevice)
 		{
-			if (our_dev->DriverObject == dc_driver) {
+			if (our_dev->DriverObject == dc_fsf_driver) {
 				IoDetachDevice(dev_obj);
 				IoDeleteDevice(our_dev); break;
 			}
@@ -1167,41 +1230,55 @@ void dc_fs_change_notification(
 	}
 }
 
-void dc_fsf_sync_flags(wchar_t *dev_name)
+
+void dc_fsf_set_flags(wchar_t *dev_name, u32 flags)
 {
 	PLIST_ENTRY  entry;
 	dc_fs_hook  *fs_h;
-	dev_hook    *hook;
 
-	if (hook = dc_find_hook(dev_name))
+	wait_object_infinity(&fs_hooks_lock);
+
+	entry = fs_hooks_list_head.Flink;
+
+	while (entry != &fs_hooks_list_head)
 	{
-		wait_object_infinity(&fs_hooks_lock);
+		fs_h  = CONTAINING_RECORD(entry, dc_fs_hook, entry_list);
+		entry = entry->Flink;
 
-		entry = fs_hooks_list_head.Flink;
-
-		while (entry != &fs_hooks_list_head)
-		{
-			fs_h  = CONTAINING_RECORD(entry, dc_fs_hook, entry_list);
-			entry = entry->Flink;
-
-			if (_wcsicmp(fs_h->dev_name, dev_name) == 0) {
-				fs_h->flags = hook->flags;
-			}
+		if (_wcsicmp(fs_h->dev_name, dev_name) == 0) {
+			fs_h->flags = flags;
+			if (!(flags & F_PROTECT_DCSYS)) { fs_h->dcsys_id = 0; }
 		}
-
-		KeReleaseMutex(&fs_hooks_lock, FALSE);
-
-		dc_deref_hook(hook);
 	}
+
+	KeReleaseMutex(&fs_hooks_lock, FALSE);
 }
 
-void dc_init_fsf()
+void dc_fsf_sync_all()
 {
-	dc_driver->FastIoDispatch = &fast_io_hook;
+	PLIST_ENTRY  entry;
+	dc_fs_hook  *fs_h;
+
+	wait_object_infinity(&fs_hooks_lock);
+
+	entry = fs_hooks_list_head.Flink;
+
+	while (entry != &fs_hooks_list_head)
+	{
+		fs_h  = CONTAINING_RECORD(entry, dc_fs_hook, entry_list);
+		entry = entry->Flink;		
+		fs_h->flags = dc_get_flags(fs_h->dev_name);		
+	}
+
+	KeReleaseMutex(&fs_hooks_lock, FALSE);
+}
+
+NTSTATUS dc_init_fsf()
+{
+	dc_fsf_driver->FastIoDispatch = &fast_io_hook;
 
 	InitializeListHead(&fs_hooks_list_head);
 	KeInitializeMutex(&fs_hooks_lock, 0);
 
-	IoRegisterFsRegistrationChange(
-		dc_driver, dc_fs_change_notification); 
+	return IoRegisterFsRegistrationChange(dc_fsf_driver, dc_fs_change_notification);
 }

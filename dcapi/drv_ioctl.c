@@ -22,7 +22,6 @@
 #include <windows.h>
 #include <stdio.h>
 #include "defines.h"
-#include "..\sys\driver.h"
 #include "drv_ioctl.h"
 #include "misc.h"
 #include "dcapi.h"

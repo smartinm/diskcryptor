@@ -8,7 +8,7 @@ NTSTATUS
     dev_hook *hook, u32 ctl_code, void *in_data, u32 in_size, void *out_data, u32 out_size
 	);
 
-HANDLE io_open_volume(wchar_t *dev_name);
+HANDLE io_open_device(wchar_t *dev_name);
 
 NTSTATUS io_device_rw_block(
 			PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags

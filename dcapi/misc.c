@@ -24,7 +24,6 @@
 #include <ntddscsi.h>
 #include <stdio.h>
 #include <math.h>
-#include "..\sys\driver.h"
 #include "misc.h"
 #include "drv_ioctl.h"
 

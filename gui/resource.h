@@ -14,7 +14,6 @@
 #define IDC_BTN_UNMOUNTALL              5
 #define IDB_MAIN_ACTION2                5
 #define IDB_BOOT_BADPASS                5
-#define DC_MINOR_VER                    5
 #define IDB_REMOVE_ITEMS                5
 #define IDC_BTN_ENCRYPT                 6
 #define IDC_BTN_ENCRYPT_                6

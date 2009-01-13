@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <wchar.h>
-#include "..\sys\driver.h"
+#include "drv_ioctl.h"
 #include "autorun.h"
 #include "ntdll.h"
 #include "misc.h"

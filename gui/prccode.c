@@ -21,7 +21,6 @@
 #include "pass.h"
 #include "winternl.h"
 #include "dcapi.h"
-#include "..\sys\driver.h"
 #include "..\boot\boot.h"
 #include "crypto\crypto.h"
 #include "crypto\pkcs5.h"

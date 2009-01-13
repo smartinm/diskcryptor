@@ -33,7 +33,6 @@
 #include "resource.h"
 #include "linklist.h"
 #include "prccode.h"
-#include "..\sys\driver.h"
 #include "defines.h"
 #include "mbrinst.h"
 #include "..\boot\boot.h"

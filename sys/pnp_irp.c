@@ -224,7 +224,6 @@ NTSTATUS
 		zeroauto(hook_dev->DeviceExtension, sizeof(dev_hook));
 
 		hook           = hook_dev->DeviceExtension;
-		hook->ext_type = DC_DEVEXT_HOOKDEV;
 		hook->hook_dev = hook_dev;
 		hook->pdo_dev  = dev_obj;
 		hook->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, dev_obj);

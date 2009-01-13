@@ -21,7 +21,6 @@
 #include <windows.h>
 #include <wincrypt.h>
 #include <psapi.h>
-#include "..\sys\driver.h"
 #include "rand.h"
 #include "misc.h"
 #include "drv_ioctl.h"

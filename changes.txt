@@ -1,3 +1,7 @@
+[14.01.2009] - 0.6
+  + Fixed bug with volume corruption when defragmenting.
+  + Fixed incompatibility with PGP WDE 9.x
+
 [26.12.2008] - 0.5
   - Removed compatibility with TrueCrypt and previous DiskCryptor versions.
   - Removed LRW encryption mode.

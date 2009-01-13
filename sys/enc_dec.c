@@ -37,7 +37,7 @@
 #include "misc_volume.h"
 #include "debug.h"
 #include "storage.h"
-#include "fs_filter.h"
+#include "fsf_control.h"
 
 typedef struct _sync_struct {
 	KEVENT sync_event;
@@ -743,6 +743,9 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			resl = ST_ERROR; break;
 		}
 
+		/* sync device flags with FS filter */
+		dc_fsf_set_flags(hook->dev_name, hook->flags);
+
 		/* create redirection storage */
 		if ( (resl = dc_create_storage(hook, &storage)) != ST_OK ) {
 			break;
@@ -801,7 +804,7 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			hdr_key = NULL;
 		}
 		/* sync device flags with FS filter */
-		dc_fsf_sync_flags(hook->dev_name);
+		dc_fsf_set_flags(hook->dev_name, hook->flags);
 	} while (0);
 
 	/* prevent leaks */

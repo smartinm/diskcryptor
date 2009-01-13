@@ -1,7 +1,7 @@
 #ifndef _MAIN_
 #define _MAIN_
 
-#include "..\sys\driver.h"
+#include "drv_ioctl.h"
 #include "drvinst.h"
 #include "drv_ioctl.h"
 #include "mbrinst.h"

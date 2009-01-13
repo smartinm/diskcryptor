@@ -62,7 +62,7 @@ NTSTATUS
 }
 
 
-HANDLE io_open_volume(wchar_t *dev_name)
+HANDLE io_open_device(wchar_t *dev_name)
 {
 	UNICODE_STRING    u_name;
 	OBJECT_ATTRIBUTES obj;

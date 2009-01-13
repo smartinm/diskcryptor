@@ -28,7 +28,8 @@
 #include "drv_ioctl.h"
 #include "dcapi.h"
 
-static wchar_t drv_name[] = L"dcrypt";
+static wchar_t drv_dc[]  = L"dcrypt";
+static wchar_t drv_fsf[] = L"dc_fsf";
 static wchar_t reg_key[] = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{71A27CDD-812A-11D0-BEC7-08002BE2092F}";
 static wchar_t reg_srv[] = L"SYSTEM\\CurrentControlSet\\Services\\dcrypt\\config";
 static wchar_t lwf_str[] = L"LowerFilters";
@@ -50,6 +51,12 @@ int dc_load_conf(dc_conf_data *conf)
 
 		if (RegQueryValueEx(h_key, L"Flags", NULL, NULL, pv(&conf->conf_flags), &cb) != 0) {			
 			conf->conf_flags = 0;
+		}
+
+		cb = sizeof(conf->build);
+
+		if (RegQueryValueEx(h_key, L"sysBuild", NULL, NULL, pv(&conf->build), &cb) != 0) {			
+			conf->build = 0;
 		}
 
 		cb = sizeof(conf->hotkeys);
@@ -177,35 +184,37 @@ static int set_to_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 	return RegSetValueEx(h_key, v_name, 0, REG_MULTI_SZ, p8(buf), cb) == 0;
 }
 
-static void dc_get_driver_path(wchar_t *path)
+static void dc_get_driver_path(wchar_t *path, wchar_t *d_name)
 {
 	wchar_t tmpb[MAX_PATH];
 
-	GetSystemDirectory(
-		tmpb, sizeof_w(tmpb));
+	GetSystemDirectory(tmpb, sizeof_w(tmpb));
 
 	_snwprintf(
-		path, MAX_PATH, L"%s\\drivers\\dcrypt.sys", tmpb);
+		path, MAX_PATH, L"%s\\drivers\\%s.sys", tmpb, d_name);
 }
 
 
-static int dc_save_drv_file()
+
+static int dc_save_drv_file(wchar_t *d_name)
 {
 	wchar_t dest[MAX_PATH];
 	wchar_t path[MAX_PATH];
+	wchar_t srcf[MAX_PATH];
 	int     resl;
 
 	do
 	{
-		dc_get_driver_path(dest);
+		dc_get_driver_path(dest, d_name);
 
 		if (dc_get_prog_path(path, sizeof_w(path) - 10) == 0) {
 			resl = ST_ERROR; break;
 		}
 
-		wcscat(path, L"\\dcrypt.sys");
+		_snwprintf(
+			srcf, MAX_PATH, L"%s\\%s.sys", path, d_name);
 
-		if (CopyFile(path, dest, FALSE) != 0) {
+		if (CopyFile(srcf, dest, FALSE) != 0) {
 			resl = ST_OK;
 		} else {
 			resl = ST_ACCESS_DENIED;
@@ -215,88 +224,138 @@ static int dc_save_drv_file()
 	return resl;
 }
 
-int dc_remove_driver()
+static int dc_remove_service(wchar_t *name)
 {
 	SC_HANDLE h_scm = NULL;
-	wchar_t   buf[MAX_PATH];
-	HKEY      h_key = NULL;
+	SC_HANDLE h_svc = NULL;
 	int       resl;
-	SC_HANDLE h_svc;	
 
-	dc_get_driver_path(buf);
-
-	do 
+	do
 	{
-		DeleteFile(buf);
-
 		if ( (h_scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS)) == NULL ) {
 			resl = ST_SCM_ERROR; break;
 		}
 
-		if (h_svc = OpenService(h_scm, drv_name, SERVICE_ALL_ACCESS)) {			
+		if (h_svc = OpenService(h_scm, name, SERVICE_ALL_ACCESS)) {			
 			DeleteService(h_svc);
 			CloseServiceHandle(h_svc);
 		}
+		resl = ST_OK;
+	} while (0);
 
+	if (h_scm != NULL) {
+		CloseServiceHandle(h_scm);
+	}
+	return resl;
+}
+
+int dc_remove_driver()
+{
+	wchar_t buf[MAX_PATH];
+	HKEY    h_key = NULL;
+	int     resl;	
+
+	do 
+	{
+		/* delete drivers files */
+		dc_get_driver_path(buf, drv_dc);
+		DeleteFile(buf);
+		dc_get_driver_path(buf, drv_fsf);
+		DeleteFile(buf);
+
+		/* remove services */
+		if ( (resl = dc_remove_service(drv_dc)) != ST_OK ) {
+			break;
+		}
+
+		if ( (resl = dc_remove_service(drv_fsf)) != ST_OK ) {
+			break;
+		}		
+
+		/* remove Volume class binding */
 		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
 			resl = ST_REG_ERROR; break;
 		}
 
-		if (rmv_from_val(h_key, lwf_str, drv_name) == 0) {
+		if (rmv_from_val(h_key, lwf_str, drv_dc) == 0) {
 			resl = ST_ERROR;
 		} else {
 			resl = ST_OK;
 		}		
-	} while(0);
+	} while(0);	
 
 	if (h_key != NULL) {
 		RegCloseKey(h_key);
 	}
 
+	return resl;
+}
+
+static int dc_add_service(wchar_t *name, u32 type)
+{
+	wchar_t   buf[MAX_PATH];
+	SC_HANDLE h_scm = NULL;
+	SC_HANDLE h_svc = NULL;
+	int       resl;
+
+	do
+	{
+		if ( (h_scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS)) == NULL ) {
+			resl = ST_SCM_ERROR; break;
+		}
+
+		dc_get_driver_path(buf, name);
+
+		h_svc = CreateService(
+			h_scm, name, NULL, SERVICE_ALL_ACCESS, type, SERVICE_BOOT_START, 
+			SERVICE_ERROR_CRITICAL, buf, L"Filter", NULL, NULL, NULL, NULL);
+
+		if (h_svc == NULL) {
+			resl = ST_SCM_ERROR;
+		} else {
+			resl = ST_OK;
+		}
+	} while (0);
+
+	if (h_svc != NULL) {
+		CloseServiceHandle(h_svc);
+	}
+
 	if (h_scm != NULL) {
 		CloseServiceHandle(h_scm);
 	}
-
 	return resl;
 }
 
 int dc_install_driver()
 {
 	dc_conf_data conf;
-	wchar_t      buf[MAX_PATH];
-	SC_HANDLE    h_scm = NULL;
-	SC_HANDLE    h_svc = NULL;
 	HKEY         h_key = NULL;
 	int          resl;
 	
-	dc_get_driver_path(buf);
-
 	do 
 	{
-		if ( (resl = dc_save_drv_file()) != ST_OK ) {
+		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
 			break;
-		}	
-	
-		if ( (h_scm = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS)) == NULL ) {
-			resl = ST_SCM_ERROR; break;
 		}
 
-		h_svc = CreateService(
-			h_scm, drv_name, NULL, SERVICE_ALL_ACCESS, SERVICE_KERNEL_DRIVER,
-			SERVICE_BOOT_START, SERVICE_ERROR_CRITICAL, buf, 
-			L"PnP Filter", NULL, NULL, NULL, NULL);
-
-		if (h_svc == NULL) {
-			resl = ST_SCM_ERROR; break;
+		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
+			break;
 		}
 
-		CloseServiceHandle(h_svc);
+		if ( (resl = dc_add_service(drv_dc, SERVICE_KERNEL_DRIVER)) != ST_OK ) {
+			break;
+		}
+
+		if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
+			break;
+		}
 
 		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
 			resl = ST_REG_ERROR; break;
 		}
 
-		if (set_to_val(h_key, lwf_str, drv_name) == 0) {
+		if (set_to_val(h_key, lwf_str, drv_dc) == 0) {
 			resl = ST_REG_ERROR; break;
 		}
 		
@@ -307,10 +366,6 @@ int dc_install_driver()
 
 	if (h_key != NULL) {
 		RegCloseKey(h_key);
-	}
-
-	if (h_scm != NULL) {
-		CloseServiceHandle(h_scm);
 	}
 
 	if (resl != ST_OK) {
@@ -325,7 +380,7 @@ int dc_driver_status()
 	wchar_t path[MAX_PATH];
 	HANDLE  h_device;
 
-	dc_get_driver_path(path);
+	dc_get_driver_path(path, drv_dc);
 	
 	if (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES) 
 	{
@@ -350,12 +405,23 @@ int dc_update_driver()
 
 	do
 	{
-		if ( (resl = dc_save_drv_file()) != ST_OK ) {
+		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
+			break;
+		}
+
+		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
 			break;
 		}
 
 		if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
 			break;
+		}
+
+		if (conf.build < 331) 
+		{
+			if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
+				break;
+			}
 		}
 
 		resl = dc_save_conf(&conf);

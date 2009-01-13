@@ -239,9 +239,8 @@ u64 dc_make_continuous_file(
 	return res;
 }
 
-static
 HANDLE dc_open_storage_file(
-		 dev_hook *hook, u32 disposition, ACCESS_MASK access
+		 wchar_t *dev_name, u32 disposition, ACCESS_MASK access
 		 )
 {
 	UNICODE_STRING    u_name;
@@ -251,7 +250,7 @@ HANDLE dc_open_storage_file(
 	HANDLE            h_file = NULL;
 	
 	_snwprintf(
-		f_name, sizeof_w(f_name), L"%s\\$dcsys$", hook->dev_name);
+		f_name, sizeof_w(f_name), L"%s\\$dcsys$", dev_name);
 
 	f_name[sizeof_w(f_name) - 1] = 0;
 
@@ -297,7 +296,7 @@ int dc_create_storage(dev_hook *hook, u64 *storage)
 	do
 	{
 		/* open volume device */
-		if ( (h_device = io_open_volume(hook->dev_name)) == NULL ) {
+		if ( (h_device = io_open_device(hook->dev_name)) == NULL ) {
 			resl = ST_ACCESS_DENIED; break;
 		}
 
@@ -319,7 +318,8 @@ int dc_create_storage(dev_hook *hook, u64 *storage)
 		dc_delete_storage(hook);
 
 		/* create new storage file */
-		h_file = dc_open_storage_file(hook, FILE_OPEN_IF, GENERIC_WRITE);
+		h_file = dc_open_storage_file(
+			hook->dev_name, FILE_OPEN_IF, GENERIC_WRITE);
 
 		if (h_file == NULL) {
 			resl = ST_ACCESS_DENIED; break;
@@ -407,7 +407,7 @@ void dc_delete_storage(dev_hook *hook)
 	HANDLE                       h_file;
 
 	h_file = dc_open_storage_file(
-		hook, FILE_OPEN, FILE_WRITE_ATTRIBUTES | DELETE);
+		hook->dev_name, FILE_OPEN, FILE_WRITE_ATTRIBUTES | DELETE);
 
 	if (h_file != NULL)
 	{

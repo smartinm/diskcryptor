@@ -23,7 +23,7 @@
 #include <conio.h>
 #include "defines.h"
 #include "main.h"
-#include "sys\driver.h"
+#include "dcapi\drv_ioctl.h"
 #include "boot\boot.h"
 #include "dcapi\misc.h"
 #include "dcapi\mbrinst.h"

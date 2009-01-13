@@ -34,7 +34,7 @@
 #include "fast_crypt.h"
 #include "misc_volume.h"
 #include "debug.h"
-#include "fs_filter.h"
+#include "fsf_control.h"
 
 typedef struct _dsk_pass {
 	struct _dsk_pass *next;
@@ -351,7 +351,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password)
 			hook->flags |= F_ENABLED; resl = ST_OK;
 		}
 		/* sync device flags with FS filter */
-		dc_fsf_sync_flags(hook->dev_name);
+		dc_fsf_set_flags(hook->dev_name, hook->flags);
 	} while (0);
 
 	/* prevent leaks */
@@ -402,7 +402,7 @@ int dc_process_unmount(dev_hook *hook, int opt)
 
 		if ( !(hook->flags & F_SYSTEM) && !(opt & UM_NOFSCTL) )
 		{
-			h_dev = io_open_volume(hook->dev_name);
+			h_dev = io_open_device(hook->dev_name);
 
 			if ( (h_dev == NULL) && !(opt & UM_FORCE) )	{
 				resl = ST_LOCK_ERR; break;
@@ -444,7 +444,7 @@ int dc_process_unmount(dev_hook *hook, int opt)
 		resl            = ST_OK;
 
 		/* sync device flags with FS filter */
-		dc_fsf_sync_flags(hook->dev_name);
+		dc_fsf_set_flags(hook->dev_name, hook->flags);
 		/* prevent leaks */
 		zeroauto(&hook->dsk_key, sizeof(dc_key));
 

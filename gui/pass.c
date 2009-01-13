@@ -6,7 +6,7 @@
 #include "..\boot\boot.h"
 #include "ukeyfiles.h"
 #include "keyfiles.h"
-#include "..\sys\driver.h"
+#include "drv_ioctl.h"
 #include "subs.h"
 
 static

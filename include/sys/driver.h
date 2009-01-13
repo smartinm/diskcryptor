@@ -214,10 +214,6 @@ typedef struct _dc_conf {
 #define OS_WIN2K 1
 #define OS_VISTA 2
 
-#define DC_DEVEXT_CONTROL 0
-#define DC_DEVEXT_HOOKDEV 1
-#define DC_DEVEXT_FSFILT  2
-
 #define DC_MEM_RETRY_TIME    10
 #define DC_MEM_RETRY_TIMEOUT (1000 * 30)
 
@@ -228,7 +224,7 @@ typedef struct _dc_conf {
  extern u32            dc_io_count;
  extern u32            dc_dump_disable;
  extern u32            dc_conf_flags;
- extern u32            dc_load_flags;  
+ extern u32            dc_load_flags;
 #endif
 
 

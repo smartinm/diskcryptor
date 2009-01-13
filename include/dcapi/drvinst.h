@@ -2,11 +2,12 @@
 #define _DRVINST_
 
 #include "dcapi.h"
-#include "..\sys\driver.h"
+#include "drv_ioctl.h"
 
 #define HOT_MAX 4 /* maximun mumber of hotkeys */
 
 typedef struct dc_conf_data {
+	u32 build;
 	u32 conf_flags;
 	u32 load_flags;
 	u32 hotkeys[HOT_MAX];

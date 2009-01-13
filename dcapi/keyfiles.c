@@ -24,8 +24,8 @@
 #include "misc.h"
 #include "keyfiles.h"
 #include "volume.h"
-#include "..\sys\driver.h"
 #include "sha512.h"
+#include "drv_ioctl.h"
 
 #define KF_BLOCK_SIZE (64 * 1024)
 

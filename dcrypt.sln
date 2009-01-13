@@ -30,6 +30,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dcrypt", "gui\gui.vcproj", 
 		{613B5FDD-A682-4252-8F9B-B29827BC88F2} = {613B5FDD-A682-4252-8F9B-B29827BC88F2}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dc_fsf", "dc_fsf\dc_fsf.vcproj", "{DB1BFE08-57DB-4071-A721-0E0A3715B114}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -83,6 +85,14 @@ Global
 		{A38C04C7-B172-4897-8471-E3478903035E}.Release|Win32.Build.0 = Release|Win32
 		{A38C04C7-B172-4897-8471-E3478903035E}.Release|x64.ActiveCfg = Release|x64
 		{A38C04C7-B172-4897-8471-E3478903035E}.Release|x64.Build.0 = Release|x64
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Debug|Win32.Build.0 = Debug|Win32
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Debug|x64.ActiveCfg = Debug|x64
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Debug|x64.Build.0 = Debug|x64
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Release|Win32.ActiveCfg = Release|Win32
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Release|Win32.Build.0 = Release|Win32
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Release|x64.ActiveCfg = Release|x64
+		{DB1BFE08-57DB-4071-A721-0E0A3715B114}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

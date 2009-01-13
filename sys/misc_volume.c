@@ -260,7 +260,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		hook->flags |= F_NO_AUTO_MOUNT;
 
 		/* open volume device */
-		if ( (h_dev = io_open_volume(hook->dev_name)) == NULL ) {
+		if ( (h_dev = io_open_device(hook->dev_name)) == NULL ) {
 			resl = ST_LOCK_ERR; break; 
 		}		
 		/* lock volume */

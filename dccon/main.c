@@ -25,7 +25,6 @@
 #include "main.h"
 #include "version.h"
 #include "boot_menu.h"
-#include "sys\driver.h"
 #include "dcapi\misc.h"
 #include "dcapi\mbrinst.h"
 #include "dcapi\drv_ioctl.h"
