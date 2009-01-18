@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2007-2008 
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -139,6 +139,7 @@ static void dc_automount_thread(void *param)
 {
 	/* connect to FS filter */
 	dc_fsf_connect(1);
+	dc_fsf_set_conf();
 
 	/* wait 0.5 sec */
 	dc_delay(500);

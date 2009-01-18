@@ -173,6 +173,7 @@ typedef struct _dc_backup_ctl {
 #define CONF_WIPEPAS_LOGOFF   0x08
 #define CONF_DISMOUNT_LOGOFF  0x10
 #define CONF_AUTO_START       0x20
+#define CONF_HIDE_DCSYS       0x40
 
 typedef struct _dc_status {
 	u64        dsk_size;

@@ -54,7 +54,7 @@ NTSTATUS
 	dc_fs_hook *hook = dev_obj->DeviceExtension;
 	
 	if (dev_obj == dc_fsf_device) {
-		return dc_complete_irp(irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
+		return dc_complete_irp(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
 	} else {
 		IoSkipCurrentIrpStackLocation(irp);
 		return IoCallDriver(hook->orig_dev, irp);
@@ -105,4 +105,42 @@ HANDLE dc_open_storage(wchar_t *dev_name)
 		FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
 	
 	return h_file;
+}
+
+static
+NTSTATUS
+  dc_sync_complete(
+    PDEVICE_OBJECT dev_obj, PIRP irp, PKEVENT sync
+	)
+{
+	KeSetEvent(sync, IO_NO_INCREMENT, FALSE);
+
+    return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+NTSTATUS
+  dc_forward_irp_sync(
+     PDEVICE_OBJECT dev_obj, PIRP irp
+	 )
+{
+	dc_fs_hook *fs_h = dev_obj->DeviceExtension;
+	KEVENT      sync;
+	NTSTATUS    status;
+
+	KeInitializeEvent(
+		&sync, NotificationEvent, FALSE);
+
+	IoCopyCurrentIrpStackLocationToNext(irp);
+
+    IoSetCompletionRoutine(
+		irp, dc_sync_complete, &sync, TRUE, TRUE, TRUE);
+
+	status = IoCallDriver(fs_h->orig_dev, irp);
+
+    if (status == STATUS_PENDING) {
+		wait_object_infinity(&sync);
+		status = irp->IoStatus.Status;
+    }
+
+	return status;
 }

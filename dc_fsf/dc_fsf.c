@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2009
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -30,6 +30,12 @@
 PDRIVER_OBJECT dc_fsf_driver;
 PDEVICE_OBJECT dc_fsf_device;
 GETDEVFLAGS    dc_get_flags;
+u32            dc_conf_flags;
+
+static void dc_fsf_set_conf(u32 conf)
+{
+	dc_conf_flags = conf;
+}
 
 static
 NTSTATUS dc_fsf_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
@@ -39,7 +45,7 @@ NTSTATUS dc_fsf_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 	u32                in_len, out_len;
 	u32                code;
 
-	if (dev_obj->DeviceExtension) {
+	if (dev_obj != dc_fsf_device) {
 		return dc_forward_irp(dev_obj, irp);
 	}
 
@@ -57,6 +63,7 @@ NTSTATUS dc_fsf_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 
 	dc_get_flags    = data->get_flags;
 	data->set_flags = dc_fsf_set_flags;
+	data->set_conf  = dc_fsf_set_conf;
 
 	if (dc_get_flags != NULL) {
 		dc_fsf_sync_all();
@@ -68,7 +75,7 @@ NTSTATUS dc_fsf_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 static
 NTSTATUS dc_fsf_create_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 {
-	if (dev_obj->DeviceExtension) {
+	if (dev_obj != dc_fsf_device) {
 		return dc_fsf_create(dev_obj, irp);
 	}
 
@@ -78,7 +85,7 @@ NTSTATUS dc_fsf_create_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 static
 NTSTATUS dc_fsf_close_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 {
-	if (dev_obj->DeviceExtension) {
+	if (dev_obj != dc_fsf_device) {
 		return dc_forward_irp(dev_obj, irp);
 	}
 
@@ -104,6 +111,7 @@ NTSTATUS
 	DriverObject->MajorFunction[IRP_MJ_CREATE]              = dc_fsf_create_irp;
 	DriverObject->MajorFunction[IRP_MJ_CLOSE]               = dc_fsf_close_irp;
 	DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL]      = dc_fsf_control_irp;
+	DriverObject->MajorFunction[IRP_MJ_DIRECTORY_CONTROL]   = dc_fsf_dirctl;
 	DriverObject->MajorFunction[IRP_MJ_FILE_SYSTEM_CONTROL] = dc_fsf_fsctl;
 
 	RtlInitUnicodeString(&dev_name_u, DC_FSF_DEVICE_NAME);

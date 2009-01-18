@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2007-2008 
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * based on rijndael-alg-fst.c
     *  @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
     *  @author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>

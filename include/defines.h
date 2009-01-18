@@ -76,7 +76,7 @@ typedef void (*callback_ex)(void*,void*);
 #define ppv(x) ((void**)(x)) 
 
 #define in_reg(a,base,size)     ( (a >= base) && (a < base+size)  )
-#define is_overlap(b1,s1,b2,s2) ( ((b1) < (b2)) ? ((b1)+(s1) >= (b2)) : ((b1) <= (b2)+(s2)) )
+#define is_intersect(start1, size1, start2, size2) ( max(start1, start2) < min(start1 + size1, start2 + size2) )
 #define addof(a,o)              ( pv(p8(a)+o) )
 
 #define put_b(p,d) { p8(p)[0]  = (u8)(d);  p = pv((p8(p) + 1));  }

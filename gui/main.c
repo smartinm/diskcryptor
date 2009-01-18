@@ -1,7 +1,7 @@
 /*  *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2007 
-	* ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -47,6 +47,7 @@
 #include "crypto\crypto.h"
 #include "keyfiles.h"
 #include "ukeyfiles.h"
+#include "disk_name.h"
 
 #pragma warning(disable : 4995)
 
@@ -200,8 +201,8 @@ void _list_devices(
 	ListView_DeleteAllItems(hlist);
 
 	dc_get_boot_disk(&boot_disk);
-	if (!fixed) {
-
+	if (!fixed) 
+	{
 		for ( node = __drives.flink;
 					node != &__drives;
 					node = node->flink ) 
@@ -230,7 +231,8 @@ void _list_devices(
 				}
 			}
 		}
-	} else {
+	} else 
+	{
 		for ( ; k < 100; k++ ) 
 		{
 			if (dc_dsk_get_size(k, 0)) 
@@ -1226,7 +1228,11 @@ _thread_enc_dec_proc(
 			act->status = ACT_STOPPED;
 			break;
 		}
-		if ((rlt != ST_OK) && (rlt != ST_RW_ERR))
+		if (rlt == ST_CANCEL)
+		{
+			Sleep(5000);
+		}
+		if ((rlt != ST_OK) && (rlt != ST_RW_ERR) && (rlt != ST_CANCEL))
 		{
 			dc_status st;
 			wchar_t *act_name;
@@ -1234,8 +1240,8 @@ _thread_enc_dec_proc(
 			dc_get_device_status(device, &st);
 			switch (act->act)
 			{
-				case ACT_ENCRYPT: act_name = L"Encryption"; break;
-				case ACT_DECRYPT: act_name = L"Decryption"; break;
+				case ACT_ENCRYPT:   act_name = L"Encryption";   break;
+				case ACT_DECRYPT:   act_name = L"Decryption";   break;
 				case ACT_REENCRYPT: act_name = L"Reencryption"; break;
 			}
 			_error_s(
@@ -1541,10 +1547,12 @@ void _menu_unmount(_dnode *node)
 
 		if (resl == ST_LOCK_ERR) 
 		{
-			if (__msg_w(L"This volume contain opened files.\n"
+			if (__msg_w(L"This volume contains opened files.\n"
 				        L"Would you like to force a unmount on this volume?", __dlg)) 
 			{
 				resl = dc_unmount_volume(node->mnt.info.device, UM_FORCE);
+			} else {
+				resl = ST_OK;
 			}
 		}
 

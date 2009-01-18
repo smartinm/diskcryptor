@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2007-2008 
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -182,9 +182,17 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 	if (irp_sp->MajorFunction == IRP_MJ_READ) {
 		offset = irp_sp->Parameters.Read.ByteOffset.QuadPart;
 		length = irp_sp->Parameters.Read.Length;
-	} else {
+	} else 
+	{
 		offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
-		length = irp_sp->Parameters.Write.Length;		
+		length = irp_sp->Parameters.Write.Length;
+
+		if ( (hook->flags & F_PROTECT_DCSYS) && 
+			 (is_intersect(offset, length, hook->stor_off, DC_AREA_SIZE) != 0) )
+		{
+			dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
+			return;
+		}
 	}
 
 	if ( (length == 0) ||
@@ -192,7 +200,7 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 	{
 		dc_complete_irp(irp, STATUS_INVALID_PARAMETER, 0);
 		return;
-	}
+	}	
 
 	status = dc_sync_encrypted_io(
 		hook, buff, length, offset, irp_sp->Flags, irp_sp->MajorFunction);
@@ -319,6 +327,12 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 	offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
 	length = irp_sp->Parameters.Write.Length;
 	status = STATUS_INSUFFICIENT_RESOURCES;
+
+	if ( (hook->flags & F_PROTECT_DCSYS) && 
+		 (is_intersect(offset, length, hook->stor_off, DC_AREA_SIZE) != 0) )
+	{
+		return dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
+	}
 	
 	nmdl = NULL; data = NULL; iopk = NULL; succs = 0;
 	do

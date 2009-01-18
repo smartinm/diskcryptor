@@ -25,6 +25,11 @@ NTSTATUS
      PDEVICE_OBJECT dev_obj, PIRP irp
 	 );
 
+NTSTATUS
+  dc_fsf_dirctl(
+     PDEVICE_OBJECT dev_obj, PIRP irp
+	 );
+
 NTSTATUS dc_init_fsf();
 
 void dc_fsf_set_flags(wchar_t *dev_name, u32 flags);

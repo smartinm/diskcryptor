@@ -1,6 +1,6 @@
 ;***************************************************************************
 ;*   Copyright (C) 2006 by Joachim Fritschi, <jfritschi@freenet.de>        *
-;*   adapted for DiskCryptor by ntldr <ntldr@freed0m.org>                  *
+;*   adapted for DiskCryptor by ntldr <ntldr@diskcryptor.net>                  *
 ;*       PGP key ID - 0xC48251EB4F8E4E6E                                   *
 ;*                                                                         *
 ;*   This program is free software; you can redistribute it and/or modify  *

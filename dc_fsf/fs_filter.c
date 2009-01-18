@@ -271,6 +271,7 @@ static FAST_IO_DISPATCH fast_io_hook = {
 extern PDRIVER_OBJECT dc_fsf_driver;
 extern PDEVICE_OBJECT dc_fsf_device;
 extern GETDEVFLAGS    dc_get_flags;
+extern u32            dc_conf_flags;
 static LIST_ENTRY     fs_hooks_list_head;
 static KMUTEX         fs_hooks_lock;
 
@@ -280,15 +281,6 @@ typedef struct _fsctl_ctx {
 	PIRP             irp;
 	
 } fsctl_ctx;
-
-typedef struct _op_irp_ctx {
-	WORK_QUEUE_ITEM  wrk_item;
-	dc_fs_hook      *fs_h;
-	PIRP             irp;
-	PDEVICE_OBJECT   dev_obj;
-	u64              open_id;
-
-} op_irp_ctx;
 
 #define is_device_ok(d) ((d) != dc_fsf_device)
 
@@ -946,41 +938,33 @@ void dcFastIoDetachDevice(
     IoDeleteDevice(SourceDevice);
 }
 
-
-static void dc_fsf_irp_worker(op_irp_ctx *oic)
+static void dc_fsf_get_dcsys_id(dc_fs_hook *fs_h)
 {
 	FILE_INTERNAL_INFORMATION info;
 	IO_STATUS_BLOCK           iosb;
 	HANDLE                    h_file = NULL;
-	dc_fs_hook               *fs_h = oic->fs_h;
-	PIRP                      irp  = oic->irp;
-	NTSTATUS                  status;	
+	NTSTATUS                  status;
 
-	if (fs_h->dcsys_id == 0)
+	fs_h->my_thread = PsGetCurrentThread();
+
+	if (h_file = dc_open_storage(fs_h->dev_name))
 	{
-		fs_h->my_thread = PsGetCurrentThread();		
+		status = ZwQueryInformationFile(
+			h_file, &iosb, &info, sizeof(info), FileInternalInformation);
 
-		if (h_file = dc_open_storage(fs_h->dev_name))
-		{
-			status = ZwQueryInformationFile(
-				h_file, &iosb, &info, sizeof(info), FileInternalInformation);
-
-			if (NT_SUCCESS(status) != FALSE) {
-				fs_h->dcsys_id = info.IndexNumber.QuadPart;
-			}
-
-			ZwClose(h_file);
+		if (NT_SUCCESS(status) != FALSE) {
+			fs_h->dcsys_id = info.IndexNumber.QuadPart;
 		}
-
-		fs_h->my_thread = NULL;
+		ZwClose(h_file);
 	}
+	fs_h->my_thread = NULL;
+}
 
-	if ( (fs_h->dcsys_id != 0) && (oic->open_id == fs_h->dcsys_id ) ) {
-		dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
-	} else {
-		dc_forward_irp(oic->dev_obj, irp);
-	}
-	mem_free(oic);
+
+static int is_dcsys(wchar_t *buff, u32 length)
+{
+	return (length >= 14) && ((length == 14) || (buff[7] == L':')) &&
+		   (_wcsnicmp(buff, L"$dcsys$", 7) == 0);
 }
 
 NTSTATUS
@@ -993,64 +977,39 @@ NTSTATUS
 	int                denied;
 	wchar_t           *buff;
 	u16                length;
-	int                delayed;
-	op_irp_ctx        *oic;
 
 	fs_h   = dev_obj->DeviceExtension;
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	buff   = irp_sp->FileObject->FileName.Buffer;
 	length = irp_sp->FileObject->FileName.Length;
-	denied = 0; delayed = 0;
+	denied = 0;
 
 	if ( (dc_get_flags == NULL) || (fs_h->flags & F_PROTECT_DCSYS) )
 	{
 		if (irp_sp->Parameters.Create.Options & FILE_OPEN_BY_FILE_ID)
 		{
-			if (fs_h->dcsys_id != 0) {
-				denied = (length == 8) && (p64(buff)[0] == fs_h->dcsys_id);				
-			} else {
-				delayed = (length == 8);
+			if ( (fs_h->dcsys_id == 0) && (KeGetCurrentIrql() == PASSIVE_LEVEL) ) {
+				dc_fsf_get_dcsys_id(fs_h);
 			}
+
+			denied = (fs_h->dcsys_id != 0) && 
+				     (length == 8) && (p64(buff)[0] == fs_h->dcsys_id);
 		} else 
 		{
-			if ( (length != 0) && (buff[0] == L'\\') ) {
+			while ( (length != 0) && (buff[0] == L'\\') ) {			
 				buff++, length -= sizeof(wchar_t);
 			}
 
-			if ( (length >= 14) && ((length == 14) || (buff[7] == L':')) ) 
-			{
-				denied = (_wcsnicmp(buff, L"$dcsys$", 7) == 0) && 
-					     ( (fs_h->my_thread == NULL) || (irp->Tail.Overlay.Thread != fs_h->my_thread) );
-			}
+			denied = (is_dcsys(buff, length) != 0) && 
+				     ( (fs_h->my_thread == NULL) || (irp->Tail.Overlay.Thread != fs_h->my_thread) );
 		}
 	}
 
 	if (denied != 0) {
 		return dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
-	}
-
-	if (delayed == 0) {
+	} else {
 		return dc_forward_irp(dev_obj, irp);
 	}
-
-	if ( (oic = mem_alloc(sizeof(op_irp_ctx))) == NULL ) {
-		return dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
-	}
-
-	oic->fs_h    = fs_h;
-	oic->irp     = irp;
-	oic->dev_obj = dev_obj;
-	oic->open_id = p64(buff)[0];
-
-	IoMarkIrpPending(irp);
-
-	ExInitializeWorkItem(
-		&oic->wrk_item, dc_fsf_irp_worker, oic);
-
-	ExQueueWorkItem(
-		&oic->wrk_item, DelayedWorkQueue);
-
-	return STATUS_PENDING;
 }
 
 static
@@ -1148,7 +1107,7 @@ NTSTATUS
     PDEVICE_OBJECT dev_obj, PIRP irp, fsctl_ctx *fctx
     )
 {
-	if (KeGetCurrentIrql() > PASSIVE_LEVEL) 
+	if (KeGetCurrentIrql() > PASSIVE_LEVEL)
 	{
 		ExQueueWorkItem(
 			&fctx->wrk_item, DelayedWorkQueue);
@@ -1169,6 +1128,10 @@ NTSTATUS
 	fsctl_ctx         *fctx;
 	NTSTATUS           status;
 	u32                minorf, fsc_cd;
+
+	if (dev_obj == dc_fsf_device) {
+		return dc_complete_irp(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
+	}
 	
 	fs_h   = dev_obj->DeviceExtension;
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
@@ -1202,6 +1165,165 @@ NTSTATUS
 	}
 
 	return status;
+}
+
+static int is_dcsys_di(void *di, FILE_INFORMATION_CLASS iclass)
+{
+	wchar_t *f_name;
+	u32      length;
+
+	switch (iclass) 
+	{
+		case FileBothDirectoryInformation: 
+			{
+				FILE_BOTH_DIR_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+		case FileDirectoryInformation:
+			{
+				FILE_DIRECTORY_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+		case FileFullDirectoryInformation:
+			{
+				FILE_FULL_DIR_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+		case FileIdBothDirectoryInformation:
+			{
+				FILE_ID_BOTH_DIR_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+		case FileIdFullDirectoryInformation:
+			{
+				FILE_ID_FULL_DIR_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+		case FileNamesInformation:
+			{
+				FILE_NAMES_INFORMATION *inf = di;
+				f_name = inf->FileName; 
+				length = inf->FileNameLength;
+			}
+		break;
+	}
+	return is_dcsys(f_name, length);
+}
+
+NTSTATUS
+  dc_fsf_dirctl(
+     PDEVICE_OBJECT dev_obj, PIRP irp
+	 )
+{
+	FILE_BOTH_DIR_INFORMATION *bdi, *ldi;
+	PIO_STACK_LOCATION         irp_sp;
+	dc_fs_hook                *fs_h;
+	NTSTATUS                   status;
+	wchar_t                   *buff;
+	u32                        length;
+	ULONG_PTR                  transf;
+	int                        is_root;
+	FILE_INFORMATION_CLASS     iclass;
+
+	if (dev_obj == dc_fsf_device) {
+		return dc_complete_irp(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
+	}
+
+	fs_h   = dev_obj->DeviceExtension;
+	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	iclass = irp_sp->Parameters.QueryDirectory.FileInformationClass;
+
+	if ( !(dc_conf_flags & CONF_HIDE_DCSYS) || !(fs_h->flags & F_PROTECT_DCSYS)   || 
+		 (irp_sp->MinorFunction != IRP_MN_QUERY_DIRECTORY) ||
+		 ( (iclass != FileBothDirectoryInformation) && (iclass != FileDirectoryInformation) &&
+		   (iclass != FileFullDirectoryInformation) && (iclass != FileIdBothDirectoryInformation) &&
+		   (iclass != FileIdFullDirectoryInformation) && (iclass != FileNamesInformation) ) )
+	{
+		return dc_forward_irp(dev_obj, irp);
+	}
+
+	buff   = irp_sp->FileObject->FileName.Buffer;
+	length = irp_sp->FileObject->FileName.Length;	
+
+	__try {
+		is_root = (length == sizeof(wchar_t)) && (buff != NULL) && (buff[0] == L'\\');
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER) {
+		is_root = 0;
+	}
+
+	if (is_root == 0) {
+		return dc_forward_irp(dev_obj, irp);
+	}
+
+	status = dc_forward_irp_sync(dev_obj, irp);
+	transf = irp->IoStatus.Information;
+
+	if (NT_SUCCESS(status) != FALSE)
+	{
+		bdi    = irp->UserBuffer;
+		length = irp_sp->Parameters.NotifyDirectory.Length;
+		ldi    = NULL;
+
+		__try 
+		{
+			if (irp_sp->Flags & SL_RETURN_SINGLE_ENTRY)
+			{
+				if (is_dcsys_di(bdi, iclass) != 0)
+				{
+					if (irp_sp->Flags & SL_RESTART_SCAN) {
+						status = STATUS_NO_MORE_FILES; transf = 0;
+					} else {
+						status = dc_forward_irp_sync(dev_obj, irp);
+						transf = irp->IoStatus.Information;
+					}
+				}
+			} else
+			{
+				for (;;)
+				{
+					if (is_dcsys_di(bdi, iclass) != 0)
+					{
+						if (bdi->NextEntryOffset != 0) 
+						{
+							if (bdi->NextEntryOffset <= length) {
+								memmove(bdi, addof(bdi, bdi->NextEntryOffset), length - bdi->NextEntryOffset);
+							}
+						} else
+						{
+							if (ldi != NULL) {
+								ldi->NextEntryOffset = 0;
+							} else {
+								status = STATUS_NO_MORE_FILES;
+								transf = 0;
+							}
+						}
+						break;
+					}
+
+					if ( (bdi->NextEntryOffset == 0) || (bdi->NextEntryOffset > length) ) {
+						break;
+					} else {
+						ldi = bdi; length -= bdi->NextEntryOffset; 
+						bdi = addof(bdi, bdi->NextEntryOffset);
+					}
+				}
+			}
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {}
+	}
+
+	return dc_complete_irp(irp, status, transf);
 }
 
 static

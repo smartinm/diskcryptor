@@ -86,6 +86,8 @@
 #define IDC_KEY_WIPE_                   311
 #define IDC_AUTO_START                  312
 #define IDC_ADV_IO_QUEUE                313
+#define IDC_AUTO_START2                 313
+#define IDC_HIDE_FILES                  313
 #define IDC_STATIC_KEY_MOUNTALL         314
 #define IDC_STATIC_KEY_UNMOUNTALL       315
 #define IDC_TREE                        316

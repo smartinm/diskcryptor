@@ -5,8 +5,8 @@
 #include "fsf_control.h"
 #include "dc_fsf\dc_fsf.h"
 
-static SETDEVFLAGS fsf_set_flags;
-
+static SETDEVFLAGS  fsf_set_flags;
+static SETCONFFLAGS fsf_set_conf;
 
 static u32 dc_get_hook_flags(wchar_t *dev_name)
 {
@@ -49,6 +49,7 @@ void dc_fsf_connect(int allow_load)
 
 		if (NT_SUCCESS(status) != FALSE) {
 			fsf_set_flags = ioctl.set_flags;
+			fsf_set_conf  = ioctl.set_conf;
 		}
 		ZwClose(h_dev);
 	}
@@ -65,3 +66,9 @@ void dc_fsf_set_flags(wchar_t *dev_name, u32 flags)
 	}
 }
 
+void dc_fsf_set_conf()
+{
+	if (fsf_set_conf != NULL) {
+		fsf_set_conf(dc_conf_flags);
+	}
+}

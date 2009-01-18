@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008 
-	* ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -921,7 +921,7 @@ int wmain(int argc, wchar_t *argv[])
 			if (resl == ST_LOCK_ERR)
 			{
 				wprintf(
-					L"This volume contain opened files.\n"
+					L"This volume contains opened files.\n"
 					L"Would you like to force a unmount on this volume? (Y/N)\n");
 
 				if (tolower(_getch()) == 'y') {
@@ -1398,10 +1398,12 @@ int wmain(int argc, wchar_t *argv[])
 
 				wprintf(
 					L"1 - On/Off passwords caching (%s)\n"
-					L"2 - Save changes and exit\n\n",
-					on_off(dc_conf.conf_flags & CONF_CACHE_PASSWORD));
+					L"2 - On/Off hiding $dcsys$ files (%s)\n"
+					L"3 - Save changes and exit\n\n",					
+					on_off(dc_conf.conf_flags & CONF_CACHE_PASSWORD),
+					on_off(dc_conf.conf_flags & CONF_HIDE_DCSYS));
 
-				if ( (ch = getchr('1', '2')) == '2' ) {
+				if ( (ch = getchr('1', '3')) == '3' ) {
 					break;
 				}
 
@@ -1410,7 +1412,9 @@ int wmain(int argc, wchar_t *argv[])
 
 				if (ch == '1') {
 					set_flag(dc_conf.conf_flags, CONF_CACHE_PASSWORD, onoff);
-				} 
+				} else {
+					set_flag(dc_conf.conf_flags, CONF_HIDE_DCSYS, onoff);
+				}
 			} while (1);
 
 			if ( (resl = dc_save_conf(&dc_conf)) == ST_OK ) {

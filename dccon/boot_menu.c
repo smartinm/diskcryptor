@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008 
-	* ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 #include "boot\boot.h"
 #include "dcapi\misc.h"
 #include "dcapi\mbrinst.h"
+#include "dcapi\disk_name.h"
 #include "console.h"
 
 static int onoff_req()

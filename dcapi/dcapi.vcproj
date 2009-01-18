@@ -430,6 +430,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\disk_name.c"
+				>
+			</File>
+			<File
 				RelativePath=".\drv_ioctl.c"
 				>
 			</File>
@@ -472,6 +476,10 @@
 			</File>
 			<File
 				RelativePath="..\include\defines.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\dcapi\disk_name.h"
 				>
 			</File>
 			<File

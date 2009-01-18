@@ -2,7 +2,7 @@
 ;   *
 ;   * DiskCryptor - open source partition encryption tool
 ;   * Copyright (c) 2007
-;   * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
 ;   *
 ;   This program is free software: you can redistribute it and/or modify
 ;   it under the terms of the GNU General Public License as published by

@@ -1,3 +1,11 @@
+[19.01.2009] - 0.6a
+  + Improved $dcsys$ file protection.
+  + Added optional hiding $dcsys$ file.
+  + Added resuming encryption after exit from hibernate mode.
+  + Fixed bug with HDD name detection.
+  + Fixed bug with Vista hang on shutdown.
+  + Small bugfixes in GUI.
+
 [14.01.2009] - 0.6
   + Fixed bug with volume corruption when defragmenting.
   + Fixed incompatibility with PGP WDE 9.x

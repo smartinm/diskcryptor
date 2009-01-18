@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008
-	* ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * partial copyright Juergen Schmied and Jon Griffiths
 
     This program is free software: you can redistribute it and/or modify
@@ -337,71 +337,6 @@ int dc_disk_write(
 	} else {
 		return ST_IO_ERROR;
 	}
-}
-
-int dc_get_hdd_name(
-	  int dsk_num, wchar_t *name, size_t max_name
-	  )
-{
-	SCSI_ADAPTER_BUS_INFO bi[128]; 
-	SCSI_INQUIRY_DATA    *data;
-	char                  c_name[MAX_PATH];
-	HANDLE                hdisk;
-	int                   resl, succs;
-	u32                   bytes;
-	DISK_GEOMETRY         dg;
-
-	do
-	{
-		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
-			resl = ST_ACCESS_DENIED; break;
-		}
-
-		succs = DeviceIoControl(
-			hdisk, IOCTL_SCSI_GET_INQUIRY_DATA, NULL, 0, &bi, sizeof(bi), &bytes, NULL);
-
-		if (succs == 0) 
-		{
-			succs = DeviceIoControl(
-				hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL);
-
-			if (succs == 0) {
-				resl = ST_IO_ERROR; break;
-			}
-
-			if (dg.MediaType == RemovableMedia) 
-			{
-				_snwprintf(
-					name, max_name, L"Removable Medium %d", dsk_num);
-			} else
-			{
-				_snwprintf(
-					name, max_name, L"Hard disk %d", dsk_num);
-			}		
-		} else
-		{
-			if (bi[0].BusData[0].InquiryDataOffset)
-			{
-				data = addof(&bi, bi[0].BusData[0].InquiryDataOffset);
-
-				zeroauto(c_name, sizeof(c_name));
-
-				if (data->InquiryDataLength > 8) {
-					mincpy(c_name, data->InquiryData + 8, min(data->InquiryDataLength - 8, 0x16));
-				}
-				mbstowcs(name, c_name, max_name);
-			} else {
-				name[0] = 0;
-			}
-		}
-		resl = ST_OK;
-	} while (0);
-
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
-	}
-
-	return resl;
 }
 
 

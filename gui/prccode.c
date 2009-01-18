@@ -799,8 +799,7 @@ _about_dlg_proc(
 				HWND htitle = GetDlgItem(hwnd, IDC_ABOUT1);
 
 				_snwprintf(display, 
-					sizeof_w(display), L"%s %d.%d.%d.%d", DC_NAME, DC_MAJOR_VER, DC_MINOR_VER, DC_DRIVER_VER, DC_BOOT_VER
-					);
+					sizeof_w(display), L"%s %s", DC_NAME, DC_FILE_VER);
 
 				SetWindowText(htitle, display);
 				SetWindowText(GetDlgItem(hwnd, IDC_EDIT_NOTICE),
@@ -906,6 +905,7 @@ _options_dlg_proc(
 		{ L"", IDC_FORCE_UNMOUNT, CONF_FORCE_DISMOUNT },
 		{ L"", IDC_WIPE_LOGOFF, CONF_WIPEPAS_LOGOFF },
 		{ L"", IDC_AUTO_START, CONF_AUTO_START },
+		{ L"", IDC_HIDE_FILES, CONF_HIDE_DCSYS },
 		{ L"", -1, -1 }
 	};
 
@@ -1653,11 +1653,10 @@ int _get_info_install_boot_page(
 	if (ST_OK == rlt && dsk_num) *dsk_num = drv.disks[0].number;
 
 	rlt = dc_get_boot_disk(&boot_disk);
-	if (ST_OK == rlt) {
-	
+	if (ST_OK == rlt) 
+	{	
 		if (ST_OK == dc_get_mbr_config(boot_disk, NULL, &conf))
 			sheets[WPAGE_ENC_BOOT].show = FALSE;
-
 	}
 	return rlt;
 
@@ -1852,13 +1851,13 @@ int _init_wizard_encrypt_pages(
 		_list_devices(GetDlgItem(hwnd, IDC_BOOT_DEVS), TRUE, dsk_num);
 		SendMessage(GetDlgItem(hwnd, IDC_COMBO_BOOT_INST), (UINT)CB_ADDSTRING, 0, (LPARAM)L"Use external bootloader"); 
 
-		if (ST_OK != rlt) {
+		if (ST_OK != rlt) 
+		{
 			SetWindowText(GetDlgItem(hwnd, IDC_WARNING), L"Bootable HDD not found!");
 			SendMessage(GetDlgItem(hwnd, IDC_COMBO_BOOT_INST), CB_SETCURSEL, 0, 0);
 
 			SendMessage(GetDlgItem(hwnd, IDC_WARNING), (UINT)WM_SETFONT, (WPARAM)__font_bold, 0);
-			EnableWindow(GetDlgItem(hwnd, IDB_BOOT_PREF), TRUE);				
-
+			EnableWindow(GetDlgItem(hwnd, IDB_BOOT_PREF), TRUE);
 		} else {		
 			SendMessage(GetDlgItem(hwnd, IDC_COMBO_BOOT_INST), (UINT)CB_ADDSTRING, 0, (LPARAM)L"Install to HDD"); 					
 			SendMessage(GetDlgItem(hwnd, IDC_COMBO_BOOT_INST), CB_SETCURSEL, 1, 0);
@@ -2255,9 +2254,8 @@ void _init_main_dlg(
 	MENUITEMINFO mnitem = { sizeof(mnitem) };
 	wchar_t      display[MAX_PATH];
 
-	_snwprintf(display,
-		sizeof_w(display), L"%s %d.%d.%d.%d", DC_NAME, DC_MAJOR_VER, DC_MINOR_VER, DC_DRIVER_VER, DC_BOOT_VER
-		);
+	_snwprintf(display, 
+		sizeof_w(display), L"%s %s", DC_NAME, DC_FILE_VER);
 
 	SetWindowText(hwnd, display);	
 
@@ -3179,9 +3177,8 @@ _main_dialog_proc(
 			_dlg_bottom = pos->cy + pos->y;
 			_dlg_left   = pos->x;
 
-			if (flags & SWP_SHOWWINDOW || flags & SWP_HIDEWINDOW)
+			if ((flags & SWP_SHOWWINDOW) || (flags & SWP_HIDEWINDOW))
 			{
-				//#
 				_set_timer(MAIN_TIMER, flags & SWP_SHOWWINDOW, TRUE);
 			}
 			return 0L;

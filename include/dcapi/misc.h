@@ -11,11 +11,7 @@ int dc_api is_win_vista();
 
 void dc_api *secure_alloc(u32 size);
 void dc_api secure_free(void *mem);
-
-int dc_api dc_get_hdd_name(
-	  int dsk_num, wchar_t *name, size_t max_name
-	  );
-	  
+  
 HANDLE dc_api dc_disk_open(int dsk_num);	  
 
 void dc_api dc_format_byte_size(

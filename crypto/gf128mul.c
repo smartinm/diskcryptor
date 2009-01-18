@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2003, Dr Brian Gladman, Worcester, UK.
  * Copyright (c) 2006, Rik Snel <rsnel@cube.dyndns.org>
- * Copyright (c) 2007, ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E 
+ * Copyright (c) 2007, ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E 
  *
  * Based on Dr Brian Gladman's (GPL'd) work published at
  * http://fp.gladman.plus.com/cryptography_technology/index.htm

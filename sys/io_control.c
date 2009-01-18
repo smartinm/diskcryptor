@@ -2,7 +2,7 @@
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2007-2008 
-    * ntldr <ntldr@freed0m.org> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@
 #include "readwrite.h"
 #include "mem_lock.h"
 #include "misc_volume.h"
+#include "fsf_control.h"
 
 static int dc_ioctl_process(
 			  u32 code, dc_ioctl *data
@@ -296,6 +297,7 @@ NTSTATUS
 					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 						dc_clean_pass_cache();
 					}
+					dc_fsf_set_conf();
 				}
 			}
 		break;

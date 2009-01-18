@@ -4,7 +4,7 @@
  *  @author Matthew Skala <mskala@ansuz.sooke.bc.ca>, July 26, 1998
  *  @author Werner Koch, April, 1998
  *  @author Dr Brian Gladman, 1999
- *  @author ntldr <ntldr@freed0m.org>, 2008
+ *  @author ntldr <ntldr@diskcryptor.net>, 2008
  *
  * The original author has disclaimed all copyright interest in this
  * code and thus put it in the public domain. The subsequent authors
