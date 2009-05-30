@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -34,6 +34,12 @@
 #include "mem_lock.h"
 #include "misc_volume.h"
 #include "fsf_control.h"
+#include <ntddcdrm.h>
+
+#define IS_VERIFY_IOCTL(ioctl) ( \
+	(ioctl == IOCTL_DISK_CHECK_VERIFY) || \
+	(ioctl == IOCTL_CDROM_CHECK_VERIFY) || \
+	(ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
 
 static int dc_ioctl_process(
 			  u32 code, dc_ioctl *data
@@ -52,7 +58,7 @@ static int dc_ioctl_process(
 		case DC_CTL_MOUNT:
 			{
 				resl = dc_mount_device(
-					data->device, &data->passw1);
+					data->device, &data->passw1, data->flags);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 					dc_add_password(&data->passw1);
@@ -61,7 +67,7 @@ static int dc_ioctl_process(
 		break;
 		case DC_CTL_MOUNT_ALL:
 			{
-				data->n_mount = dc_mount_all(&data->passw1);
+				data->n_mount = dc_mount_all(&data->passw1, data->flags);
 				resl          = ST_OK;
 
 				if ( (data->n_mount != 0) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
@@ -72,7 +78,7 @@ static int dc_ioctl_process(
 		case DC_CTL_UNMOUNT:
 			{
 				resl = dc_unmount_device(
-					data->device, (data->force & UM_FORCE));
+					data->device, (data->flags & MF_FORCE));
 			}
 		break;
 		case DC_CTL_CHANGE_PASS:
@@ -159,6 +165,36 @@ static int dc_ioctl_process(
 	return resl;
 }
 
+static void dc_hw_crypto_changed()
+{
+	dev_hook *hook;
+
+	dc_init_crypto(dc_conf_flags & CONF_HW_CRYPTO);
+
+	if (hook = dc_first_hook())
+	{
+		do
+		{
+			wait_object_infinity(&hook->busy_lock);
+			wait_object_infinity(&hook->key_lock);
+
+			if (hook->flags & F_ENABLED) 
+			{
+				if (hook->hdr_key != NULL) {
+					dc_cipher_reinit(hook->hdr_key);
+				}
+				if (hook->tmp_key != NULL) {
+					dc_cipher_reinit(hook->tmp_key);
+				}
+				dc_cipher_reinit(&hook->dsk_key);
+			}
+
+			KeReleaseMutex(&hook->key_lock, FALSE);
+			KeReleaseMutex(&hook->busy_lock, FALSE);
+		} while (hook = dc_next_hook(hook));
+	}
+}
+
 NTSTATUS
   dc_drv_control_irp(
      PDEVICE_OBJECT dev_obj, PIRP irp
@@ -190,12 +226,6 @@ NTSTATUS
 				status = STATUS_SUCCESS;
 			}
 		break;		
-		case DC_CTL_UNMOUNT_ALL:
-			{
-				dc_unmount_all(UM_FORCE);
-				status = STATUS_SUCCESS;
-			}
-		break;
 		case DC_CTL_STATUS:
 			{
 				dc_ioctl  *dctl = data;
@@ -219,6 +249,7 @@ NTSTATUS
 						stat->dsk_size     = hook->dsk_size;
 						stat->tmp_size     = hook->tmp_size;
 						stat->flags        = hook->flags;
+						stat->mnt_flags    = hook->mnt_flags;
 						stat->disk_id      = hook->disk_id;
 						stat->paging_count = hook->paging_count;
 						stat->vf_version   = hook->vf_version;
@@ -243,12 +274,21 @@ NTSTATUS
 		break;
 		case DC_CTL_GET_RAND:
 			{
-				if (out_len != 0)
+				dc_rand_ctl *rctl = data;
+				
+				if (in_len == sizeof(dc_rand_ctl))
 				{
-					rnd_get_bytes(pv(data), out_len);
-					
-					status = STATUS_SUCCESS;
-					bytes  = out_len;
+					__try
+					{
+						ProbeForWrite(rctl->buff, rctl->size, sizeof(u8));
+
+						if (rnd_get_bytes(rctl->buff, rctl->size) != 0) {
+							status = STATUS_SUCCESS;
+						}
+					} 
+					__except(EXCEPTION_EXECUTE_HANDLER) {
+						status = GetExceptionCode();
+					}
 				}
 			}
 		break;
@@ -288,11 +328,16 @@ NTSTATUS
 		case DC_CTL_SET_CONF:
 			{
 				dc_conf *conf = data;
+				u32      hw_c = (dc_conf_flags & CONF_HW_CRYPTO);				
 
 				if (in_len == sizeof(dc_conf))
 				{
 					dc_conf_flags = conf->conf_flags;
-					status        = STATUS_SUCCESS;			
+					status        = STATUS_SUCCESS;
+
+					if ( hw_c != (dc_conf_flags & CONF_HW_CRYPTO) ) {
+						dc_hw_crypto_changed();					
+					}
 
 					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 						dc_clean_pass_cache();
@@ -402,6 +447,7 @@ static void dc_verify_ioctl_complete(
 	hook->mnt_probed    = 0;
 	hook->mnt_probe_cnt = 0;
 
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 	IoCompleteRequest(irp, IO_NO_INCREMENT);
 }
 
@@ -415,6 +461,8 @@ NTSTATUS
 	dev_hook          *hook;
 	u32                ioctl;
 	NTSTATUS           status;
+	u32               *chg_c;
+    int                change;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 	hook   = dev_obj->DeviceExtension;
@@ -444,15 +492,29 @@ NTSTATUS
 			case IOCTL_DISK_GET_PARTITION_INFO_EX:
 			  {
 				  PPARTITION_INFORMATION_EX pi = pv(irp->AssociatedIrp.SystemBuffer);				  
-				  pi->PartitionLength.QuadPart = hook->use_size;				  
+				  pi->PartitionLength.QuadPart = hook->use_size;
 			  }
 		    break;
+			case IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX:
+				{
+					PDISK_GEOMETRY_EX dgx = pv(irp->AssociatedIrp.SystemBuffer);
+					dgx->DiskSize.QuadPart = hook->use_size;
+				}
+			break;
 		}
 	}
 
-	if ( (hook->flags & F_REMOVABLE) && (ioctl == IOCTL_DISK_CHECK_VERIFY) )
+	if ( (hook->flags & F_REMOVABLE) && (IS_VERIFY_IOCTL(ioctl) != 0) )
 	{
-		if (!NT_SUCCESS(status) && (hook->dsk_size != 0)) 
+		chg_c  = pv(irp->AssociatedIrp.SystemBuffer);
+		change = NT_SUCCESS(status) == FALSE;
+		
+		if (irp->IoStatus.Information == sizeof(u32)) {
+			change |= lock_xchg(&hook->chg_last_v, *chg_c) != *chg_c;
+			*chg_c += hook->chg_mount;
+		}
+
+		if ( (change != 0) && (hook->dsk_size != 0) )
 		{
 			DbgMsg("media removed\n");
 
@@ -460,25 +522,37 @@ NTSTATUS
 				hook, dc_verify_ioctl_complete, irp);
 
 			return STATUS_MORE_PROCESSING_REQUIRED;
-		}
+		}	
 	}
+
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS
-  dc_io_control_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
-{
-	dev_hook *hook;
-		
-	hook = dev_obj->DeviceExtension;
 
-	IoCopyCurrentIrpStackLocationToNext(irp);
 
-	IoSetCompletionRoutine(
-		irp, dc_ioctl_complete,	NULL, TRUE, TRUE, TRUE);
+NTSTATUS dc_io_control_irp(dev_hook *hook, PIRP irp)
+{	
+	PIO_STACK_LOCATION irp_sp;
+	u32                ioctl;
+	
+	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
 
-	return IoCallDriver(hook->orig_dev, irp);
+	if ( (ioctl == IOCTL_DISK_GET_LENGTH_INFO) || 
+		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO) ||
+		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO_EX) || 
+		 (ioctl == IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX) ||
+		 (IS_VERIFY_IOCTL(ioctl) != 0) )
+	{
+		IoCopyCurrentIrpStackLocationToNext(irp);
+
+		IoSetCompletionRoutine(
+			irp, dc_ioctl_complete,	NULL, TRUE, TRUE, TRUE);
+
+		return IoCallDriver(hook->orig_dev, irp);
+	} else {
+		return dc_forward_irp(hook, irp);
+	}	
 }

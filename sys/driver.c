@@ -50,11 +50,13 @@ PDEVICE_OBJECT dc_device;
 u32            dc_os_type;	   
 u32            dc_io_count;
 u32            dc_dump_disable;
+u32            dc_no_usb_mount;
 u32            dc_conf_flags; /* config flags readed from registry */
 u32            dc_load_flags; /* other flags setted by driver      */
 
+typedef NTSTATUS (*dc_dispatch)(dev_hook *hook, PIRP irp);
 
-static PDRIVER_DISPATCH hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
+static dc_dispatch hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_forward_irp,    /* IRP_MJ_CREATE */
 	dc_forward_irp,    /* IRP_MJ_CREATE_NAMED_PIPE */
 	dc_forward_irp,    /* IRP_MJ_CLOSE */
@@ -85,36 +87,6 @@ static PDRIVER_DISPATCH hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_pnp_irp         /* IRP_MJ_PNP */
 };
 
-static PDRIVER_DISPATCH control_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
-	dc_create_close_irp, /* IRP_MJ_CREATE */
-	dc_invalid_irp,      /* IRP_MJ_CREATE_NAMED_PIPE */
-	dc_create_close_irp, /* IRP_MJ_CLOSE */
-	dc_invalid_irp,      /* IRP_MJ_READ */
-	dc_invalid_irp,      /* IRP_MJ_WRITE */
-	dc_invalid_irp,      /* IRP_MJ_QUERY_INFORMATION */
-	dc_invalid_irp,      /* IRP_MJ_SET_INFORMATION */
-	dc_invalid_irp,      /* IRP_MJ_QUERY_EA */
-	dc_invalid_irp,      /* IRP_MJ_SET_EA */
-	dc_invalid_irp,      /* IRP_MJ_FLUSH_BUFFERS */
-	dc_invalid_irp,      /* IRP_MJ_QUERY_VOLUME_INFORMATION */
-	dc_invalid_irp,      /* IRP_MJ_SET_VOLUME_INFORMATION */
-	dc_invalid_irp,      /* IRP_MJ_DIRECTORY_CONTROL */
-	dc_invalid_irp,      /* IRP_MJ_FILE_SYSTEM_CONTROL */
-	dc_drv_control_irp,  /* IRP_MJ_DEVICE_CONTROL*/
-	dc_invalid_irp,      /* IRP_MJ_INTERNAL_DEVICE_CONTROL */
-	dc_invalid_irp,      /* IRP_MJ_SHUTDOWN */
-	dc_invalid_irp,      /* IRP_MJ_LOCK_CONTROL */
-	dc_invalid_irp,      /* IRP_MJ_CLEANUP */
-	dc_invalid_irp,      /* IRP_MJ_CREATE_MAILSLOT */
-	dc_invalid_irp,      /* IRP_MJ_QUERY_SECURITY */
-	dc_invalid_irp,      /* IRP_MJ_SET_SECURITY */
-	dc_invalid_irp,      /* IRP_MJ_POWER */
-	dc_invalid_irp,      /* IRP_MJ_SYSTEM_CONTROL */
-	dc_invalid_irp,      /* IRP_MJ_DEVICE_CHANGE */
-	dc_invalid_irp,      /* IRP_MJ_QUERY_QUOTA */
-	dc_invalid_irp,      /* IRP_MJ_SET_QUOTA */
-	dc_invalid_irp       /* IRP_MJ_PNP */
-};
 
 static
 NTSTATUS
@@ -123,29 +95,59 @@ NTSTATUS
 	 )
 {
 	PIO_STACK_LOCATION irp_sp;
-	u32                funct;
+	dev_hook          *hook;
+	UCHAR              funct;
+	NTSTATUS           status;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
+	hook   = dev_obj->DeviceExtension;
 	funct  = irp_sp->MajorFunction;
 
-	if (dev_obj != dc_device) {
-		return hookdev_procs[funct](dev_obj, irp);		
-	} else {
-		return control_procs[funct](dev_obj, irp);		
+	if (dev_obj == dc_device) 
+	{
+		switch (funct) 
+		{
+			case IRP_MJ_CREATE:
+			case IRP_MJ_CLOSE:
+				return dc_create_close_irp(dev_obj, irp);
+			break;
+			case IRP_MJ_DEVICE_CONTROL:
+				return dc_drv_control_irp(dev_obj, irp);
+			break;
+			default:
+				return dc_complete_irp(irp, STATUS_INVALID_DEVICE_REQUEST, 0);
+			break;
+		}
 	}
+	
+	status = IoAcquireRemoveLock(&hook->remv_lock, irp);
+
+	if (NT_SUCCESS(status) == FALSE) 
+	{
+		if (funct == IRP_MJ_POWER) {
+			PoStartNextPowerIrp(irp);
+		}
+
+		return dc_complete_irp(irp, status, 0);
+	}
+
+	return hookdev_procs[funct](hook, irp);
 }
 
 static void dc_automount_thread(void *param)
 {
-	/* connect to FS filter */
-	dc_fsf_connect(1);
-	dc_fsf_set_conf();
-
 	/* wait 0.5 sec */
 	dc_delay(500);
 
 	/* complete automounting */
-	dc_mount_all(NULL);
+	dc_mount_all(NULL, 0);
+
+	/* delay 10 seconds before mounting USB devices on win2k, 
+	   because win2k USB stack contains bug */
+	if (dc_no_usb_mount != 0) {
+		dc_delay(10*1000); dc_no_usb_mount = 0;
+		dc_mount_all(NULL, 0);
+	}
 
 	/* clean cached passwords */
 	if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
@@ -160,7 +162,15 @@ void dc_reinit_routine(
 	   PDRIVER_OBJECT drv_obj, void *context, u32 count
 	   )
 {
-	start_system_thread(dc_automount_thread, NULL, NULL);
+	/* connect to FS filter */
+	dc_fsf_connect();
+	dc_fsf_set_conf();
+
+	if (dc_conf_flags & CONF_AUTOMOUNT_BOOT) {
+		start_system_thread(dc_automount_thread, NULL, NULL);
+	} else {
+		dc_clean_pass_cache(); dc_no_usb_mount = 0;
+	}
 }
 
 static void dc_load_config(
@@ -290,16 +300,16 @@ NTSTATUS
 	ULONG    min_ver;
 	int      num;
 
-	PsGetVersion(
-		&maj_ver, &min_ver, NULL, NULL);
+	PsGetVersion(&maj_ver, &min_ver, NULL, NULL);
 
-	dc_os_type = OS_UNK; status = STATUS_DRIVER_INTERNAL_ERROR;
+	dc_os_type = OS_UNK; 
+	status     = STATUS_DRIVER_INTERNAL_ERROR;
 
 	if ( (maj_ver == 5) && (min_ver == 0) ) {
-		dc_os_type = OS_WIN2K;
+		dc_os_type = OS_WIN2K; dc_no_usb_mount = 1;
 	}
 
-	if (maj_ver == 6) {
+	if (maj_ver >= 6) {
 		dc_os_type = OS_VISTA;
 	}	
 
@@ -309,12 +319,18 @@ NTSTATUS
 #endif
 	DbgMsg("dcrypt.sys started\n");
 
-	dc_init_crypto();
+#ifdef AES_ASM_VIA
+	if (aes256_ace_available() != 0) {
+		dc_load_flags |= DST_VIA_PADLOCK;
+	}
+#endif
+
+	dc_load_config(RegistryPath);
+	dc_init_crypto(dc_conf_flags & CONF_HW_CRYPTO);
 	dc_init_devhook(); dc_init_mount();
 	fastmem_init(); mem_lock_init();
 	dc_get_boot_pass();
-	dc_load_config(RegistryPath);
-
+	
 	for (num = 0; num <= IRP_MJ_MAXIMUM_FUNCTION; num++) {
 		DriverObject->MajorFunction[num] = dc_dispatch_irp;
 	}

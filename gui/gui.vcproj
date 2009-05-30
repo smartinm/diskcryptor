@@ -47,6 +47,7 @@
 				Optimization="0"
 				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="0"
 				RuntimeLibrary="1"
@@ -140,6 +141,7 @@
 				Optimization="0"
 				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
+				StringPooling="true"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -237,9 +239,11 @@
 				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
+				EnableEnhancedInstructionSet="0"
 				UsePrecompiledHeader="0"
 				AssemblerOutput="0"
 				AssemblerListingLocation=""
@@ -266,7 +270,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib msvcrt.lib comctl32.lib shlwapi.lib ntdll.lib"
+				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib ntdll.lib user32.lib msvcrt.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
 				GenerateManifest="false"
@@ -345,6 +349,7 @@
 				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				StructMemberAlignment="0"
@@ -525,6 +530,14 @@
 			>
 		</File>
 		<File
+			RelativePath=".\cdrom.bmp"
+			>
+		</File>
+		<File
+			RelativePath=".\cdrom_mask.bmp"
+			>
+		</File>
+		<File
 			RelativePath=".\check.bmp"
 			>
 		</File>
@@ -533,11 +546,19 @@
 			>
 		</File>
 		<File
-			RelativePath=".\ClassDiagram11.cd"
+			RelativePath=".\check_mask.bmp"
 			>
 		</File>
 		<File
 			RelativePath=".\disk.bmp"
+			>
+		</File>
+		<File
+			RelativePath=".\disk1.bmp"
+			>
+		</File>
+		<File
+			RelativePath=".\disk_mask.bmp"
 			>
 		</File>
 		<File
@@ -546,6 +567,14 @@
 		</File>
 		<File
 			RelativePath=".\icon2.ico"
+			>
+		</File>
+		<File
+			RelativePath=".\undisk.bmp"
+			>
+		</File>
+		<File
+			RelativePath=".\undisk_mask.bmp"
 			>
 		</File>
 	</Files>

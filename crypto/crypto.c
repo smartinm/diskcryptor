@@ -18,7 +18,6 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
 #include "defines.h" 
 #include "cryptodef.h"
 #include "crypto.h"
@@ -39,7 +38,10 @@ void xts_mode_process(
 		void *cipher_k, void *tweak_k
 		)
 {
-	be128 t, idx;
+#ifdef AES_ASM_VIA
+	u8    calign tmp[XTS_BLOCK_SIZE];
+#endif
+	be128 calign t, idx;
 	u32   b_max, b_num;
 	u32   b_base;
 #ifdef SMALL_CODE
@@ -55,15 +57,33 @@ void xts_mode_process(
 	{
 		b_num = b_base, b_max -= b_base;
 
+#ifdef AES_ASM_VIA
+		if (tweak_enc == aes256_encrypt_ace) {
+			aes256_ace_rekey();
+		}
+#endif
+
 		/* derive first tweak value */
 		tweak_enc(pv(&idx), pv(&t), tweak_k);
+
+#ifdef AES_ASM_VIA
+		if (tweak_enc == aes256_encrypt_ace) {
+			aes256_ace_rekey();
+		}
+#endif
 		
 		do
 		{
+#ifdef AES_ASM_VIA
 			/* encrypt block */
-			xor128(out, in, &t);			
-			cryptprc(out, out, cipher_k);						
+			xor128(tmp, in, &t);		
+			cryptprc(tmp, tmp, cipher_k);					
+			xor128(out, tmp, &t);
+#else
+			xor128(out, in, &t);
+			cryptprc(out, out, cipher_k);
 			xor128(out, out, &t);
+#endif
 
 			/* update pointers */
 			in += 16; out += 16;
@@ -258,7 +278,7 @@ static void xts_aes_twofish_serpent_decrypt(u8 *in, u8 *out, size_t len, u64 off
 }
 
 static dc_cipher dc_ciphers[] = {
-#ifdef AES_ASM
+#ifndef AES_STATIC
 	{ 32, aes256_set_key, NULL,  NULL  },                      /* AES */
 #else
 	{ 32, aes256_set_key, aes256_encrypt,  aes256_decrypt  },  /* AES */
@@ -294,7 +314,7 @@ void dc_cipher_init(
 		d_key + dc_ciphers[cipher].key_len, &key->xts.tweak_k);
 
 	key->xts.encrypt = dc_ciphers[cipher].encrypt;
-#ifdef AES_ASM
+#ifndef AES_STATIC
 	if (cipher == CF_AES) {
 		key->xts.encrypt = aes256_encrypt_ptr(&key->xts.tweak_k);
 	}
@@ -306,7 +326,7 @@ void dc_cipher_init(
 	dc_ciphers[cipher].set_key(d_key, &key->cipher_k);
 	key->encrypt = dc_ciphers[cipher].encrypt;
 	key->decrypt = dc_ciphers[cipher].decrypt;
-#ifdef AES_ASM
+#ifndef AES_STATIC
 	if (cipher == CF_AES) {
 		key->encrypt = aes256_encrypt_ptr(&key->cipher_k);
 		key->decrypt = aes256_decrypt_ptr(&key->cipher_k);
@@ -320,9 +340,8 @@ void dc_cipher_init(
 #ifndef SMALL_CODE
 void dc_cipher_reinit(dc_key *key)
 {
-#ifdef AES_ASM
-	if (key->cipher == CF_AES) 
-	{
+#ifndef AES_STATIC
+	if (key->cipher == CF_AES) {
 		key->encrypt = aes256_encrypt_ptr(&key->cipher_k);
 		key->decrypt = aes256_decrypt_ptr(&key->cipher_k);
 		key->xts.encrypt = aes256_encrypt_ptr(&key->xts.tweak_k);

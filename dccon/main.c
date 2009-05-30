@@ -25,15 +25,16 @@
 #include "main.h"
 #include "version.h"
 #include "boot_menu.h"
-#include "dcapi\misc.h"
-#include "dcapi\mbrinst.h"
-#include "dcapi\drv_ioctl.h"
-#include "dcapi\drvinst.h"
-#include "dcapi\rand.h"
-#include "dcapi\keyfiles.h"
-#include "boot\boot.h"
-#include "crypto\crypto.h"
-#include "crypto\pkcs5.h"
+#include "dcapi/misc.h"
+#include "dcapi/mbrinst.h"
+#include "dcapi/drv_ioctl.h"
+#include "dcapi/drvinst.h"
+#include "dcapi/rand.h"
+#include "dcapi/keyfiles.h"
+#include "dcapi/cd_enc.h"
+#include "boot/boot.h"
+#include "crypto/crypto.h"
+#include "crypto/pkcs5.h"
 #include "console.h"
 
 typedef struct _bench_item {
@@ -60,6 +61,9 @@ static void print_usage()
 		L"   -update                       update DiskCryptor driver\n"
 		L"   -enum                         enum all volume devices in system\n"
 		L"   -info    [device]             display information about device\n"
+		L"   -addpass [params]             add password to password cache\n"
+		L"      -p  [password]      get password from command line\n"
+		L"      -kf [keyfiles path] use keyfiles\n"
 		L"   -mount   [device] [params]    mount encrypted device\n"		
 		L"      -mp [mount point]   add volume mount point\n"
 		L"      -p  [password]      get password from command line\n"
@@ -102,6 +106,7 @@ static void print_usage()
 		L"      -q     quick format\n"
 		L"      -fat   format to FAT file system\n"
 		L"      -fat32 format to FAT32 file system\n"
+		L"      -exfat format to exFAT file system\n"
 		L"      -ntfs  format to NTFS file system\n"
 		L"      -raw   file system does not needed\n"
 		L"   -backup  [device] [file]      backup volume header to file\n"
@@ -114,6 +119,10 @@ static void print_usage()
 		L"   -config                       change program configuration\n"
 		L"   -keygen [file]                make 64 bytes random keyfile\n"
 		L"   -bsod                         erase all keys in memory and generate BSOD\n"
+		L"   -enciso [src] [dst] [params]  encrypt .iso image\n"
+		L"      -src    source file\n"
+		L"      -dst    destination file\n"
+		L"      -params encryption parameters (similar to -encrypt)\n"
 		L"   -boot [action]\n"
 		L"      -enum                      enumerate all HDDs\n"
 		L"      -setmbr   [hdd]            setup bootloader to HDD master boot record\n"
@@ -495,6 +504,19 @@ static int dc_decrypt_loop(vol_inf *inf)
 	return ST_OK;
 }
 
+static int dc_cd_callback(u64 iso_sz, u64 enc_sz, void *param)
+{
+	if ( (_kbhit() != 0) && (_getch() == 0x1B) ) {
+		wprintf(L"\nEncryption cancelled\n");
+		return ST_CANCEL;
+	}
+
+	wprintf(
+		L"\r%-.3f %%", 
+		(double)(enc_sz) / (double)(iso_sz) * 100);
+
+	return ST_OK;
+}
 
 int dc_set_boot_interactive(int d_num)
 {
@@ -663,7 +685,7 @@ int wmain(int argc, wchar_t *argv[])
 
 		if ( (argc >= 2) && (wcscmp(argv[1], L"-version") == 0) ) 
 		{
-			wprintf(L"DiskCryptor %s console\n", DC_FILE_VER);
+			wprintf(L"DiskCryptor %S console\n", DC_FILE_VER);
 			resl = ST_OK; break;
 		}
 
@@ -846,33 +868,39 @@ int wmain(int argc, wchar_t *argv[])
 			}
 
 			pass = dc_load_pass_and_keyfiles(NULL, NULL, NULL, 0);
+			mp_c = get_param(L"-mp");
 
 			if (pass == NULL) {
 				resl = ST_OK; break;
 			}
 
-			if ( (resl = dc_mount_volume(inf->device, pass)) == ST_OK ) 
+			if ( (mp_c != NULL) && (inf->status.mnt_point[0] == L'\\') ) {
+				resl = dc_mount_volume(inf->device, pass, MF_DELMP);
+			} else {
+				resl = dc_mount_volume(inf->device, pass, 0);
+			}
+
+			if ( (resl == ST_OK) && (mp_c != NULL) )
 			{
-				if (mp_c = get_param(L"-mp"))
+				if (inf->status.mnt_point[0] != L'\\') {
+					wprintf(L"device %s already have mount point\n", argv[2]);						
+				} else 
 				{
-					if (inf->status.mnt_point[0] != L'\\') {
-						wprintf(L"device %s already have mount point\n", argv[2]);						
-					} else 
-					{
-						_snwprintf(
-							vol_n, sizeof_w(vol_n), L"%s\\", inf->w32_device);
+					_snwprintf(
+						vol_n, sizeof_w(vol_n), L"%s\\", inf->w32_device);
 
-						wcsncpy(mnt_p, mp_c, sizeof_w(mnt_p));
-						if ( (s = wcslen(mnt_p)) && (mnt_p[s-1] != L'\\') ) {
-							mnt_p[s] = L'\\'; mnt_p[s+1] = 0;
-						}
+					wcsncpy(mnt_p, mp_c, sizeof_w(mnt_p));
+					if ( (s = wcslen(mnt_p)) && (mnt_p[s-1] != L'\\') ) {
+						mnt_p[s] = L'\\'; mnt_p[s+1] = 0;
+					}
 
-						if (SetVolumeMountPoint(mnt_p, vol_n) == 0) {
-							wprintf(L"Error when adding mount point\n");
-						}
+					if (SetVolumeMountPoint(mnt_p, vol_n) == 0) {
+						wprintf(L"Error when adding mount point\n");
 					}
 				}
+			}
 
+			if (resl == ST_OK) {
 				wprintf(L"device %s mounted\n", argv[2]);
 			}
 
@@ -886,7 +914,7 @@ int wmain(int argc, wchar_t *argv[])
 			int      n_mount;
 
 			pass = dc_load_pass_and_keyfiles(NULL, NULL, NULL, 0);
-			resl = dc_mount_all(pass, &n_mount);
+			resl = dc_mount_all(pass, &n_mount, 0);
 
 			if (resl == ST_OK) {
 				wprintf(L"%d devices mounted\n", n_mount);
@@ -900,15 +928,18 @@ int wmain(int argc, wchar_t *argv[])
 
 		if ( (argc >= 3) && (wcscmp(argv[1], L"-unmount") == 0) )
 		{
-			wchar_t mnt_p[MAX_PATH];
-			int     flags = 0;
+			int flags = 0;
 
 			if ( (inf = find_device(argv[2])) == NULL ) {
 				resl = ST_NF_DEVICE; break;
 			}
 
 			if (is_param(L"-f") != 0) {
-				flags = UM_FORCE;
+				flags |= MF_FORCE;
+			}
+
+			if (is_param(L"-dp") != 0) {
+				flags |= MF_DELMP;
 			}
 
 			if ( !(inf->status.flags & F_ENABLED) ) {
@@ -925,20 +956,11 @@ int wmain(int argc, wchar_t *argv[])
 					L"Would you like to force a unmount on this volume? (Y/N)\n");
 
 				if (tolower(_getch()) == 'y') {
-					resl = dc_unmount_volume(inf->device, UM_FORCE);
+					resl = dc_unmount_volume(inf->device, flags | MF_FORCE);
 				}
 			}
 
-			if (resl == ST_OK) 
-			{
-				if (is_param(L"-dp") != 0) 
-				{
-					_snwprintf(
-						mnt_p, sizeof_w(mnt_p), L"%s\\", inf->status.mnt_point);					
-
-					DeleteVolumeMountPoint(mnt_p);
-				}
-
+			if (resl == ST_OK) {
 				wprintf(L"device %s unmounted\n", argv[2]);
 			}
 			break;
@@ -962,6 +984,21 @@ int wmain(int argc, wchar_t *argv[])
 				wprintf(L"passwords has been erased in memory\n");
 			}
 			break;
+		}
+
+		if ( (argc >= 2) && (wcscmp(argv[1], L"-addpass") == 0) )
+		{
+			dc_pass *pass;
+
+			pass = dc_load_pass_and_keyfiles(NULL, NULL, NULL, 0);
+
+			if (pass == NULL) {
+				resl = ST_OK; break;
+			}
+
+			resl = dc_add_password(pass);
+
+			secure_free(pass);
 		}
 
 		if ( (argc >= 3) && (wcscmp(argv[1], L"-encrypt") == 0) )
@@ -1002,29 +1039,31 @@ int wmain(int argc, wchar_t *argv[])
 			if ( (inf->status.flags & F_SYSTEM) || (wcscmp(inf->device, boot_dev) == 0) )
 			{
 				ldr_config conf;
-				int        b_dsk;
+				int        dsk_1, dsk_2;
 				
-				if (dc_get_boot_disk(&b_dsk) != ST_OK)
+				if (dc_get_boot_disk(&dsk_1, &dsk_2) != ST_OK)
 				{
 					wprintf(
 						L"This partition needed for system booting and bootable HDD not found\n"
 						L"You must be use external bootloader\n"
-						L"Continue operation (Y/N)?\n\n");
+						L"Continue operation (Y/N)?\n\n"
+						);
 
 					if (tolower(_getch()) != 'y') {
 						resl = ST_OK; break;
 					}
-				} else if (dc_get_mbr_config(b_dsk, NULL, &conf) != ST_OK)
+				} else if (dc_get_mbr_config(dsk_1, NULL, &conf) != ST_OK)
 				{
 					wprintf(
 						L"This partition needed for system booting\n"
 						L"You must install bootloader to HDD, or use external bootloader\n\n"
 						L"1 - Install to HDD\n"
-						L"2 - I already have external bootloader\n");
+						L"2 - I already have external bootloader\n"
+						);
 
 					if (getchr('1', '2') == '1') 
 					{
-						if ( (resl = dc_set_boot_interactive(b_dsk)) != ST_OK ) {
+						if ( (resl = dc_set_boot_interactive(-1)) != ST_OK ) {
 							break;
 						}
 					}
@@ -1246,6 +1285,8 @@ int wmain(int argc, wchar_t *argv[])
 					fs = L"FAT";
 				} else if (is_param(L"-fat32") != 0) {
 					fs = L"FAT32";
+				} else if (is_param(L"-exfat") != 0) {
+					fs = L"exFAT";
 				} else fs = NULL;
 
 				if (resl == ST_OK) 
@@ -1399,12 +1440,22 @@ int wmain(int argc, wchar_t *argv[])
 				wprintf(
 					L"1 - On/Off passwords caching (%s)\n"
 					L"2 - On/Off hiding $dcsys$ files (%s)\n"
-					L"3 - Save changes and exit\n\n",					
+					L"3 - On/Off hardware cryptography support (%s)\n"
+					L"4 - On/Off automounting at boot time (%s)\n"
+					L"5 - Save changes and exit\n\n",					
 					on_off(dc_conf.conf_flags & CONF_CACHE_PASSWORD),
-					on_off(dc_conf.conf_flags & CONF_HIDE_DCSYS));
+					on_off(dc_conf.conf_flags & CONF_HIDE_DCSYS),
+					(dc_conf.load_flags & DST_HW_CRYPTO) ? 
+					    on_off(dc_conf.conf_flags & CONF_HW_CRYPTO) : L"not available",
+					on_off(dc_conf.conf_flags & CONF_AUTOMOUNT_BOOT)
+					);
 
-				if ( (ch = getchr('1', '3')) == '3' ) {
+				if ( (ch = getchr('1', '5')) == '5' ) {
 					break;
+				}
+
+				if ( !(dc_conf.load_flags & DST_HW_CRYPTO) && (ch == '3') ) {
+					continue;
 				}
 
 				wprintf(L"0 - OFF\n1 - ON\n");
@@ -1412,8 +1463,12 @@ int wmain(int argc, wchar_t *argv[])
 
 				if (ch == '1') {
 					set_flag(dc_conf.conf_flags, CONF_CACHE_PASSWORD, onoff);
-				} else {
+				} else if (ch == '2') {
 					set_flag(dc_conf.conf_flags, CONF_HIDE_DCSYS, onoff);
+				} else if (ch == '3') {
+					set_flag(dc_conf.conf_flags, CONF_HW_CRYPTO, onoff);
+				} else {
+					set_flag(dc_conf.conf_flags, CONF_AUTOMOUNT_BOOT, onoff);
 				}
 			} while (1);
 
@@ -1438,6 +1493,34 @@ int wmain(int argc, wchar_t *argv[])
 		{
 			dc_get_bsod(); resl = ST_OK;
 			break;
+		}
+
+		if ( (argc >= 4) && (wcscmp(argv[1], L"-enciso") == 0) ) 
+		{
+			dc_pass   *pass;			
+			crypt_info crypt;
+			
+			/* get encryption params */
+			crypt.cipher_id = CF_AES;
+			get_crypt_info(&crypt);
+
+			pass = dc_load_pass_and_keyfiles(NULL, NULL, NULL, 1);
+
+			if (pass == NULL) {
+				resl = ST_OK; break;
+			}
+
+			resl = dc_encrypt_cd(
+				argv[2], argv[3], pass, crypt.cipher_id, dc_cd_callback, NULL);
+
+			_putch('\n');
+
+			secure_free(pass);
+
+			if (resl == ST_OK) {
+				wprintf(L"ISO image successfully encrypted.\n");
+			}
+			if (resl == ST_CANCEL) { resl = ST_OK; }
 		}
 	} while (0);
 

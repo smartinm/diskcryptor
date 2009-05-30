@@ -10,8 +10,7 @@ void dump_usage_notify(
 		 IN DEVICE_USAGE_NOTIFICATION_TYPE type
 		 );
 
-int is_dump_crypt();
-int is_hiber_crypt();
+int dump_hibernate_action();
 
 typedef struct _LDR_DATA_TABLE_ENTRY {
     LIST_ENTRY InLoadOrderLinks;

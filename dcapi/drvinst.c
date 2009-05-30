@@ -30,9 +30,12 @@
 
 static wchar_t drv_dc[]  = L"dcrypt";
 static wchar_t drv_fsf[] = L"dc_fsf";
-static wchar_t reg_key[] = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{71A27CDD-812A-11D0-BEC7-08002BE2092F}";
+static wchar_t vol_key[] = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{71A27CDD-812A-11D0-BEC7-08002BE2092F}";
+static wchar_t cdr_key[] = L"SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E965-E325-11CE-BFC1-08002BE10318}";
+
 static wchar_t reg_srv[] = L"SYSTEM\\CurrentControlSet\\Services\\dcrypt\\config";
 static wchar_t lwf_str[] = L"LowerFilters";
+static wchar_t upf_str[] = L"UpperFilters";
 
 int dc_load_conf(dc_conf_data *conf)
 {
@@ -249,14 +252,56 @@ static int dc_remove_service(wchar_t *name)
 	return resl;
 }
 
+static int dc_remove_filter(wchar_t *key, wchar_t *name)
+{
+	HKEY h_key;
+	int  resl;
+
+	if (RegOpenKey(HKEY_LOCAL_MACHINE, key, &h_key) == 0) 
+	{
+		if ( (rmv_from_val(h_key, lwf_str, name) == 0) && 
+			 (rmv_from_val(h_key, upf_str, name) == 0) ) 
+		{
+			resl = ST_ERROR;
+		} else { resl = ST_OK; }		
+		RegCloseKey(h_key);
+	} else { resl = ST_REG_ERROR; }
+
+	return resl;
+}
+
+static int dc_add_filter(wchar_t *key, wchar_t *name, int upper)
+{
+	HKEY h_key;
+	int  resl;
+	int  succs;
+
+	if (RegOpenKey(HKEY_LOCAL_MACHINE, key, &h_key) == 0) 
+	{
+		if (upper != 0) {
+			succs = set_to_val(h_key, upf_str, name);
+		} else {
+			succs = set_to_val(h_key, lwf_str, name);
+		}
+		resl = (succs != 0) ? ST_OK : ST_REG_ERROR;
+		RegCloseKey(h_key);
+	} else { resl = ST_REG_ERROR; }
+
+	return resl;
+}
+
 int dc_remove_driver()
 {
 	wchar_t buf[MAX_PATH];
-	HKEY    h_key = NULL;
-	int     resl;	
+	int     succs = 1;
 
 	do 
 	{
+		/* remove Volume class filter */
+		succs &= (dc_remove_filter(vol_key, drv_dc) == ST_OK);
+		/* remove CDROM class filter */
+		succs &= (dc_remove_filter(cdr_key, drv_dc) == ST_OK);
+
 		/* delete drivers files */
 		dc_get_driver_path(buf, drv_dc);
 		DeleteFile(buf);
@@ -264,31 +309,11 @@ int dc_remove_driver()
 		DeleteFile(buf);
 
 		/* remove services */
-		if ( (resl = dc_remove_service(drv_dc)) != ST_OK ) {
-			break;
-		}
+		succs &= (dc_remove_service(drv_dc)  == ST_OK);
+		succs &= (dc_remove_service(drv_fsf) == ST_OK);
+	} while(0);
 
-		if ( (resl = dc_remove_service(drv_fsf)) != ST_OK ) {
-			break;
-		}		
-
-		/* remove Volume class binding */
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
-			resl = ST_REG_ERROR; break;
-		}
-
-		if (rmv_from_val(h_key, lwf_str, drv_dc) == 0) {
-			resl = ST_ERROR;
-		} else {
-			resl = ST_OK;
-		}		
-	} while(0);	
-
-	if (h_key != NULL) {
-		RegCloseKey(h_key);
-	}
-
-	return resl;
+	return (succs != 0) ? ST_OK : ST_ERROR;
 }
 
 static int dc_add_service(wchar_t *name, u32 type)
@@ -330,7 +355,6 @@ static int dc_add_service(wchar_t *name, u32 type)
 int dc_install_driver()
 {
 	dc_conf_data conf;
-	HKEY         h_key = NULL;
 	int          resl;
 	
 	do 
@@ -351,22 +375,20 @@ int dc_install_driver()
 			break;
 		}
 
-		if (RegOpenKey(HKEY_LOCAL_MACHINE, reg_key, &h_key) != 0) {
-			resl = ST_REG_ERROR; break;
+		/* add Volume class filter */
+		if ( (resl = dc_add_filter(vol_key, drv_dc, 0)) != ST_OK ) {
+			break;
 		}
-
-		if (set_to_val(h_key, lwf_str, drv_dc) == 0) {
-			resl = ST_REG_ERROR; break;
+		/* add CDROM class filter */
+		if ( (resl = dc_add_filter(cdr_key, drv_dc, 1)) != ST_OK ) {
+			break;
 		}
-		
 		/* setup default config */
-		zeroauto(&conf, sizeof(conf));		
+		zeroauto(&conf, sizeof(conf));
+		conf.conf_flags = (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
+		
 		resl = dc_save_conf(&conf);
 	} while (0);
-
-	if (h_key != NULL) {
-		RegCloseKey(h_key);
-	}
 
 	if (resl != ST_OK) {
 		dc_remove_driver();
@@ -419,9 +441,21 @@ int dc_update_driver()
 
 		if (conf.build < 331) 
 		{
+			/* install file system filter driver */
 			if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
 				break;
 			}
+		}
+
+		if (conf.build < 366) 
+		{
+			/* add CDROM class filter */
+			if ( (resl = dc_add_filter(cdr_key, drv_dc, 1)) != ST_OK ) {
+				break;
+			}
+
+			/* set new default flags */
+			conf.conf_flags |= (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
 		}
 
 		resl = dc_save_conf(&conf);

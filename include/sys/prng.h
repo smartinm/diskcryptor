@@ -4,7 +4,7 @@
 #include "defines.h"
 #include "aes.h"
 
-typedef struct _rnd_ctx {
+typedef calign struct _rnd_ctx {
 	aes256_key key;
 	be128      index;
 
@@ -12,7 +12,7 @@ typedef struct _rnd_ctx {
 
 void rnd_add_buff(void *data, int size);
 void rnd_reseed_now();
-void rnd_get_bytes(u8 *buf, int len);
+int  rnd_get_bytes(u8 *buf, int len);
 int  rnd_init_prng();
 
 rnd_ctx *rnd_fast_init();

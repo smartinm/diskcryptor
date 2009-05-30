@@ -20,7 +20,7 @@
 org 7C00h
 
 use16
- jmp   @F
+ jmp   j_1
  ; boot parameters
  dd 20B60251h
 lba_packet:
@@ -31,7 +31,7 @@ lba_packet:
  buff_hi  dw 2000h
  start_lo dd 1
  start_hi dd 0
-@@:
+j_1:
  jmp   0:start
 
 start:
@@ -42,8 +42,8 @@ start:
  mov   sp, 4000h
  sti
  ; check int13 hook installed by another bootloader copy
- mov   bx, [ds:4Ch]
- mov   es, [ds:4Eh]
+ mov   bx, [4Ch]
+ mov   es, [4Eh]
  cmp   dword [es:bx+2], 6D4701BBh
  jz    boot_active
  ; read stage1 code to 2000:0
@@ -67,20 +67,20 @@ boot_active:
  rep movsb
  ; jump to copy
  push  es
- push  @F
+ push  in_seg
  retf
-@@:
+in_seg:
  ; setup new data segment
  mov   ax, cs
  mov   ds, ax
  ; find active partition
  mov   di, 7C00h+1BEh ; start of partition table
-@@:
+find:
  test  byte [di], 0x80
  jnz   active_found
  add   di, 0x10       ; next table
  cmp   di, 7C00h+1FEh ; scanned beyond end of table ??
- jb    @B
+ jb    find
  ; atcive partition not found
  call  error_msg
  db 'no active partition found',0
@@ -96,37 +96,36 @@ active_found:
  mov   [sectors], bx
  ; reat boot sector
  call  read_sectors
- jnc   @F
+ jnc   do_boot_1
  call  error_msg
  db 'disk read error',0
-@@:
+do_boot_1:
  ; check boot signature
  cmp   word [es:7C00h+1FEh], 0AA55h
- jz    @F
+ jz    do_boot_2
  call  error_msg
  db 'invalid boot sector',0
-@@:
+do_boot_2:
  ; jump to boot sector
  push  es
  push  bp
  retf
-
 
 read_sectors:
  pusha
  ; save drive number
  mov   bp, dx
  ; setup read segment
- push  [buff_hi]
+ push  word [buff_hi]
  pop   es
  ; if read area below that 504mb use CHS enforcement
  ; this needed for compatibility with some stupid BIOSes
  xor   eax, eax
  cmp   dword [start_hi], eax
- jnz   @F
+ jnz   check_lba
  cmp   dword [start_lo], (504 * 1024 * 2)
  jc    chs_mode
-@@:
+check_lba:
  ; check for LBA support
  mov   ah, 41h
  mov   bx, 55AAh
@@ -183,21 +182,19 @@ read:
 
 error_msg:
  pop   si
-@@:
+e_loop:
  lodsb
  test  al, al
  jz    $
  mov   ah, 0Eh
  xor   bx, bx
  int   10h
- jmp   @B
+ jmp   e_loop
 
 
-repeat	0x1fc-($-7C00h)
- db 0
-end repeat
- dw 0x0
- dw 0xAA55
+times  510-($-$$) db 0
+db     0x55,0xaa
+
 
 
 

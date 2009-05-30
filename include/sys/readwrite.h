@@ -6,10 +6,7 @@ NTSTATUS
      dev_hook *hook, u8 *buff, u32 size, u64 offset, u32 flags, u32 funct
 	 );
 
-NTSTATUS
-  dc_read_write_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 );
+NTSTATUS dc_read_write_irp(dev_hook *hook, PIRP irp);
 
 void dc_sync_irp_io(dev_hook *hook, PIRP irp);
 

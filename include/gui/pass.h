@@ -25,18 +25,18 @@ typedef struct __pass_inf {
 #define P_NCHAR    32
 
 #define _get_pass_keyfiles(hwnd, id_pass, id_check_key, key_list_id) ( \
-		__get_pass_keyfiles(                \
-				GetDlgItem(hwnd, id_pass),      \
-				_get_check(hwnd, id_check_key), \
-				key_list_id                     \
-			)                                 \
+		__get_pass_keyfiles(					\
+				GetDlgItem(hwnd, id_pass),		\
+				_get_check(hwnd, id_check_key),	\
+				key_list_id						\
+				)								\
 	)
 
-#define _get_pass(hwnd, id_pass) (      \
-		__get_pass_keyfiles(                \
-				GetDlgItem(hwnd, id_pass),      \
-				FALSE, -1                       \
-			)                                 \
+#define _get_pass(hwnd, id_pass) (				\
+		__get_pass_keyfiles(					\
+				GetDlgItem(hwnd, id_pass),		\
+				FALSE, -1						\
+				)								\
 	)
 
 void _draw_pass_rating(

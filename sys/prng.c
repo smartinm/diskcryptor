@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -51,6 +51,7 @@ typedef struct _seed_data {
 	LARGE_INTEGER   seed21;
 	ULONG_PTR       seed22;
 	ULONG_PTR       seed23;
+	KIRQL           seed24;
 		  
 } seed_data;
 
@@ -147,7 +148,6 @@ void rnd_reseed_now()
 	seed.seed4  = PsGetCurrentThreadId();
 	seed.seed5  = KeGetCurrentProcessorNumber();
 	seed.seed6  = KeQueryInterruptTime();
-	seed.seed7  = KeQueryPriorityThread(seed.seed3);
 	seed.seed10 = KeQueryPerformanceCounter(NULL);
 	seed.seed11 = __rdtsc();
 	seed.seed12 = ExGetPreviousMode();
@@ -155,8 +155,13 @@ void rnd_reseed_now()
 	seed.seed14 = IoGetTopLevelIrp();
 	seed.seed15 = MmQuerySystemSize();
 	seed.seed16 = PsGetProcessExitTime();
-	seed.seed17 = ExUuidCreate(&seed.seed18);
-	seed.seed19 = RtlRandom(&seed.seed8);
+	seed.seed24 = KeGetCurrentIrql();
+	
+	if (KeGetCurrentIrql() == PASSIVE_LEVEL) {
+		seed.seed7  = KeQueryPriorityThread(seed.seed3);
+		seed.seed17 = ExUuidCreate(&seed.seed18);
+		seed.seed19 = RtlRandom(&seed.seed8);
+	}
 	
 	KeQueryTickCount(&seed.seed21);
 	IoGetStackLimits(&seed.seed22, &seed.seed23);
@@ -167,12 +172,13 @@ void rnd_reseed_now()
 	zeroauto(&seed, sizeof(seed));
 }
 
-void rnd_get_bytes(u8 *buf, int len)
+int rnd_get_bytes(u8 *buf, int len)
 {
 	sha512_ctx  sha_ctx;
-	u8          hval[SHA512_DIGEST_SIZE];
+	u8 calign   hval[SHA512_DIGEST_SIZE];
 	int         c_len, idx, i;
 	ext_seed    seed;
+	int         fail;
 
 	if (reseed_cnt < 256) {
 		DbgMsg("RNG not have sufficient entropy (%d reseeds), collect it now\n", reseed_cnt);
@@ -186,15 +192,18 @@ void rnd_get_bytes(u8 *buf, int len)
 
 	wait_object_infinity(&rnd_mutex);
 
+#ifdef AES_ASM_VIA
+	aes256_ace_rekey();
+#endif
+
 	/* derive AES key from key pool */
-	aes256_set_key(
-		key_pool, rnd_key);
+	aes256_set_key(key_pool, rnd_key);
 
 	/* mix pool state before get data from it */
 	rnd_pool_mix();
 
 	/* idx - position for extraction pool data */
-	idx = 0;
+	idx = 0; fail = 0;
 	do
 	{
 		c_len      = min(len, SHA512_DIGEST_SIZE);
@@ -215,7 +224,12 @@ void rnd_get_bytes(u8 *buf, int len)
 		}
 
 		/* copy data to output */
-		memcpy(buf, hval, c_len);
+		__try {
+			memcpy(buf, hval, c_len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			fail = 1;
+		}
 
 		/* increment extraction pointer */
 		if ( (idx += SHA512_DIGEST_SIZE) == RNG_POOL_SIZE ) {
@@ -229,7 +243,7 @@ void rnd_get_bytes(u8 *buf, int len)
 
 		/* update buffer pointer and remaining length */
 		buf += c_len; len -= c_len;
-	} while (len != 0);
+	} while ( (len != 0) && (fail == 0) );
 
 	/* mix pool after get data to prevent "could boot" attacks to generated keys */
 	rnd_pool_mix();
@@ -241,6 +255,8 @@ void rnd_get_bytes(u8 *buf, int len)
 	zeroauto(&seed, sizeof(seed));
 
 	KeReleaseMutex(&rnd_mutex, FALSE);
+
+	return fail == 0;
 }
 
 rnd_ctx *rnd_fast_init() 
@@ -272,14 +288,17 @@ void rnd_fast_free(rnd_ctx *ctx)
 
 void rnd_fast_rand(rnd_ctx *ctx, u8 *buf, int len)
 {
-	u8  buff[16];
-	int c_len;
+	u8 calign buff[16];
+	int       c_len;
+
+#ifdef AES_ASM_VIA
+	aes256_ace_rekey();
+#endif
 
 	do
 	{
 		/* encrypt counter with AES in CTR mode */
-		aes256_encrypt(
-			pv(&ctx->index), buff, &ctx->key);
+		aes256_encrypt(pv(&ctx->index), buff, &ctx->key);
 
 		/* increment counter */
 		if (++ctx->index.b == 0) {

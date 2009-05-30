@@ -6,16 +6,16 @@
 
 #define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); }
 
-#define __msg_w(display, hwnd) (MessageBox( \
-	hwnd, display, L"Warning", MB_YESNO | MB_ICONWARNING) == IDYES)
+#define __msg_w( hwnd, display ) ( MessageBox( \
+	hwnd, display, L"Warning", MB_YESNO | MB_ICONWARNING) == IDYES )
 
-int _msg_i(HWND hwnd, wchar_t *format, ...);
-int _msg_q(HWND hwnd, wchar_t *format, ...);
+int __msg_i( HWND hwnd, wchar_t *format, ... );
+int __msg_q( HWND hwnd, wchar_t *format, ... );
 
-#define __msg_e(hwnd, display) (MessageBox( \
-	hwnd, display, L"Error", MB_OK | MB_ICONERROR))
+#define __msg_e( hwnd, display ) ( MessageBox( \
+	hwnd, display, L"Error", MB_OK | MB_ICONERROR) )
 
-void _error_s(
+void __error_s(
 		HWND hwnd,
 		wchar_t *format, 
 		int e_code, 
@@ -40,9 +40,12 @@ void *_extract_rsrc(
 		int *size
 	);
 
-void _set_trailing_slash(wchar_t *path);
+void _set_trailing_slash( wchar_t *path );
+wchar_t *_extract_name( wchar_t *s_path );
+
 void _reboot( );
 
-int _bitcount(DWORD n);
+int _bitcount( DWORD n );
+BOOL _array_include( int arr[ ], int find );
 
 #endif

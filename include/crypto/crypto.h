@@ -33,14 +33,14 @@ typedef struct _dc_cipher {
 
 } dc_cipher;
 
-typedef aligned struct _chain_ctx {
+typedef calign struct _chain_ctx {
 	aes256_key  aes_key;
 	twofish_ctx twofish_key;
 	serpent_ctx serpent_key;
 
 } chain_ctx;
 
-typedef aligned union _cipher_key {
+typedef calign union _cipher_key {
 	aes256_key  aes_key;
 	twofish_ctx twofish_key;
 	serpent_ctx serpent_key;
@@ -48,7 +48,7 @@ typedef aligned union _cipher_key {
 
 } cipher_key;
 
-typedef aligned struct _dc_key
+typedef calign struct _dc_key
 {
 	struct {
 		cipher_key   tweak_k;
@@ -85,8 +85,9 @@ int dc_decrypt_header(
 	  dc_key *hdr_key, dc_header *header, dc_pass *password
 	  );
 
-#define dc_init_crypto() { \
+#define dc_init_crypto(hw_crypt) { \
 	aes256_gentab(); \
+	aes256_select_alg((hw_crypt)); \
 }
 
 

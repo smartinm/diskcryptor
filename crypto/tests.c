@@ -18,6 +18,9 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifdef DCAPI_DLL
+ #include <windows.h>
+#endif
 #include "defines.h"
 #include "cryptodef.h"
 #include "tests.h"
@@ -35,9 +38,23 @@
  #define DbgMsg
 #endif
 
+
+#ifdef BOOT_LDR
+ #define test_alloc(n) pv(0x5000)
+ #define test_free(p)
+#else
+#ifdef DCAPI_DLL
+ #define test_alloc(n) VirtualAlloc(NULL, n, MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+ #define test_free(p)  VirtualFree(p, 0, MEM_RELEASE)
+#else /* DCAPI_DLL */
+ #define test_alloc(n) mem_alloc(n)
+ #define test_free(p)  mem_free(p)
+#endif /* DCAPI_DLL */
+#endif /* BOOT_LDR */
+
 #ifdef CRYPT_TESTS
 
-static struct {
+static calign struct {
 	u8 key[32];
 	u8 plaintext[16];
 	u8 ciphertext[16];
@@ -329,33 +346,38 @@ static int test_pkcs5()
 	return 1;
 }
 
+
 static int test_ciphers()
 {
-	char        tmp[16];
+	char calign tmp[16];
 	cipher_key *key;
 	int         resl = 0;
 	int         i;
 
 	do
 	{
-#ifdef BOOT_LDR
-		key = pv(0x5000);
-#else
-		if ( (key = mem_alloc(sizeof(cipher_key))) == NULL) {
-			break;
+		if ( (key = test_alloc(sizeof(cipher_key))) == NULL ) { 
+			break; 
 		}
-#endif
 
 		/* test AES */
 		for (i = 0; i < array_num(aes256_vectors); i++) 
 		{
 			aes256_set_key(aes256_vectors[i].key, &key->aes_key);
 
+#ifdef AES_ASM_VIA
+			aes256_ace_rekey();
+#endif
+
 			aes256_encrypt(aes256_vectors[i].plaintext, tmp, &key->aes_key);
 
 			if (memcmp(aes256_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) {
 				goto exit;
 			}
+
+#ifdef AES_ASM_VIA
+			aes256_ace_rekey();
+#endif
 
 			aes256_decrypt(aes256_vectors[i].ciphertext, tmp, &key->aes_key);
 
@@ -403,11 +425,10 @@ static int test_ciphers()
 		resl = 1;
 	} while (0);
 exit:;
-#ifndef BOOT_LDR
+
 	if (key != NULL) {
-		mem_free(key);
+		test_free(key);
 	}
-#endif
 	
 	return resl;	
 }
@@ -423,13 +444,9 @@ static int test_xts_mode()
 
 	do
 	{
-#ifdef BOOT_LDR
-		d_key = pv(0x5000);
-#else
-		if ( (d_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (d_key = test_alloc(sizeof(dc_key))) == NULL ) {
 			break;
 		}
-#endif
 
 		for (i = 0; i < SECTOR_SIZE; i++) {
 			pt[i] = (u8)i;
@@ -461,11 +478,9 @@ static int test_xts_mode()
 		resl = 1;
 	} while (0);
 exit:;
-#ifndef BOOT_LDR
 	if (d_key != NULL) {
-		mem_free(d_key);
+		test_free(d_key);
 	}
-#endif
 
 	return resl;
 }
@@ -481,13 +496,9 @@ static int test_buff_crypt()
 
 	do
 	{
-#ifdef BOOT_LDR
-		d_key = pv(0x5000);
-#else
-		if ( (d_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (d_key = test_alloc(sizeof(dc_key))) == NULL ) {
 			break;
 		}
-#endif
 
 		for (i = 0; i < DISKKEY_SIZE; i++) {
 			key[i] = i % DISKKEY_SIZE;
@@ -513,11 +524,10 @@ static int test_buff_crypt()
 		resl = 1;
 	} while (0);
 exit:;
-#ifndef BOOT_LDR
+
 	if (d_key != NULL) {
-		mem_free(d_key);
+		test_free(d_key);
 	}
-#endif
 
 	return resl;
 }

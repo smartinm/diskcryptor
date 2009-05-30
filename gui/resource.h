@@ -20,10 +20,12 @@
 #define IDB_GENERATE_KEYFILE            6
 #define IDC_BTN_ENCRYPT2                7
 #define IDC_BTN_DECRYPT_                7
+#define DC_MINOR_VER                    7
 #define IDC_BTN_ENCRYPT3                8
 #define IDC_BTN_MOUNTALL_               8
 #define IDC_BTN_ENCRYPT4                9
 #define IDC_BTN_UNMOUNTALL_             9
+#define DC_BOOT_VER                     90
 #define IDD_MAIN_DLG                    101
 #define IDS_STRING102                   102
 #define IDC_DISKDRIVES                  104
@@ -50,12 +52,17 @@
 #define DLG_CONF2                       131
 #define DLG_WIZ_PAGE2                   132
 #define DLG_WIZ_LOADER                  133
-#define IDB_DISK                        135
+#define IDB_DISK                        134
+#define IDB_CDROM                       135
 #define IDB_DISK_MASK                   136
 #define IDB_UNDISK                      137
 #define IDB_BITMAP1                     138
 #define IDB_UNDISK_MASK                 139
 #define IDB_DISK_MASKh                  140
+#define IDB_DISK_                       140
+#define IDB_DISK_h                      140
+#define IDB_CDROM1                      140
+#define IDB_CDROM_MASK                  140
 #define DLG_MAIN_INFO                   146
 #define DLG_MAIN_ACTION                 147
 #define IDB_ENABLED                     152
@@ -73,9 +80,13 @@
 #define DLG_BOOT_CONF_BADPASS           165
 #define IDD_DIALOG_ABOUT                166
 #define IDD_DIALOG_BENCHMARK            167
-#define DLG_WIZ_TYPE                    170
+#define DLG_WIZ_ISO                     170
 #define DLG_WIZ_FORMAT                  171
 #define IDD_DIALOG_KEYFILES             172
+#define DLG_WIZ_PROGRESS                173
+#define DLG_BOOT_CONF_OTHER             174
+#define DLG_CONF_EXTENDED               175
+#define DLG_CONF_EXTNDED                175
 #define IDC_DRIVER_VER                  206
 #define IDB_PREF_GENERAL                305
 #define IDB_PREF_HOTKEYS                306
@@ -86,10 +97,11 @@
 #define IDC_KEY_WIPE_                   311
 #define IDC_AUTO_START                  312
 #define IDC_ADV_IO_QUEUE                313
-#define IDC_AUTO_START2                 313
 #define IDC_HIDE_FILES                  313
 #define IDC_STATIC_KEY_MOUNTALL         314
+#define IDC_HARD_CRYPTO_SUPPORT         314
 #define IDC_STATIC_KEY_UNMOUNTALL       315
+#define IDC_AUTO_MOUNT_ON_BOOT          315
 #define IDC_TREE                        316
 #define IDCCANCEL                       317
 #define IDC_LT_GET_PASS                 318
@@ -221,6 +233,7 @@
 #define IDC_LAUOUTS_LIST                1117
 #define IDC_LAYOUTS_LIST                1117
 #define IDC_GR_CAPS                     1118
+#define IDE_ISO_SRC_PATH                1118
 #define IDC_GR_SMALL                    1119
 #define IDC_GR_DIGITS                   1120
 #define IDC_GR_SPACE                    1121
@@ -247,7 +260,9 @@
 #define IDB_BOOT_PATH                   1146
 #define IDB_BOOT_MAIN                   1147
 #define IDB_BOOT_LOGON                  1148
+#define IDB_ISO_OPEN_DST                1148
 #define IDC_BOOT_TAB                    1149
+#define IDC_HEAD_BOOT_FILE2             1149
 #define IDC_COMBO_METHOD                1150
 #define IDC_COMBO_SHOW_PASS             1151
 #define IDC_PART_LIST_BY_ID             1152
@@ -304,6 +319,16 @@
 #define IDC_STATIC_RIGHT                1198
 #define IDC_PASS_STATUS_NEW             1204
 #define IDC_RESIZING                    1205
+#define IDC_TAB1                        1206
+#define IDT_TAB                         1207
+#define IDT_BOOT_TAB                    1208
+#define IDE_ISO_DST_PATH                1209
+#define IDB_ISO_OPEN_SRC                1210
+#define IDC_STATIC_STATUS               1211
+#define IDC_PROGRESS_ISO                1212
+#define IDC_STATUS_PROGRESS             1213
+#define IDC_ISO_PROGRESS                1214
+#define IDC_USE_HARD_CRYPTO             1215
 #define ID_FILE_EXIT                    40001
 #define ID_VOLUMES_ENCRYPT              40002
 #define ID_VOLUMES_DECRYPT              40003
@@ -373,14 +398,17 @@
 #define ID_VOLUMES_ADDMOUNTPOINT40069   40069
 #define ID_VOLUMES_DELETE_MNTPOINT      40070
 #define ID_VOLUMES_ADD_MNTPOINT         40071
+#define ID_TOOLS_E                      40072
+#define ID_TOOLS_                       40073
+#define ID_TOOLS_ENCRYPT_CD             40074
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        174
-#define _APS_NEXT_COMMAND_VALUE         40072
-#define _APS_NEXT_CONTROL_VALUE         1206
+#define _APS_NEXT_COMMAND_VALUE         40075
+#define _APS_NEXT_CONTROL_VALUE         1216
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

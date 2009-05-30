@@ -1,7 +1,8 @@
 #ifndef _FS_FILTER_H_
 #define _FS_FILTER_H_
 
-#include "sys\driver.h"
+#include "sys/driver.h"
+#include "dcconst.h"
 
 typedef aligned struct _dc_fs_hook {
 	PDEVICE_OBJECT orig_dev;

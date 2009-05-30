@@ -1,3 +1,21 @@
+
+[31.05.2009] - 0.7
+  + Added CD encryption feature.
+  + Added 'load boot disk MBR' option to invalid password actions in bootloader.
+  + Added support for booting from software RAID1 volumes.
+  + Added exFAT support.
+  + Added compatibility with Windows 7.
+  + Improved SCSI disks name detection.
+  + Added new implementation of AES optimized for CPUs with small instruction cache.
+  + Added VIA PadLock AES acceleration support.
+  + Added installer.
+  + Added new command-line keys.
+  + More stable benchmark results.
+  + Added automatically delete mount points added when mounting.
+  + Added support for disks with large sector size.
+  + Added correct signature of drivers and other executeable files (special thanks to ReactOS Foundation).
+  + Small bugfixes.  
+
 [19.01.2009] - 0.6a
   + Improved $dcsys$ file protection.
   + Added optional hiding $dcsys$ file.

@@ -1,6 +1,8 @@
 #include <windows.h>
 #include "defines.h"
 #include "dcapi.h"
+#include "tests.h"
+#include "crypto\aes.h"
 
 static HINSTANCE h_inst_dll;
        u32       h_tls_idx;
@@ -46,7 +48,7 @@ BOOL WINAPI DllMain(
     HINSTANCE h_inst, u32 dw_reason, void *reserved
 	)
 {
-	if (dw_reason = DLL_PROCESS_ATTACH)
+	if (dw_reason == DLL_PROCESS_ATTACH)
 	{
 		h_tls_idx  = TlsAlloc();
 		h_inst_dll = h_inst;
@@ -56,6 +58,7 @@ BOOL WINAPI DllMain(
 		} else {
 			return FALSE;
 		}
+		CreateMutex(NULL, FALSE, L"DISKCRYPTOR_MUTEX");
 	}
 	return TRUE;
 }

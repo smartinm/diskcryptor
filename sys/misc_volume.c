@@ -94,7 +94,7 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 
 		wait_object_infinity(&hook->busy_lock);
 
-		if (hook->flags & (F_SYNC | F_UNSUPRT | F_DISABLE)) {
+		if (hook->flags & (F_SYNC | F_UNSUPRT | F_DISABLE | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
 
@@ -174,7 +174,7 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 
 		wait_object_infinity(&hook->busy_lock);
 
-		if (hook->flags & F_ENABLED) {
+		if (hook->flags & (F_ENABLED | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
 
@@ -221,11 +221,11 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 {
 	IO_STATUS_BLOCK iosb;
 	NTSTATUS        status;
-	dc_header      *header;
-	dev_hook       *hook  = NULL;
-	HANDLE          h_dev = NULL;
-	u8             *buff  = NULL;
-	rnd_ctx        *r_ctx = NULL;	
+	dc_header      *header = NULL;
+	dev_hook       *hook   = NULL;
+	HANDLE          h_dev  = NULL;
+	u8             *buff   = NULL;
+	rnd_ctx        *r_ctx  = NULL;	
 	int             w_init = 0;
 	int             resl;
 
@@ -239,7 +239,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 
 		wait_object_infinity(&hook->busy_lock);
 
-		if (hook->flags & (F_ENABLED | F_UNSUPRT | F_DISABLE)) {
+		if (hook->flags & (F_ENABLED | F_UNSUPRT | F_DISABLE | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
 
@@ -311,7 +311,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 
 		/* mount device */
-		if ( (resl = dc_mount_device(dev_name, password)) != ST_OK ) {
+		if ( (resl = dc_mount_device(dev_name, password, 0)) != ST_OK ) {
 			break;
 		}
 		
@@ -404,7 +404,7 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 				&hook->wp_ctx, hook, ENC_BLOCK_SIZE, wp_mode);
 
 			if (resl == ST_OK) {
-				hook->crypt.wp_mode = wp_mode;
+				hook->crypt.wp_mode = d8(wp_mode);
 			} else {
 				dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE);
 				hook->crypt.wp_mode = WP_NONE;
@@ -429,7 +429,7 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 		}
 
 		if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {			
-			dc_process_unmount(hook, UM_NOFSCTL);
+			dc_process_unmount(hook, MF_NOFSCTL, 0);
 			resl = ST_FINISHED;
 		}
 	} while (0);
@@ -501,7 +501,7 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 			resl = ST_NO_MOUNT; break;
 		}
 
-		if (hook->flags & (F_SYNC | F_FORMATTING)) {
+		if (hook->flags & (F_SYNC | F_FORMATTING | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
 
@@ -527,7 +527,7 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 		}
 
 		/* init data wipe */
-		resl = dc_wipe_init(&wipe, hook, SECTOR_SIZE, WP_GUTMANN);
+		resl = dc_wipe_init(&wipe, hook, DC_AREA_SIZE, WP_GUTMANN);
 
 		if (resl == ST_OK) {
 			wp_init = 1;

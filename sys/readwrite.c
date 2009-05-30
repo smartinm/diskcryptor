@@ -175,7 +175,7 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 	buff   = dc_map_mdl_with_retry(irp->MdlAddress);
 
 	if (buff == NULL) {
-		dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+		dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 		return;
 	}
 
@@ -190,7 +190,7 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 		if ( (hook->flags & F_PROTECT_DCSYS) && 
 			 (is_intersect(offset, length, hook->stor_off, DC_AREA_SIZE) != 0) )
 		{
-			dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
+			dc_release_irp(hook, irp, STATUS_ACCESS_DENIED);
 			return;
 		}
 	}
@@ -198,12 +198,14 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 	if ( (length == 0) ||
 		 (length & (SECTOR_SIZE - 1)) || (offset + length > hook->use_size) )
 	{
-		dc_complete_irp(irp, STATUS_INVALID_PARAMETER, 0);
+		dc_release_irp(hook, irp, STATUS_INVALID_PARAMETER);
 		return;
 	}	
 
 	status = dc_sync_encrypted_io(
 		hook, buff, length, offset, irp_sp->Flags, irp_sp->MajorFunction);
+
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 
 	if (NT_SUCCESS(status) != FALSE) {
 		dc_complete_irp(irp, status, length);
@@ -214,7 +216,7 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 
 static void dc_decrypt_complete(PIRP irp, dev_hook *hook)
 {
-	lock_dec(&hook->io_pending);
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 	IoCompleteRequest(irp, IO_NO_INCREMENT);
 }
 
@@ -261,8 +263,8 @@ NTSTATUS
 			irp->IoStatus.Information = 0;
 		}
 	}
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 
-	lock_dec(&hook->io_pending);
     return STATUS_SUCCESS;
 }
 
@@ -277,7 +279,7 @@ NTSTATUS
 	irp->MdlAddress = iopk->old_mdl;
 	irp->UserBuffer = iopk->old_buf;
 
-	lock_dec(&iopk->hook->io_pending);
+	IoReleaseRemoveLock(&iopk->hook->remv_lock, irp);
 	fast_free(iopk);
 
 	if (irp->PendingReturned) {
@@ -296,6 +298,10 @@ static NTSTATUS dc_read_irp(dev_hook *hook, PIRP irp)
 	nxt_sp = IoGetNextIrpStackLocation(irp);
 	
 	autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));	
+
+	if (hook->flags & F_NO_REDIRECT) {
+		nxt_sp->Parameters.Read.ByteOffset.QuadPart += hook->stor_off;
+	}
 		
 	IoSetCompletionRoutine(
 		irp, dc_read_complete, NULL, TRUE, TRUE, TRUE);
@@ -326,27 +332,30 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 	nxt_sp = IoGetNextIrpStackLocation(irp);
 	offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
 	length = irp_sp->Parameters.Write.Length;
-	status = STATUS_INSUFFICIENT_RESOURCES;
-
-	if ( (hook->flags & F_PROTECT_DCSYS) && 
-		 (is_intersect(offset, length, hook->stor_off, DC_AREA_SIZE) != 0) )
-	{
-		return dc_complete_irp(irp, STATUS_ACCESS_DENIED, 0);
-	}
-	
+		
 	nmdl = NULL; data = NULL; iopk = NULL; succs = 0;
 	do
 	{
+		if ( (hook->flags & F_PROTECT_DCSYS) && 
+			 (is_intersect(offset, length, hook->stor_off, DC_AREA_SIZE) != 0) ) 
+		{
+			status = STATUS_ACCESS_DENIED; break;
+		}
+
 		data = dc_map_mdl_with_retry(irp->MdlAddress);
 		iopk = fast_alloc(length + sizeof(io_packet));
 		nmdl = dc_allocate_mdl_with_retry(iopk->data, length);
 
 		if ( (data == NULL) || (iopk == NULL) || (nmdl == NULL) ) {
-			break;
+			status = STATUS_INSUFFICIENT_RESOURCES; break;
 		}
 
 		/* copy IRP stack */
 		autocpy(nxt_sp, irp_sp, sizeof(IO_STACK_LOCATION));
+
+		if (hook->flags & F_NO_REDIRECT) {
+			nxt_sp->Parameters.Write.ByteOffset.QuadPart += hook->stor_off;
+		}
 
 		MmBuildMdlForNonPagedPool(nmdl);
 
@@ -370,6 +379,7 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 			if (succs == 0) {
 				irp->MdlAddress = iopk->old_mdl;
 				irp->UserBuffer = iopk->old_buf;
+				status = STATUS_INSUFFICIENT_RESOURCES;
 			} else {
 				status = STATUS_PENDING;
 			}
@@ -396,8 +406,7 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 		IoSetCompletionRoutine(
 			irp, NULL, NULL, FALSE, FALSE, FALSE);
 
-		lock_dec(&hook->io_pending);
-		dc_complete_irp(irp, status, 0);
+		dc_release_irp(hook, irp, status);
 	}
 
 	return status;
@@ -406,17 +415,12 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 static void dc_intersection_rw(isc_ctx *ictx)
 {
 	dc_sync_irp_io(ictx->hook, ictx->irp);
-	lock_dec(&ictx->hook->io_pending);
 	fast_free(ictx);
 }
 
-NTSTATUS
-  dc_read_write_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_read_write_irp(dev_hook *hook, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
-	dev_hook          *hook;
 	isc_ctx           *ictx;
 	ULONGLONG          offset;
 	ULONG              length;
@@ -427,21 +431,16 @@ NTSTATUS
 	}
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	hook   = dev_obj->DeviceExtension;
-
-	/* increment pending IO counter */
-	lock_inc(&hook->io_pending);
 
 	if ( hook->flags & (F_DISABLE | F_FORMATTING) ) {
-		lock_dec(&hook->io_pending);
-		return dc_complete_irp(irp, STATUS_INVALID_DEVICE_STATE, 0);
+		return dc_release_irp(hook, irp, STATUS_INVALID_DEVICE_STATE);
 	}
 
 	if (hook->flags & F_SYNC)
 	{
 		IoMarkIrpPending(irp);
 
-		ExInterlockedInsertTailList (
+		ExInterlockedInsertTailList(
 			&hook->sync_irp_queue, &irp->Tail.Overlay.ListEntry, &hook->sync_req_lock);
 
 		KeSetEvent(
@@ -454,8 +453,7 @@ NTSTATUS
 	{
 		/* probe for mount new volume */
 		if ( (hook->flags & (F_UNSUPRT | F_NO_AUTO_MOUNT)) || (hook->mnt_probed != 0) ) {
-			lock_dec(&hook->io_pending);
-			return dc_forward_irp(dev_obj, irp);
+			return dc_forward_irp(hook, irp);
 		} else {
 			return dc_probe_mount(hook, irp);
 		}
@@ -472,11 +470,10 @@ NTSTATUS
 	if ( (length == 0) ||
 		 (length & (SECTOR_SIZE - 1)) || (offset + length > hook->use_size) )
 	{
-		lock_dec(&hook->io_pending);
-		return dc_complete_irp(irp, STATUS_INVALID_PARAMETER, 0); 
+		return dc_release_irp(hook, irp, STATUS_INVALID_PARAMETER);		
 	}
 
-	if (offset >= DC_AREA_SIZE)
+	if ( (offset >= DC_AREA_SIZE) || (hook->flags & F_NO_REDIRECT) )
 	{
 		if (irp_sp->MajorFunction == IRP_MJ_READ) {
 			return dc_read_irp(hook, irp);
@@ -486,11 +483,10 @@ NTSTATUS
 	} 
 
 	if ( (ictx = fast_alloc(sizeof(sizeof(isc_ctx)))) == NULL ) {
-		lock_dec(&hook->io_pending);
-		return dc_complete_irp(irp, STATUS_INSUFFICIENT_RESOURCES, 0);
+		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
 
-	ictx->dev_obj = dev_obj;
+	ictx->dev_obj = hook->hook_dev;
 	ictx->irp     = irp;
 	ictx->hook    = hook;
 

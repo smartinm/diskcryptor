@@ -4,6 +4,7 @@
 #include "defines.h"
 #include "version.h"
 #include "volume.h"
+#include "dcconst.h"
 
 #ifdef IS_DRIVER
  #include <ntdddisk.h>
@@ -17,7 +18,6 @@
 #define DC_CTL_MOUNT         CTL_CODE(FILE_DEVICE_UNKNOWN, 3,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_MOUNT_ALL     CTL_CODE(FILE_DEVICE_UNKNOWN, 4,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_UNMOUNT       CTL_CODE(FILE_DEVICE_UNKNOWN, 5,  METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_UNMOUNT_ALL   CTL_CODE(FILE_DEVICE_UNKNOWN, 6,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_STATUS        CTL_CODE(FILE_DEVICE_UNKNOWN, 7,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_ADD_SEED      CTL_CODE(FILE_DEVICE_UNKNOWN, 8,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_CHANGE_PASS   CTL_CODE(FILE_DEVICE_UNKNOWN, 9,  METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -66,7 +66,7 @@ typedef struct _dc_ioctl {
 	dc_pass    passw1;  /* password                         */
 	dc_pass    passw2;  /* new password (for changing pass) */
 	wchar_t    device[MAX_DEVICE + 1];
-	int        force;   /* dismount flags                  */
+	u32        flags;   /* mount/unmount flags             */
 	int        status;  /* operation status code           */
 	int        n_mount; /* number of mounted devices       */
 	crypt_info crypt;
@@ -80,6 +80,12 @@ typedef struct _dc_lock_ctl {
 
 } dc_lock_ctl;
 
+typedef struct _dc_rand_ctl {
+	void *buff;
+	u32   size;
+
+} dc_rand_ctl;
+
 typedef struct _dc_backup_ctl {
 	u16        device[MAX_DEVICE + 1];
 	dc_pass    pass;
@@ -88,97 +94,14 @@ typedef struct _dc_backup_ctl {
 
 } dc_backup_ctl;
 
-/* hook control flags */
-#define F_NONE          0x0000
-#define F_ENABLED       0x0001 /* device mounted                                          */
-#define F_SYNC          0x0002 /* syncronous IRP processing mode                          */
-#define F_SYSTEM        0x0004 /* this is a system device                                 */
-#define F_REMOVABLE     0x0008 /* this is removable device                                */
-#define F_HIBERNATE     0x0010 /* this device used for hibernation                        */
-#define F_UNSUPRT       0x0020 /* device unsupported                                      */
-#define F_DISABLE       0x0040 /* device temporary disabled                               */
-#define F_REENCRYPT     0x0100 /* reencryption in progress                                */
-#define F_FORMATTING    0x0200 /* formatting in progress                                  */
-#define F_NO_AUTO_MOUNT 0x0400 /* automounting disabled for this device                   */
-#define F_PROTECT_DCSYS 0x0800 /* protect \$dcsys$ file from any access                   */
-#define F_PREVENT_ENC   0x1000 /* fail any encrypt/decrypt requests with ST_CANCEL status */
-
-/* unmount flags */
-#define UM_FORCE    0x01 /* unmount volume if FSCTL_LOCK_VOLUME fail */
-#define UM_NOFSCTL  0x02 /* no send FSCTL_DISMOUNT_VOLUME            */
-#define UM_NOSYNC   0x04 /* no stop syncronous mode thread */
-
-#define TEST_BLOCK_LEN 1024*1024 /* speed test block size */
-#define TEST_BLOCK_NUM 10        /* number of test blocks */
-
-/* operation status codes */
-#define ST_OK             0  /* operation completed successfull */
-#define ST_ERROR          1  /* unknown error    */
-#define ST_NF_DEVICE      2  /* device not found */
-#define ST_RW_ERR         3  /* read/write error */
-#define ST_PASS_ERR       4  /* invalid password */
-#define ST_ALR_MOUNT      5  /* device has already mounted */
-#define ST_NO_MOUNT       6  /* device not mounted */
-#define ST_LOCK_ERR       7  /* error on volume locking  */
-#define ST_UNMOUNTABLE    8  /* device is unmountable */
-#define ST_NOMEM          9  /* not enought memory */
-#define ST_ERR_THREAD     10 /* error on creating system thread */
-#define ST_INV_WIPE_MODE  11 /* invalid data wipe mode */
-#define ST_INV_DATA_SIZE  12 /* invalid data size */
-#define ST_ACCESS_DENIED  13 /* access denied */
-#define ST_NF_FILE        14 /* file not found */
-#define ST_IO_ERROR       15 /* disk I/O error */
-#define ST_UNK_FS         16 /* unsupported file system */
-#define ST_ERR_BOOT       17 /* invalid FS bootsector, please format partition */      
-#define ST_MBR_ERR        18 /* MBR is corrupted */
-#define ST_BLDR_INSTALLED 19 /* bootloader is already installed */
-#define ST_NF_SPACE       20 /* not enough space after partitions to install bootloader */
-#define ST_BLDR_NOTINST   21 /* bootloader is not installed */
-#define ST_INV_BLDR_SIZE  22 /* invalid bootloader size */
-#define ST_BLDR_NO_CONF   23 /* bootloader corrupted, config not found */
-#define ST_BLDR_OLD_VER   24 /* old bootloader can not be configured */
-#define ST_AUTORUNNED     25 /* */
-#define ST_NEED_EXIT      26 /* */
-#define ST_NO_ADMIN       27 /* user not have admin privilegies */
-#define ST_NF_BOOT_DEV    28 /* boot device not found */
-#define ST_REG_ERROR      29 /* can not open registry key */
-#define ST_NF_REG_KEY     30 /* registry key not found */
-#define ST_SCM_ERROR      31 /* can not open SCM database */
-#define ST_FINISHED       32 /* encryption finished */
-#define ST_INSTALLED      32 /* driver already installed */
-#define ST_INV_SECT       34 /* device has unsupported sector size */
-#define ST_CLUS_USED      35 /* shrinking error, last clusters are used */
-#define ST_NF_PT_SPACE    36 /* not enough free space in partition to continue encrypting */
-#define ST_MEDIA_CHANGED  37 /* removable media changed */
-#define ST_NO_MEDIA       38 /* no removable media in device */
-#define ST_DEVICE_BUSY    39 /* device is busy */
-#define ST_INV_MEDIA_TYPE 40 /* media type not supported */
-#define ST_FORMAT_NEEDED  41 /* */
-#define ST_CANCEL         42 /* */
-#define ST_INV_VOL_VER    43 /* invalid volume version */
-#define ST_EMPTY_KEYFILES 44 /* keyfiles not found */
-#define ST_NOT_BACKUP     45 /* this is a not backup file */
-
-/* data wipe modes */
-#define WP_NONE    0 /* no data wipe                           */
-#define WP_DOD_E   1 /* US DoD 5220.22-M (8-306. / E)          */
-#define WP_DOD     2 /* US DoD 5220.22-M (8-306. / E, C and E) */
-#define WP_GUTMANN 3 /* Gutmann   */
-#define WP_NUM     4
-
-/* registry config flags */
-#define CONF_FORCE_DISMOUNT   0x01
-#define CONF_CACHE_PASSWORD   0x02
-#define CONF_EXPLORER_MOUNT   0x04
-#define CONF_WIPEPAS_LOGOFF   0x08
-#define CONF_DISMOUNT_LOGOFF  0x10
-#define CONF_AUTO_START       0x20
-#define CONF_HIDE_DCSYS       0x40
+#define TEST_BLOCK_LEN 2048*1024 /* speed test block size */
+#define TEST_BLOCK_NUM 20        /* number of test blocks */
 
 typedef struct _dc_status {
 	u64        dsk_size;
 	u64        tmp_size;
 	u32        flags;
+	u32        mnt_flags;
 	u32        disk_id;
 	s32        paging_count;	
 	crypt_info crypt;
@@ -224,6 +147,7 @@ typedef struct _dc_conf {
  extern u32            dc_os_type; 
  extern u32            dc_io_count;
  extern u32            dc_dump_disable;
+ extern u32            dc_no_usb_mount;
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;
 #endif

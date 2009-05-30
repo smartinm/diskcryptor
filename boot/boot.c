@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2008 
+    * Copyright (c) 2008-2009
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -35,8 +35,8 @@ ldr_config conf = {
 	ET_MESSAGE | ET_RETRY,
 	BT_MBR_BOOT,
 	0, 
-	0,         /* options         */
-	KB_QWERTY, /* keyboard layout */
+	OP_HW_CRYPTO,  /* options         */
+	KB_QWERTY,     /* keyboard layout */
 	"enter password: ",
 	"password incorrect\n",
 	{ 0 }, 
@@ -289,6 +289,11 @@ static void dc_password_error(prt_inf *active)
 	if (conf.error_type & ET_EXIT_TO_BIOS) {
 		bios_call(0x18, NULL);
 	}
+
+	if (conf.error_type & ET_MBR_BOOT) {
+		autocpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
+		bios_jump_boot(boot_dsk);
+	}
 }
 
 /* find first HDD contain active partition */
@@ -328,7 +333,7 @@ void boot_main()
 	login = 0; n_mount = 0;
 
 	/* init crypto */
-	dc_init_crypto();
+	dc_init_crypto(conf.options & OP_HW_CRYPTO);
 
 	/* prepare MBR copy buffer */
 	autocpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);

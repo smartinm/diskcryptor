@@ -34,61 +34,62 @@
 #include "crypto\crypto.h"
 #include "crypto\pkcs5.h"
 
-colinfo _main_headers[ ] = {
-	{ L" ",      120 },
-	{ L"Size",   74  },
-	{ L"Label",  94  },
-	{ L"Type",   43  },
-	{ L"Status", 88  },
-	{ L" ",      65  },
-	{ L"",       0   }
+_colinfo _main_headers[ ] = {
+	{ STR_SPACE,	120,	LVCFMT_LEFT,	TRUE	},
+	{ L"Size",		74,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Label",		94,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Type",		43,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Status",	88,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_SPACE,	65,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_NULL }
 };
 
-colinfo _boot_headers[ ] = {
-	{ L"Device",     115 },
-	{ L"Size",       60  },
-	{ L"Bootloader", 75  },
-	{ L" ",          40  },
-	{ L"",           0   }
+_colinfo _boot_headers[ ] = {
+	{ L"Device ",		115,	LVCFMT_LEFT,	TRUE	},
+	{ L"Size",			60,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Bootloader",	75,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_SPACE,		40,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_NULL }
 };
 
-colinfo _part_by_id_headers[ ] = {
-	{ L"Volume",  115 },
-	{ L"Size",    60  },
-	{ L"Disk ID", 90  },
-	{ L" ",       110 },
-	{ L"",        0   },
+_colinfo _part_by_id_headers[ ] = {
+	{ L"Volume ",	115,	LVCFMT_LEFT,	TRUE	},
+	{ L"Size",		60,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Disk ID",	90,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_SPACE,	110,	LVCFMT_RIGHT,	FALSE	},
+	{ STR_NULL },
 };
 
-colinfo _benchmark_headers[ ] = {
-	{ L"Cipher", 160 },
-	{ L"Mode",   60  },
-	{ L"Speed",  90  },
-	{ L"",       0   },
+_colinfo _benchmark_headers[ ] = {
+	{ L"Cipher",	160,	LVCFMT_LEFT,	FALSE	},
+	{ L"Mode",		60,		LVCFMT_RIGHT,	FALSE	},
+	{ L"Speed",		90,		LVCFMT_RIGHT,	FALSE	},
+	{ STR_NULL },
 };
 
 wchar_t *_info_table_items[ ] = {
 	L"Symbolic Link",
 	L"Device",
-	L" ",
+	STR_SPACE,
 	L"Cipher",
 	L"Encryption mode",
 	L"Pkcs5.2 prf",
-	L""
+	STR_NULL
 };
 
 wchar_t *_act_table_items[ ] = {
 	L"Done:",
 	L"Speed:",
+	STR_SPACE,
 	L"Estimated:",
 	L"Elapsed:",
-	L""
+	STR_NULL
 };
 
 _static_view pass_gr_ctls[ ] = {
-	{ IDC_GR_SMALL,  0, 0 }, { IDC_GR_CAPS,  0, 0 },
+	{ IDC_GR_SMALL,	 0, 0 }, { IDC_GR_CAPS,	 0, 0 },
 	{ IDC_GR_DIGITS, 0, 0 }, { IDC_GR_SPACE, 0, 0 },
-	{ IDC_GR_SPEC,   0, 0 }, { IDC_GR_ALL,   0, 0 },
+	{ IDC_GR_SPEC,	 0, 0 }, { IDC_GR_ALL,	 0, 0 },
 	{ -1, 0, 0 }
 };
 
@@ -100,123 +101,124 @@ _static_view pass_pe_ctls[ ] = {
 };
 
 _init_list cipher_names[ ] = {
-	{ CF_AES,             L"AES" },
-	{	CF_TWOFISH,         L"Twofish" },
-	{	CF_SERPENT,         L"Serpent" },
-	{	CF_AES_TWOFISH,     L"AES-Twofish" },
-	{	CF_TWOFISH_SERPENT, L"Twofish-Serpent" },
-	{	CF_SERPENT_AES,     L"Serpent-AES" },
-	{	CF_AES_TWOFISH_SERPENT, L"AES-Twofish-Serpent" },
-	{ 0, L"" }
+	{ CF_AES,					L"AES"					},
+	{ CF_TWOFISH,				L"Twofish"				},
+	{ CF_SERPENT,				L"Serpent"				},
+	{ CF_AES_TWOFISH,			L"AES-Twofish"			},
+	{ CF_TWOFISH_SERPENT,		L"Twofish-Serpent"		},
+	{ CF_SERPENT_AES,			L"Serpent-AES"			},
+	{ CF_AES_TWOFISH_SERPENT,	L"AES-Twofish-Serpent"	},
+	{ 0, STR_NULL }
 };
 
 _init_list wipe_modes[ ] = {
-	{ WP_NONE,    L"None" }, 
-	{ WP_DOD_E,   L"US DoD 5220.22-M (8-306. / E)" },
-	{ WP_DOD,     L"US DoD 5220.22-M (8-306. / E, C and E)" }, 
-	{ WP_GUTMANN, L"Gutmann mode" },
-	{ 0, L"" }
+	{ WP_NONE,		L"None"										},
+	{ WP_DOD_E,		L"US DoD 5220.22-M (8-306. / E)"			},
+	{ WP_DOD,		L"US DoD 5220.22-M (8-306. / E, C and E)"	},
+	{ WP_GUTMANN,	L"Gutmann mode"								},
+	{ 0, STR_NULL }
 };
 
 _init_list kb_layouts[ ] = {
 	{ KB_QWERTY, L"QWERTY" },
 	{ KB_QWERTZ, L"QWERTZ" },
 	{ KB_AZERTY, L"AZERTY" },
-	{ 0, L"" }
+	{ 0, STR_NULL }
 };
 
 _init_list auth_type[ ] = {
-	{ LT_GET_PASS | LT_EMBED_KEY, L"Password and bootauth keyfile" },
-	{ LT_GET_PASS,  L"Password request" },
-	{ LT_EMBED_KEY, L"Embedded bootauth keyfile" },
-	{ 0, L"" }
+	{ LT_GET_PASS | LT_EMBED_KEY,	L"Password and bootauth keyfile"	},
+	{ LT_GET_PASS,					L"Password request"					},
+	{ LT_EMBED_KEY,					L"Embedded bootauth keyfile"		},
+	{ 0, STR_NULL }
 };
 
 _init_list show_pass[ ] = {
-	{ TRUE,         L"Hide entered password" },
-	{ LT_DSP_PASS,  L"Display entered password as \"*\"" },
-	{ 0, L"" }
+	{ TRUE,			L"Hide entered password"				},
+	{ LT_DSP_PASS,	L"Display entered password as \"*\""	},
+	{ 0, STR_NULL }
 };
 
 _init_list auth_tmount[ ] = {
-	{ 0,   L"Disabled"  },
-	{ 3,   L"3 sec"     },
-	{ 5,   L"5 sec"     },
-	{ 7,   L"7 sec"     },
-	{ 10,  L"10 sec"    },
-	{ 20,  L"20 sec"    },
-	{ 30,  L"30 sec"    },
-	{ 50,  L"50 sec"    },
-	{ 60,  L"2 minutes" },
-	{ 120, L"5 minutes" },
-	{ 0,   L""          }
+	{ 0,	L"Disabled"		},
+	{ 3,	L"3 sec"		},
+	{ 5,	L"5 sec"		},
+	{ 7,	L"7 sec"		},
+	{ 10,	L"10 sec"		},
+	{ 20,	L"20 sec"		},
+	{ 30,	L"30 sec"		},
+	{ 50,	L"50 sec"		},
+	{ 60,	L"2 minutes"	},
+	{ 120,	L"5 minutes"	},
+	{ 0,STR_NULL }
 };
 
 _init_list boot_type_ext[ ] = {
-	{ BT_MBR_FIRST,   L"First disk MBR" },
-	{ BT_AP_PASSWORD, L"First partition with appropriate password" },
-	{ BT_DISK_ID,     L"Specified partition" },
-	{ 0, L"" }
+	{ BT_MBR_FIRST,		L"First disk MBR"								},
+	{ BT_AP_PASSWORD,	L"First partition with appropriate password"	},
+	{ BT_DISK_ID,		L"Specified partition"							},
+	{ 0, STR_NULL }
 };
 
 _init_list boot_type_all[ ] = {
-	{ BT_MBR_FIRST,   L"First disk MBR" },
-	{ BT_AP_PASSWORD, L"First partition with appropriate password" },
-	{ BT_DISK_ID,     L"Specified partition" },
-	{ BT_MBR_BOOT,    L"Boot disk MBR" },
-	{ BT_ACTIVE,      L"Active partition" },
-	{ 0, L"" }
+	{ BT_MBR_FIRST,		L"First disk MBR"								},
+	{ BT_AP_PASSWORD,	L"First partition with appropriate password"	},
+	{ BT_DISK_ID,		L"Specified partition"							},
+	{ BT_MBR_BOOT,		L"Boot disk MBR"								},
+	{ BT_ACTIVE,		L"Active partition"								},
+	{ 0, STR_NULL }
 };
 
 _init_list bad_pass_act[ ] = {
-	{ FALSE,           L"Halt system" },
-	{ ET_REBOOT,       L"Reboot system" },
-	{ ET_BOOT_ACTIVE,  L"Boot from active partition" },
-	{ ET_EXIT_TO_BIOS, L"Exit to BIOS" },
-	{ ET_RETRY,        L"Retry authentication" },
-	{ 0, L"" }
+	{ FALSE,			L"Halt system"					},
+	{ ET_REBOOT,		L"Reboot system"				},
+	{ ET_BOOT_ACTIVE,	L"Boot from active partition"	},
+	{ ET_EXIT_TO_BIOS,	L"Exit to BIOS"					},
+	{ ET_RETRY,			L"Retry authentication"			},
+	{ ET_MBR_BOOT,		L"Load Boot Disk MBR"			},
+	{ 0, STR_NULL }
 };
 
 _init_list loader_type[ ] = {
-	{ CTL_LDR_MBR,   L"HDD master boot record", },
-	{ CTL_LDR_STICK, L"Bootable partition (USB-Stick, etc)", },
-	{ CTL_LDR_ISO,   L"ISO bootloader image", },
-	{ CTL_LDR_PXE,   L"Bootloader image for PXE network booting" },
-	{ 0, L"" }
+	{ CTL_LDR_MBR,		L"HDD master boot record"					},
+	{ CTL_LDR_STICK,	L"Bootable partition (USB-Stick, etc)"		},
+	{ CTL_LDR_ISO,		L"ISO bootloader image"						},
+	{ CTL_LDR_PXE,		L"Bootloader image for PXE network booting"	},
+	{ 0, STR_NULL }
 };
 
 _init_list pass_status[ ] = {
-	{ ST_PASS_SPRS_SYMBOLS,  L" Used suppressed symbols on this layout" },
-	{ ST_PASS_EMPTY,         L" Pass is empty" },
-	{ ST_PASS_NOT_CONFIRMED, L" The password was not correctly confirmed" },
-	{ ST_PASS_EMPTY_CONFIRM, L" Confirm is empty" },
-	{ ST_PASS_EMPTY_KEYLIST, L" Keyfiles list is empty" },
-	{ ST_PASS_CORRRECT,      L" Correct" },
-	{ 0, L"" }
+	{ ST_PASS_SPRS_SYMBOLS,		L" Used suppressed symbols on this layout"		},
+	{ ST_PASS_EMPTY,			L" Pass is empty"								},
+	{ ST_PASS_NOT_CONFIRMED,	L" The password was not correctly confirmed"	},
+	{ ST_PASS_EMPTY_CONFIRM,	L" Confirm is empty"							},
+	{ ST_PASS_EMPTY_KEYLIST,	L" Keyfiles list is empty"						},
+	{ ST_PASS_CORRRECT,			L" Correct"										},
+	{ 0, STR_NULL }
 };
 
 _ctl_init hotks_chk[ ] = {
-	{ L"", IDC_KEY_MOUNTALL,   },
-	{ L"", IDC_KEY_UNMOUNTALL, },
-	{ L"", IDC_KEY_WIPE,       },
-	{ L"", IDC_KEY_BSOD,       },
-	{ L"", -1, -1              }
+	{ STR_NULL, IDC_KEY_MOUNTALL	},
+	{ STR_NULL, IDC_KEY_UNMOUNTALL	},
+	{ STR_NULL, IDC_KEY_WIPE		},
+	{ STR_NULL, IDC_KEY_BSOD		},
+	{ STR_NULL, -1, -1 }
 };
 
 _ctl_init hotks_edit[ ] = {
-	{ L"", IDC_EDIT_KEY_MOUNTALL,   0 },
-	{ L"", IDC_EDIT_KEY_UNMOUNTALL, 0 },
-	{ L"", IDC_EDIT_KEY_WIPE,       0 },
-	{ L"", IDC_EDIT_KEY_BSOD,       0 },
-	{ L"", -1, -1                     }
+	{ STR_NULL, IDC_EDIT_KEY_MOUNTALL,		0 },
+	{ STR_NULL, IDC_EDIT_KEY_UNMOUNTALL,	0 },
+	{ STR_NULL, IDC_EDIT_KEY_WIPE,			0 },
+	{ STR_NULL, IDC_EDIT_KEY_BSOD,			0 },
+	{ STR_NULL, -1, -1 }
 };
 
 _ctl_init hotks_static[ ] = {
-	{ L"", IDC_STATIC_KEY_MOUNTALL,   0 },
-	{ L"", IDC_STATIC_KEY_UNMOUNTALL, 0 },
-	{ L"", IDC_STATIC_KEY_WIPE,       0 },
-	{ L"", IDC_STATIC_KEY_BSOD,       0 },
-	{ L"", -1, -1                       }
+	{ STR_NULL, IDC_STATIC_KEY_MOUNTALL,	0 },
+	{ STR_NULL, IDC_STATIC_KEY_UNMOUNTALL,	0 },
+	{ STR_NULL, IDC_STATIC_KEY_WIPE,		0 },
+	{ STR_NULL, IDC_STATIC_KEY_BSOD,		0 },
+	{ STR_NULL, -1, -1 }
 };
 
 HINSTANCE __hinst;
@@ -236,26 +238,24 @@ HWND __dlg;
 HWND __dlg_act_info;
 
 void *wnd_get_long(
-		HWND wnd, 
-		int index
+		HWND h_wnd, 
+		int  index
 	)
 {
 #pragma warning(disable:4312)
-	return (void*)GetWindowLongPtr(wnd, index);
+	return (void*)GetWindowLongPtr(h_wnd, index);
 #pragma warning(default:4312)
-
 }
 
 void *wnd_set_long(
-		HWND  wnd, 
+		HWND  h_wnd, 
 		int   index, 
 		void *ptr
 	)
 {
 #pragma warning(disable:4312 4244)
-	return (void*)SetWindowLongPtr(wnd, index, (LONG_PTR)ptr);
+	return (void*)SetWindowLongPtr(h_wnd, index, (LONG_PTR)ptr);
 #pragma warning(default:4312 4244)
-
 }
 
 
@@ -272,13 +272,13 @@ int _draw_proc(
 			return 1L;
 		}
 		break;
-
 		case WM_MEASUREITEM:
 		{
 			MEASUREITEMSTRUCT *item = pv(lparam);
-
 			if (item->CtlType != ODT_LISTVIEW)
+			{
 				item->itemHeight -= 3;
+			}
 		}
 		break;
 	}
@@ -318,10 +318,9 @@ void _list_set_item_text(
 	};
 
 	ListView_GetItem(hlist, &lvitem);
-
-	if (wcscmp(curr, text)) {
+	if (wcscmp(curr, text))
+	{
 		ListView_SetItemText(hlist, item, subitem, text);
-
 	}
 }
 
@@ -342,13 +341,15 @@ BOOL _list_insert_item(
 
 	lvitem.state = state;
 
-	if (!wcslen(text)) return FALSE;
-	return ListView_InsertItem(hlist, &lvitem) != -1;
+	if (wcslen(text) == 0) {
+		return FALSE;
+	}
+	return ListView_InsertItem( hlist, &lvitem ) != -1;
 
 }
 
 
-BOOL _list_insert_col(
+int _list_insert_col(
 		HWND hlist,
 		int  cx
 	)
@@ -356,25 +357,32 @@ BOOL _list_insert_col(
 	LVCOLUMN lvcol = { LVCF_WIDTH, 0 };			
 	lvcol.cx = cx;
 
-	return ListView_InsertColumn(hlist, 0, &lvcol);
-
+	if (ListView_InsertColumn( hlist, 0, &lvcol ))
+	{
+		return ST_OK;
+	} else {
+		return ST_ERROR;
+	}
 }
 
 
 LPARAM _get_item_index(
-		HWND hlist,
+		HWND h_list,
 		int  item
 	)
 {
 	LVITEM lvi;
-	zeroauto(&lvi, sizeof(LVITEM));
+	zeroauto( &lvi, sizeof(LVITEM) );
 
-	lvi.mask = LVIF_PARAM;
+	lvi.mask  = LVIF_PARAM;
 	lvi.iItem = item;
 
-	if (ListView_GetItem(hlist, &lvi)) return lvi.lParam;
-	return (LPARAM)NULL;
-
+	if ( ListView_GetItem( h_list, &lvi ) ) 
+	{
+		return lvi.lParam;
+	} else {
+		return (LPARAM)NULL;
+	}
 }
 
 
@@ -391,7 +399,10 @@ void _get_item_text(
 	};
 
 	ListView_GetItem(hlist, &lvitem);
-	if (item == -1) text[0] = 0;
+	if (item == -1) 
+	{
+		text[0] = 0;
+	}
 
 }
 
@@ -406,22 +417,55 @@ BOOL _is_duplicated_item(
 
 	for ( ; k < ListView_GetItemCount(h_list) ; k++ )
 	{
-		_get_item_text(h_list, k, 0, item, sizeof_w(item));
-		if (wcscmp(item, s_item) == 0) return TRUE;
-
+		_get_item_text( h_list, k, 0, item, sizeof_w(item) );
+		if ( wcscmp(item, s_item) == 0 )
+		{
+			return TRUE;
+		}
 	}
 	return FALSE;
 
 }
 
+LPARAM _get_sel_item( HWND h_list )
+{
+	return _get_item_index(
+		h_list, ListView_GetSelectionMark( h_list )
+		);
+}
 
-LPARAM _get_sel_item(
-		HWND hlist
+BOOL _get_header_text(
+		HWND     h_list,
+		int      idx,
+		wchar_t *s_header,
+		int      size
 	)
 {
-	int item = ListView_GetSelectionMark(hlist);
-	return _get_item_index(hlist, item);
+	HDITEM hd_item = { HDI_TEXT };
 
+	hd_item.pszText    = s_header;
+	hd_item.cchTextMax = size;
+
+	return Header_GetItem(
+		ListView_GetHeader( h_list ), idx, &hd_item
+		);
+}
+
+BOOL _set_header_text(
+		HWND     h_list,
+		int      idx,
+		wchar_t *s_header,
+		int      size
+	)
+{
+	HDITEM hd_item = { HDI_TEXT };
+
+	hd_item.pszText    = s_header;
+	hd_item.cchTextMax = size;
+
+	return Header_SetItem(
+		ListView_GetHeader( h_list ), idx, &hd_item
+		);
 }
 
 
@@ -577,79 +621,104 @@ INT_PTR _ctl_color(
 
 
 BOOL _ui_init(
-		HINSTANCE hinst
+		HINSTANCE h_inst
 	)
 {
-	HBITMAP undisk = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_UNDISK));
-	HBITMAP undisk_mask = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_UNDISK_MASK));
+	HBITMAP undisk      = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_UNDISK ) );
+	HBITMAP undisk_mask = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_UNDISK_MASK ) );
 
-	HBITMAP disk = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_DISK));
-	HBITMAP disk_mask = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_DISK_MASK));
+	HBITMAP disk        = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_DISK ) );
+	HBITMAP disk_mask   = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_DISK_MASK ) );
 
-	HBITMAP disk_enb = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_ENABLED));
+	HBITMAP cdrom       = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_CDROM ) );
+	HBITMAP cdrom_mask  = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_CDROM_MASK ) );
 
-	HBITMAP check = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_CHECK));
-	HBITMAP check_mask = LoadBitmap(hinst, MAKEINTRESOURCE(IDB_CHECK_MASK));
+	HBITMAP disk_enb    = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_ENABLED ) );
+
+	HBITMAP check       = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_CHECK ) );
+	HBITMAP check_mask  = LoadBitmap( h_inst, MAKEINTRESOURCE( IDB_CHECK_MASK ) );
 
 	NONCLIENTMETRICS metric = { sizeof(metric) };
 
 	InitCommonControls( );
-	if (!LoadLibrary(L"riched20.dll")) return FALSE;
+	if (! LoadLibrary(L"riched20.dll") ) return FALSE;
 
-	__hinst = hinst;
+	__hinst = h_inst;
 	__dlg = HWND_DESKTOP;
 
 	metric.lfMessageFont.lfWeight = FW_BOLD;
-	metric.lfMessageFont.lfHeight = -11;				
-	__font_bold = CreateFontIndirect(&metric.lfMessageFont);
+	metric.lfMessageFont.lfHeight = -11;
+	__font_bold = CreateFontIndirect( &metric.lfMessageFont );
 
 	metric.lfMessageFont.lfWeight = FW_DONTCARE;
 	metric.lfMessageFont.lfUnderline = TRUE;
-	__font_link = CreateFontIndirect(&metric.lfMessageFont);
+	__font_link = CreateFontIndirect( &metric.lfMessageFont );
 
-	metric.lfMessageFont.lfHeight = -9;				
-	metric.lfMessageFont.lfUnderline = FALSE;		
-	__font_small = CreateFontIndirect(&metric.lfMessageFont);
+	metric.lfMessageFont.lfHeight = -9;
+	metric.lfMessageFont.lfUnderline = FALSE;
+	__font_small = CreateFontIndirect( &metric.lfMessageFont );
 
-	__img = ImageList_Create(9, 9, ILC_MASK, 2, 2);	
-	__dsk_img = ImageList_Create(15, 11, ILC_MASK | ILC_COLOR24, 3, 3);	
+	__img = ImageList_Create( 9, 9, ILC_MASK, 2, 2 );
+	__dsk_img = ImageList_Create( 15, 11, ILC_MASK | ILC_COLOR24, 5, 5 );
 	
-	ImageList_Add(__img, check, check_mask);
-	ImageList_Add(__dsk_img, disk, disk_mask);
-	ImageList_Add(__dsk_img, undisk, undisk_mask);
-	ImageList_Add(__dsk_img, disk_enb, disk_mask);
+	ImageList_Add( __img, check, check_mask );
 
-	__cur_arrow = LoadCursor(NULL, IDC_ARROW);
-	__cur_hand  = LoadCursor(NULL, IDC_HAND);
-	__cur_wait  = LoadCursor(NULL, IDC_WAIT);
+	ImageList_Add( __dsk_img, disk, disk_mask );
+	ImageList_Add( __dsk_img, undisk, undisk_mask );
+	ImageList_Add( __dsk_img, disk_enb, disk_mask );
+	ImageList_Add( __dsk_img, cdrom, cdrom_mask );
 
-	return  TRUE;
+	__cur_arrow = LoadCursor( NULL, IDC_ARROW );
+	__cur_hand  = LoadCursor( NULL, IDC_HAND );
+	__cur_wait  = LoadCursor( NULL, IDC_WAIT );
+
+	return TRUE;
 
 }
 
+
 _wnd_data *_sub_class(
 		HWND hwnd,
+		int  proc_idx,
 		HWND dlg,
-		char key
+		...
 	)
 {
 	_wnd_data *data = NULL;
-	void *proc;
+	void *proc = NULL;
 
-	if (hwnd) 
+	if ( hwnd ) 
 	{
 		data = malloc(sizeof(_wnd_data));
-		zeroauto(data, sizeof(_wnd_data));
+		zeroauto( data, sizeof(_wnd_data) );
 	}
-
-	if (data) 
+	if ( data ) 
 	{
-		if (key) proc = _key_proc; else proc = _static_proc;
-		data->old_proc = wnd_set_long(hwnd, GWL_WNDPROC, proc);
+		if ( proc_idx != SUB_NONE )
+		{
+			if ( proc_idx == SUB_KEY_PROC )    proc = _key_proc; 
+			if ( proc_idx == SUB_STATIC_PROC ) proc = _static_proc; 
 
-		data->dlg = dlg;
-		wnd_set_long(hwnd, GWL_USERDATA, data);
+			if ( proc != NULL )
+			{
+				data->old_proc = wnd_set_long( hwnd, GWL_WNDPROC, proc );
+			}
+		}
+		{
+			int     k   = 0;
+			HWND    val = dlg;
+			va_list va;
 
+			va_start( va, dlg );
+			while ( val != HWND_NULL )
+			{
+				data->dlg[k] = val;
+				val = va_arg( va, HWND );				
+				k++;
+			}
+			va_end(va);
+		}
+		wnd_set_long( hwnd, GWL_USERDATA, data );
 		return data;
 
 	} else return NULL;
@@ -662,12 +731,17 @@ void __unsub_class(
 	)
 {
 	_wnd_data *data = wnd_get_long(hwnd, GWL_USERDATA);		
-	if (data) {
+	int k = 0;
 
-		DestroyWindow(data->dlg);
+	if (data)
+	{		
+		while (data->dlg[k] && data->dlg[k] != HWND_NULL) 
+		{
+			DestroyWindow(data->dlg[k]);
+			k++;
+		}
 		free(data);
 		SetWindowLongPtr(hwnd, GWL_USERDATA, 0);
-
 	}
 }
 
@@ -715,8 +789,8 @@ _key_proc(
 
 		do {
 			if (GetKeyState(VK_CONTROL) < 0) shift |= MOD_CONTROL;
-			if (GetKeyState(VK_SHIFT) < 0) shift |= MOD_SHIFT;
-			if (GetKeyState(VK_MENU) < 0) shift |= MOD_ALT;
+			if (GetKeyState(VK_SHIFT) < 0)   shift |= MOD_SHIFT;
+			if (GetKeyState(VK_MENU) < 0)    shift |= MOD_ALT;
 
 			resolve = _key_name(wparam, shift, key);
 			if ((msg == WM_KEYUP) && (!resolve)) {			
@@ -727,9 +801,9 @@ _key_proc(
 			}
 			SetWindowText(hwnd, key);
 
-			if ((msg != WM_KEYUP) && resolve) {
+			if ((msg != WM_KEYUP) && resolve) 
+			{
 				data->vk = MAKELONG(shift, wparam);
-
 			}			
 		} while (0);
 		return 0L;
@@ -737,6 +811,39 @@ _key_proc(
 	}
 	CallWindowProc(data->old_proc, hwnd, msg, wparam, lparam);
 	return 1L;	
+
+}
+
+
+void _change_page(
+		HWND hwnd,
+		int  wnd_idx
+	)
+{
+	_wnd_data *data = wnd_get_long( hwnd, GWL_USERDATA );
+	if (! data ) return;
+
+	data->state = !data->state;
+	if ( data->dlg[0] )
+	{
+		_tab_data *tab = wnd_get_long( GetParent(hwnd), GWL_USERDATA );
+		if (! tab ) return;
+
+		tab->h_curr   = hwnd;
+		tab->curr_tab = wnd_idx;
+
+		if ( data->dlg[wnd_idx] != HWND_NULL )
+		{				
+			ShowWindow( tab->active, SW_HIDE );
+			tab->active = data->dlg[wnd_idx];
+
+			ShowWindow( tab->active, SW_SHOW );
+			SetWindowPos( tab->active, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE );
+		}
+		InvalidateRect( GetParent(hwnd), NULL, FALSE );
+	} else InvalidateRect( hwnd, NULL, FALSE );
+
+	SendMessage( GetParent(hwnd), WM_USER_CLICK, (WPARAM)hwnd, 0 );
 
 }
 
@@ -753,10 +860,21 @@ _static_proc(
 	_wnd_data *data = wnd_get_long(hwnd, GWL_USERDATA);
 	if (!data) return 1L;	
 
-	switch (msg) {
+	switch (msg) 
+	{
 		/*case WM_GETDLGCODE: {
 			return DLGC_STATIC;
 
+		}
+		break;*/
+		/*case WM_NOTIFY:
+		{
+			if (wparam == IDT_INFO)
+			{
+				int code = ((NMHDR *)lparam)->code;
+				__msg_i( hwnd, L"static_proc: %d", code );
+
+			}
 		}
 		break;*/
 
@@ -772,30 +890,14 @@ _static_proc(
 
 		case WM_LBUTTONDBLCLK:
 		case WM_LBUTTONDOWN:
-		
-			data->state = !data->state;
-			if (data->dlg) 
-			{
-				_tab_data *tab = wnd_get_long(GetParent(hwnd), GWL_USERDATA);
 
-				tab->curr = hwnd;
-				if (data->dlg != (HWND)-1) 
-				{				
-					ShowWindow(tab->active, SW_HIDE);
-					tab->active = data->dlg;
+			_change_page(hwnd, 0);
+			return 0L;		
 
-					ShowWindow(tab->active, SW_SHOW);
-					SetWindowPos(tab->active, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE);
-				}
-				InvalidateRect(GetParent(hwnd), NULL, FALSE);
-			} else InvalidateRect(hwnd, NULL, FALSE);
-
-			SendMessage(GetParent(hwnd), WM_USER_CLICK, (WPARAM)hwnd, 0);
-			return 0L;					
 		break;
 
 	}
-	CallWindowProc(data->old_proc, hwnd, msg, wparam, lparam);
+	CallWindowProc( data->old_proc, hwnd, msg, wparam, lparam );
 	return 1L;	
 
 }
@@ -822,39 +924,43 @@ void _draw_listview(
 		LPDRAWITEMSTRUCT itst
 	)
 {
-	DRAWTEXTPARAMS tp = { sizeof(tp) };
-	LVCOLUMN lvc = { sizeof(lvc) };	
+	DRAWTEXTPARAMS dtp = { sizeof(dtp) };
+	LVCOLUMN       lvc = { sizeof(lvc) };
 
-	HWND header = ListView_GetHeader(itst->hwndItem);
+	wchar_t s_text[200] = { 0 };
+	int     cx, cy, k   = 0;
+	int     offset      = 0;
+	int     icon;
+	BOOL    is_root;
 
-	int cols = Header_GetItemCount(header);
-	wchar_t text[200];
-	BOOL root;
+	int col_cnt = Header_GetItemCount( ListView_GetHeader( itst->hwndItem ) );
 
-	int k = 0;			
-	int offset = 0;
-	int cx, cy;
-	int icon;
+	LVITEM   lvitem   = { LVIF_TEXT | LVIF_PARAM, itst->itemID, 0, 0, 0, s_text, sizeof_w(s_text) };
+	COLORREF bgcolor = ListView_GetBkColor( itst->hwndItem );
 
-	LVITEM lvitem = { LVIF_TEXT | LVIF_PARAM, itst->itemID, 0, 0, 0, text, sizeof_w(text) };
-	COLORREF bgcolor = ListView_GetBkColor(itst->hwndItem);
-
-	ListView_GetItem(itst->hwndItem, &lvitem);	
-	root = _is_root_item(lvitem.lParam);
-
-	//if (_is_warning_item(lvitem.lParam)) bgcolor = CL_WARNING_BG;
-
-	if (itst->itemState & ODS_SELECTED && IsWindowEnabled(itst->hwndItem)) bgcolor = CL_WHITE; //_cl(COLOR_BTNSHADOW, 88);
-
-	if (root) bgcolor = _cl(COLOR_BTNSHADOW, 60);	
-	if (_is_marked_item(lvitem.lParam)) bgcolor = _cl(COLOR_BTNSHADOW, 35);
+	ListView_GetItem( itst->hwndItem, &lvitem );
+	is_root = _is_root_item( lvitem.lParam );
+	/*
+	if (_is_warning_item(lvitem.lParam)) {
+		bgcolor = CL_WARNING_BG;
+	}
+	*/
+	if ( itst->itemState & ODS_SELECTED && IsWindowEnabled( itst->hwndItem ) ) {
+		bgcolor = CL_WHITE; // == _cl(COLOR_BTNSHADOW, 88);
+	}
+	if ( is_root ) {
+		bgcolor = _cl( COLOR_BTNSHADOW, 60 );
+	}
+	if ( _is_marked_item(lvitem.lParam) ) {
+		bgcolor = _cl( COLOR_BTNSHADOW, 35 );
+	}
 	
-	_fill(itst->hDC, &itst->rcItem, bgcolor);
+	_fill( itst->hDC, &itst->rcItem, bgcolor );
 
-	for ( ;k < cols; k++ ) {
-
-		lvc.mask = LVCF_FMT | LVCF_WIDTH;
-		ListView_GetColumn(itst->hwndItem, k, &lvc);	
+	for ( ;k < col_cnt; k++ )
+	{
+		lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_IMAGE;
+		ListView_GetColumn( itst->hwndItem, k, &lvc );
 
 		itst->rcItem.left = k ? itst->rcItem.right : 0;
 		itst->rcItem.right = itst->rcItem.left + lvc.cx;
@@ -862,79 +968,82 @@ void _draw_listview(
 		lvitem.iItem = itst->itemID; 
 		lvitem.iSubItem = k;
 
-		ListView_GetItem(itst->hwndItem, &lvitem);
-		tp.iLeftMargin = tp.iRightMargin = 5;				
+		ListView_GetItem( itst->hwndItem, &lvitem );
+		dtp.iLeftMargin = dtp.iRightMargin = 5;		
 
-		if (!itst->rcItem.left) {
-			ImageList_GetIconSize(__dsk_img, &cx, &cy);
+		if ( (!itst->rcItem.left) && _is_icon_show( itst->hwndItem, k ) )
+		{
+			ImageList_GetIconSize( __dsk_img, &cx, &cy );
+			offset = lvitem.lParam && !is_root ? 25 : 3;
 
-			offset = lvitem.lParam && !root ? 25 : 3;
-
-			if (!_is_simple_list(itst->hwndItem))
-				itst->rcItem.left += offset + cy + (lvitem.lParam && !root ? 8 : 4);
-
+			itst->rcItem.left += offset + cy + ( lvitem.lParam && !is_root ? 8 : 4 );
 			icon = 0;
-			if (!root) {
-				
-				//if (_is_enabled_item(lvitem.lParam)) icon = 2;
-				if (_is_splited_item(lvitem.lParam)) icon = 1;			
 
+			if (! is_root ) 
+			{
+				//icon = 0;
+				if ( _is_splited_item(lvitem.lParam) ) icon = 1;
+				if ( _is_cdrom_item(lvitem.lParam) ) icon = 2;
 			}
 
-			if (!_is_simple_list(itst->hwndItem))
-
-				ImageList_Draw(
-					__dsk_img, 
-					icon,
-					itst->hDC,
-					offset,
-					itst->rcItem.top+3,
-					ILD_TRANSPARENT
+			ImageList_Draw(
+				__dsk_img, icon, itst->hDC, offset, itst->rcItem.top + 3, ILD_TRANSPARENT
 				);
 
 		} else offset = 0;
-		if (offset && root) {	
-
-			//if (_is_marked_item(lvitem.lParam)) 
-			//	SelectObject(itst->hDC, __font_bold);
-					
-			DrawState(itst->hDC, /*GetStockObject(DC_PEN)*/0, NULL, (LPARAM)text, 0, 
-				itst->rcItem.left+5, itst->rcItem.top, 0, 0, DST_PREFIXTEXT | DSS_MONO);
-
+		if ( offset && is_root )
+		{
+			/*
+			if (_is_marked_item(lvitem.lParam)) {
+				SelectObject(itst->hDC, __font_bold);
+			}
+			*/					
+			DrawState(
+				itst->hDC, 0, NULL, (LPARAM)s_text, 0, 
+				itst->rcItem.left+5, itst->rcItem.top, 0, 0, DST_PREFIXTEXT | DSS_MONO
+				); // second param = GetStockObject(DC_PEN)
 		} else {
-			if (wcslen(text)) {
-
-				COLORREF text_color = GetSysColor(COLOR_WINDOWTEXT);
-				if (_is_warning_item(lvitem.lParam)) {
-
-					//text_color = CL_WARNING;
-					//SelectObject(itst->hDC, __font_bold);
-
+			if ( wcslen(s_text) != 0) 
+			{
+				COLORREF text_color = GetSysColor( COLOR_WINDOWTEXT );
+				/*
+				if (_is_warning_item(lvitem.lParam)) 
+				{
+					text_color = CL_WARNING;
+					SelectObject( itst->hDC, __font_bold );
 				}
-				if (!_is_active_item(lvitem.lParam)) text_color = GetSysColor(COLOR_GRAYTEXT);
+				*/
+				if (!_is_active_item(lvitem.lParam)) {
+					text_color = GetSysColor( COLOR_GRAYTEXT );
+				}
+				SetTextColor( itst->hDC, text_color );
 
-				SetTextColor(itst->hDC, text_color);
+				if (k >= 4) {
+					SelectObject( itst->hDC, __font_bold );
+				}
+				if (!IsWindowEnabled( itst->hwndItem )) 
+				{
+					/*
+					DrawState(
+						itst->hDC, 0, NULL, (LPARAM)text, 0,
+						itst->rcItem.left+5, itst->rcItem.top, 0, 0, DST_PREFIXTEXT | DSS_MONO | DSS_DISABLED
+						);
+					*/
+					SetTextColor( itst->hDC, GetSysColor(COLOR_GRAYTEXT) );
 
-				if (k >= 4) SelectObject(itst->hDC, __font_bold);
-				if (!IsWindowEnabled(itst->hwndItem)) {			
-
-					//DrawState(itst->hDC, 0, NULL, (LPARAM)text, 0,
-					//	itst->rcItem.left+5, itst->rcItem.top, 0, 0, DST_PREFIXTEXT | DSS_MONO | DSS_DISABLED);
-
-					SetTextColor(itst->hDC, GetSysColor(COLOR_GRAYTEXT));
-
-					DrawTextEx(itst->hDC, text, -1, &itst->rcItem,
-						DT_END_ELLIPSIS | ((lvc.fmt & LVCFMT_RIGHT) ? DT_RIGHT : FALSE), &tp);
-
+					DrawTextEx(
+						itst->hDC, s_text, -1, &itst->rcItem,
+						DT_END_ELLIPSIS | ((lvc.fmt & LVCFMT_RIGHT) ? DT_RIGHT : FALSE), &dtp
+						);
 				} else {
-
-					DrawTextEx(itst->hDC, text, -1, &itst->rcItem,
-						DT_END_ELLIPSIS | ((lvc.fmt & LVCFMT_RIGHT) ? DT_RIGHT : FALSE), &tp);
-
+					DrawTextEx(
+						itst->hDC, s_text, -1, &itst->rcItem,
+						DT_END_ELLIPSIS | ((lvc.fmt & LVCFMT_RIGHT) ? DT_RIGHT : FALSE), &dtp
+						);
 				}
 			}
-		}								
-	}
+		}
+	}							
 }
 
 
@@ -1009,31 +1118,31 @@ void _draw_static(
 	char curr;	
 
 	if (!itst) return;
-	switch (itst->CtlType) {
-
+	switch (itst->CtlType) 
+	{
 		case ODT_LISTVIEW: _draw_listview(itst); break;
 		case ODT_COMBOBOX: _draw_combobox(itst); break;
-		case ODT_TAB: _draw_tabs(itst); break;
+		case ODT_TAB:      _draw_tabs(itst);     break;
 
 		case ODT_BUTTON:
 
         if (itst->itemState & ODS_DISABLED) state = DSS_DISABLED;
-        if (itst->itemState & ODS_SELECTED) {
-
+        if (itst->itemState & ODS_SELECTED)
+				{
 					edge = BDR_SUNKENOUTER;
 					x++; y++;
-
         }
 				itst->rcItem.top++;
 				GetWindowText(itst->hwndItem, data, MAX_PATH);
 
 				gwl = wnd_get_long(itst->hwndItem, GWL_USERDATA);
 				tab = wnd_get_long(GetParent(itst->hwndItem), GWL_USERDATA);
-				curr = tab && (tab->curr == itst->hwndItem);
+				curr = tab && (tab->h_curr == itst->hwndItem);
 
-				if (gwl) {
-					if (!gwl->dlg) {
-
+				if (gwl) 
+				{
+					if (!gwl->dlg[0]) 
+					{
 						itst->rcItem.right = itst->rcItem.left + 13;
 						itst->rcItem.bottom = itst->rcItem.top + 13;
 
@@ -1052,14 +1161,14 @@ void _draw_static(
 							(LPARAM)data, 0, itst->rcItem.right+4, -1, 0, 0, DST_PREFIXTEXT | state);
 
 						return;
-					} else { 
-						if (curr) {
-							
+					} else 
+					{ 
+						if (curr) 
+						{							
 							edge = BDR_SUNKENOUTER;
 							x++; y++;
-						
-						} else border = BF_FLAT;
 
+						} else border = BF_FLAT;
 					}
 				}
 
@@ -1074,7 +1183,8 @@ void _draw_static(
 				GetWindowInfo(itst->hwndItem, &wi);
 				GetWindowText(itst->hwndItem, data, MAX_PATH);
 
-				if (data[0] == L'#') {
+				if (data[0] == L'#')
+				{
 					GetWindowRect(GetParent(GetParent(itst->hwndItem)), &rc);
 
 					itst->rcItem.right = rc.right - rc.left - 3;
@@ -1084,13 +1194,11 @@ void _draw_static(
 
 					tp.iLeftMargin += 10;
 					itst->rcItem.top += 1;
-					DrawTextEx(itst->hDC, data + 1, -1, &itst->rcItem, DT_END_ELLIPSIS, &tp);
-					
+					DrawTextEx(itst->hDC, data + 1, -1, &itst->rcItem, DT_END_ELLIPSIS, &tp);					
 				}
-
-				else {
-					if ((wi.dwStyle & SS_SUNKEN) == 0) DrawEdge(itst->hDC, &itst->rcItem, edge, border);
-				
+				else 
+				{
+					if ((wi.dwStyle & SS_SUNKEN) == 0) DrawEdge(itst->hDC, &itst->rcItem, edge, border);				
 				}
 
 
@@ -1113,7 +1221,7 @@ __sub_enum(
 			(wcscmp(name, L"Button") == 0)) return 1L;
 
 	if (GetWindowLong(hwnd, GWL_STYLE) & BS_OWNERDRAW)
-		_sub_class(hwnd, FALSE, FALSE);
+		_sub_class(hwnd, SUB_STATIC_PROC, HWND_NULL);
 
 	return 1L;
 
@@ -1232,7 +1340,7 @@ int _init_combo(
 			if (list[count].val == val) item = count;			
 		} else {
 			if ( (bits != -1 ? _bitcount(list[count].val) == bits : TRUE) && 
-					 (val & list[count].val) )
+				 (val & list[count].val) )
 			{
 				item = count;
 			}
@@ -1240,7 +1348,6 @@ int _init_combo(
 		count++;
 	}
 	SendMessage(hwnd, CB_SETCURSEL, item, 0);
-
 	return item;
 
 }
@@ -1346,32 +1453,154 @@ BOOL _folder_choice(
 
 
 void _init_list_headers(
-		HWND     hwnd,
-		colinfo *cols
+		HWND      hwnd,
+		_colinfo *cols
 	)
 {
-	LVCOLUMN lvcol;
+	LVCOLUMN lvcol = { 0 };
 	int col = 0;
 
 	if (!ListView_GetItemCount(hwnd))
 	{	
-		lvcol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM; 
-		while (wcslen(cols[col].name)) { 
-
-			lvcol.iSubItem = col;
-			lvcol.pszText = cols[col].name;
-			lvcol.cx = cols[col].width;
-
-			if ( col < 1 )
-				lvcol.fmt = LVCFMT_LEFT; else
-				lvcol.fmt = LVCFMT_RIGHT;               
+		lvcol.mask  = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+		if ( cols[col].row_images )
+		{
+			lvcol.fmt |= LVCFMT_BITMAP_ON_RIGHT;
+		}
+		while ( wcslen(cols[col].name) != 0 ) 
+		{ 
+			lvcol.iSubItem  = col;
+			lvcol.pszText   = cols[col].name;
+			lvcol.cx        = cols[col].width;
+			lvcol.fmt      |= cols[col].align;
 
 			ListView_InsertColumn(hwnd, col, &lvcol);
 			col++;
-
 		}
 	}
 }
 
 
+BOOL _open_file_dialog(
+		HWND     h_parent,
+		wchar_t *s_path,
+		int      size,
+		wchar_t *s_title
+	)
+{
+	OPENFILENAME ofn = { sizeof(ofn), h_parent };
+
+	ofn.lpstrFile  = s_path;
+	ofn.nMaxFile   = size;
+
+	ofn.lpstrTitle = s_title;
+	ofn.FlagsEx    = OFN_EX_NOPLACESBAR;
+
+	if (GetOpenFileName(&ofn))
+	{
+		return TRUE;
+	} else {
+		return FALSE;
+	}	
+}
+
+
+BOOL _save_file_dialog(
+		HWND     h_parent,
+		wchar_t *s_path,
+		int      size,
+		wchar_t *s_title
+	)
+{
+	OPENFILENAME ofn = { sizeof(ofn), h_parent };
+	ofn.lpstrFile = s_path;
+
+	ofn.lpstrTitle = s_title;	
+	ofn.nMaxFile  = size;	
+
+	ofn.Flags = OFN_FORCESHOWHIDDEN | OFN_HIDEREADONLY;
+	ofn.FlagsEx = OFN_EX_NOPLACESBAR;
+
+	if ( GetSaveFileName(&ofn) )
+	{
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+}
+
+
+/*
+BOOL _message_with_check(
+		HWND      h_parent,
+		wchar_t  *s_message,
+		wchar_t  *s_check_label,
+		BOOL     *check_state
+		)
+{
+	MSGBOXPARAMS params = { sizeof(MSGBOXPARAMS), h_parent };
+
+	params.lpszCaption = L"Warning";
+	params.lpszText    = s_message;
+	params.dwStyle     = MB_YESNO | MB_ICONWARNING;
+
+	return MessageBoxIndirect( &params ) == IDYES;
+
+	MessageDIg();
+
+}
+*/
+
+/*
+public:
+  CMessageBoxPatcher
+    ( LPCTSTR lpCheckBoxString,
+    bool bNoMoreByDefault = false
+    )
+    : CThunk<CMessageBoxPatcher, HOOKPROC>((TMFP)CBTProc, this),
+    m_bNoMore(bNoMoreByDefault),
+    m_lpCheckBoxString(lpCheckBoxString),
+    m_hwndCheckBox(NULL),
+    m_hwndMessageBox(NULL)
+  {
+    m_hHook = ::SetWindowsHookEx(WH_CBT, GetThunk(), NULL,
+      ::GetCurrentThreadId());
+  }
+
+  ~CMessageBoxPatcher()
+  {
+    if (m_hHook)
+      ::UnhookWindowsHookEx(m_hHook);
+  }
+
+  bool GetBoxState() const
+  {
+    return m_bNoMore;
+  }
+
+private:
+  HHOOK      m_hHook;
+  HWND       m_hwndCheckBox;
+  HWND       m_hwndMessageBox;
+  bool       m_bNoMore;
+  LPCTSTR    m_lpCheckBoxString;
+};
+
+inline int WINAPI MessageBox
+  ( IN HWND hwnd,
+  IN LPCTSTR lpText,
+  IN LPCTSTR lpCaption,
+  IN UINT uType,
+  IN LPCTSTR lpCheckBoxString,
+  IN OUT PBOOL pbNoMore
+  )
+{
+  CMessageBoxPatcher  patcher(lpCheckBoxString, !!*pbNoMore);
+  int          nRet;
+
+  nRet = ::MessageBox(hwnd, lpText, lpCaption, uType);
+  *pbNoMore = patcher.GetBoxState();
+  return nRet;
+}
+*/
 

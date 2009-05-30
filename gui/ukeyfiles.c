@@ -9,16 +9,16 @@
 list_entry __key_files;
 list_entry __key_files_new;
 
-colinfo _keyfiles_headers[ ] = {
-	{ L"File / Folder Path", 375 },
-	{ L"",  },
+_colinfo _keyfiles_headers[ ] = {
+	{ L"File / Folder Path", 375, LVCFMT_LEFT, FALSE },
+	{ STR_NULL },
 };
 
 
 void _init_keyfiles_list( )
 {
-	_init_list_head(&__key_files);
-	_init_list_head(&__key_files_new);
+	_init_list_head(& __key_files );
+	_init_list_head(& __key_files_new );
 }
 
 
@@ -145,10 +145,11 @@ void _add_item(
 {
 	if (_is_duplicated_item(h_list, s_file))
 	{
-		_msg_i(GetParent(h_list), 
+		__msg_i(
+			GetParent(h_list), 
 			L"%s \"%s\" already exists in keyfiles list", 
 			s_file[wcslen(s_file) - 1] == L'\\' ? L"Folder" : L"File", s_file
-		);
+			);
 	} else {
 		_list_insert_item(h_list, ListView_GetItemCount(h_list), 0, s_file, 0);
 	}
@@ -202,21 +203,14 @@ _keyfiles_dlg_proc(
 			{
 				case IDB_GENERATE_KEYFILE :
 				{
-					OPENFILENAME ofn = { sizeof(ofn), hwnd };
 					wchar_t s_file[MAX_PATH] = { L"keyfile" };
 
 					byte keyfile[64];
 					int rlt;					
 
-					ofn.lpstrFile = s_file;
-					ofn.nMaxFile = sizeof_w(s_file);
-
-					ofn.lpstrTitle = L"Save 64 bytes random keyfile as..";
-
-					ofn.Flags = OFN_FORCESHOWHIDDEN | OFN_HIDEREADONLY;
-					ofn.FlagsEx = OFN_EX_NOPLACESBAR;
-
-					if ( GetSaveFileName(&ofn) )
+					if ( _save_file_dialog(
+						hwnd, s_file, sizeof_w(s_file), L"Save 64 bytes random keyfile as.."
+						) )
 					{
 						if ( (rlt = dc_get_random(keyfile, sizeof(keyfile))) == ST_OK ) 
 						{
@@ -225,7 +219,7 @@ _keyfiles_dlg_proc(
 						}
 						if (rlt == ST_OK) 
 						{							
-							if ( _msg_q(hwnd, 
+							if ( __msg_q(hwnd, 
 								L"Keyfile \"%s\" successfully created\n\n"
 								L"Add this file to the keyfiles list?", 
 								s_file
@@ -239,7 +233,7 @@ _keyfiles_dlg_proc(
 								_ui_embedded(hwnd, key_list);
 							}							
 						} else {
-							_error_s(hwnd, L"Error creating Keyfile", rlt);
+							__error_s( hwnd, L"Error creating Keyfile", rlt );
 						}
 					}
 				}
@@ -274,42 +268,36 @@ _keyfiles_dlg_proc(
 				break;
 				case IDB_ADD_FILE :
 				{
-					wchar_t path[MAX_PATH] = { 0 };
-					OPENFILENAME ofn = { sizeof(ofn), hwnd };
-
-					ofn.lpstrFile = path;
-					ofn.nMaxFile = sizeof_w(path);
-
-					ofn.lpstrTitle = L"Select File..";
-					ofn.FlagsEx = OFN_EX_NOPLACESBAR;
-
-					if (GetOpenFileName(&ofn)) 
+					wchar_t s_path[MAX_PATH] = { 0 };
+					if (_open_file_dialog(hwnd, s_path, sizeof_w(s_path), L"Select File..")) 
 					{					
 						if (key_list == KEYLIST_EMBEDDED)
 						{
-							HWND hfile = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+							HWND hfile = CreateFile(
+								s_path, GENERIC_READ, 
+								FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL
+								);
+
 							if (hfile != INVALID_HANDLE_VALUE) 
 							{
-								if (GetFileSize(hfile, NULL) != 64) {
-									_error_s(hwnd, L"Embedded keyfile must be 64 byte size", ST_ERROR);
-								} else
+								if (GetFileSize(hfile, NULL) != 64) 
 								{
+									__error_s( hwnd, L"Embedded keyfile must be 64 byte size", ST_ERROR );
+								} else {
 									_ui_keys_list_refresh(hwnd);
-									_add_item(hlist, path);
+									_add_item(hlist, s_path);
 								}
 								CloseHandle(hfile);
 							}
 							_ui_embedded(hwnd, key_list);
-
 						} else {
 							_ui_keys_list_refresh(hwnd);
-							_add_item(hlist, path);
+							_add_item(hlist, s_path);
 						}
 					}
 				}
 				break;
 			}
-
 			if (id == IDCANCEL) EndDialog(hwnd, 0);
 			if (id == IDOK)
 			{
@@ -328,7 +316,7 @@ _keyfiles_dlg_proc(
 
 						if ((new_node = secure_alloc(sizeof(_list_key_files))) == NULL)
 						{
-							_error_s(hwnd, L"Can't allocate memory", ST_NOMEM);
+							__error_s( hwnd, L"Can't allocate memory", ST_NOMEM );
 							_keyfiles_wipe(key_list);
 							break;
 						}
@@ -343,32 +331,32 @@ _keyfiles_dlg_proc(
 		break;
 		case WM_INITDIALOG : 
 		{
-			HWND hlist = GetDlgItem(hwnd, IDC_LIST_KEYFILES);
+			HWND h_list = GetDlgItem(hwnd, IDC_LIST_KEYFILES);
 			
 			_list_key_files *key_file;
 
 			key_list = (int)lparam;
-			head     = _KEYFILES_HEAD_(key_list);
+			head     = _KEYFILES_HEAD_( key_list );
 
-			_init_list_headers(hlist, _keyfiles_headers);
+			_init_list_headers( h_list, _keyfiles_headers );
 
-			if (key_file = _first_keyfile(key_list))
+			if ( key_file = _first_keyfile( key_list ) )
 			{
-				EnableWindow(GetDlgItem(hwnd, IDB_REMOVE_ITEMS), TRUE);
+				EnableWindow( GetDlgItem(hwnd, IDB_REMOVE_ITEMS), TRUE );
 				do 
 				{
-					_list_insert_item(hlist, ListView_GetItemCount(hlist), 0, key_file->path, 0);
-					key_file = _next_keyfile(key_file, key_list);
+					_list_insert_item( h_list, ListView_GetItemCount(h_list), 0, key_file->path, 0 );
+					key_file = _next_keyfile( key_file, key_list );
 
-				} while (key_file != NULL);
+				} while ( key_file != NULL );
 			} 
 
-			_ui_keys_list_refresh(hwnd);
-			_ui_embedded(hwnd, key_list);
+			_ui_keys_list_refresh( hwnd );
+			_ui_embedded( hwnd, key_list );
 
-			ListView_SetBkColor(hlist, GetSysColor(COLOR_BTNFACE));
-			ListView_SetTextBkColor(hlist, GetSysColor(COLOR_BTNFACE));
-			ListView_SetExtendedListViewStyle(hlist, LVS_EX_FLATSB | LVS_EX_FULLROWSELECT);	
+			ListView_SetBkColor( h_list, GetSysColor(COLOR_BTNFACE) );
+			ListView_SetTextBkColor( h_list, GetSysColor(COLOR_BTNFACE) );
+			ListView_SetExtendedListViewStyle( h_list, LVS_EX_FLATSB | LVS_EX_FULLROWSELECT );
 
 			SetForegroundWindow(hwnd);
 			return 1L;

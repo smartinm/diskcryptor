@@ -10,7 +10,7 @@ typedef struct __list_key_files {
 	
 } _list_key_files;
 
-extern colinfo _keyfiles_headers[ ];
+extern _colinfo _keyfiles_headers[ ];
 
 extern list_entry __key_files;
 extern list_entry __key_files_new;

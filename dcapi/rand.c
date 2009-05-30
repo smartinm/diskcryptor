@@ -167,8 +167,7 @@ static LRESULT CALLBACK rnd_mouse_hook(int code, WPARAM wparam,  LPARAM lparam)
 	}
 
 	return CallNextHookEx(
-		mouse_hook, code, wparam, lparam
-		);
+		mouse_hook, code, wparam, lparam);
 }
 
 static LRESULT CALLBACK rnd_kbd_hook(int code, WPARAM wparam,  LPARAM lparam)
@@ -188,8 +187,7 @@ static LRESULT CALLBACK rnd_kbd_hook(int code, WPARAM wparam,  LPARAM lparam)
 	}
 
 	return CallNextHookEx(
-		kbd_hook, code, wparam, lparam
-		);
+		kbd_hook, code, wparam, lparam);
 }
 
 void rnd_reseed_now( )
@@ -225,17 +223,14 @@ void rnd_reseed_now( )
 
 	GetThreadTimes(
 		GetCurrentThread(), &seed.seed22,
-		&seed.seed23, &seed.seed24, &seed.seed25
-		);
+		&seed.seed23, &seed.seed24, &seed.seed25);
 
 	GetProcessTimes(
 		GetCurrentProcess(), &seed.seed26,
-		&seed.seed27, &seed.seed28, &seed.seed29
-		);
+		&seed.seed27, &seed.seed28, &seed.seed29);
 
 	GetProcessMemoryInfo(
-		GetCurrentProcess(), &seed.seed32, sizeof(seed.seed32)
-		);
+		GetCurrentProcess(), &seed.seed32, sizeof(seed.seed32));
 
 	QueryPerformanceCounter(&seed.seed30);
 	GlobalMemoryStatusEx(&seed.seed31);
@@ -260,12 +255,10 @@ int rnd_init()
 	}
 
 	mouse_hook = SetWindowsHookEx(
-		WH_MOUSE, rnd_mouse_hook, NULL, GetCurrentThreadId()
-		);
+		WH_MOUSE, rnd_mouse_hook, NULL, GetCurrentThreadId());
 
 	kbd_hook = SetWindowsHookEx(
-		WH_KEYBOARD, rnd_kbd_hook, NULL, GetCurrentThreadId()
-		);
+		WH_KEYBOARD, rnd_kbd_hook, NULL, GetCurrentThreadId());
 
 	/* get random data from Windows PRNG */
 	if (CryptAcquireContext(&hprov, NULL, NULL, PROV_RSA_FULL, 0) ||

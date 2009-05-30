@@ -16,7 +16,6 @@ del    *.log  /S /Q
 del    *.obj  /S /Q
 del    *.aps  /S /Q
 del    *.ilk  /S /Q
-del    fast_aes\aes_x86.txt 
 del    boot\bin\* /S /Q
 
 rmdir release\amd64\obj /S /Q

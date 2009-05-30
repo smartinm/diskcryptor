@@ -146,7 +146,7 @@ typedef void (*callback_ex)(void*,void*);
 #define zeromem(m,s) memset(m, 0, s)
 
 #ifdef IS_DRIVER
- #define mem_alloc(x) ExAllocatePoolWithTag(NonPagedPool, (x), '1_cd')
+ #define mem_alloc(x) ExAllocatePoolWithTag(NonPagedPoolCacheAligned, (x), '1_cd')
  #define mem_free(x)  ExFreePool(x)
 #else 
  #define mem_alloc(x) malloc(x)
@@ -173,6 +173,9 @@ typedef void (*callback_ex)(void*,void*);
     if (!((s) % 4)) { __stosd(pv(m), 0, (size_t)(s) / 4); } else \
     if (!((s) % 2)) { __stosw(pv(m), 0, (size_t)(s) / 2); } else \
 	{ __stosb(pv(m), 0, (size_t)(s)); } }
+
+ #define _disable() { __asm { cli }; }
+ #define _enable()  { __asm { sti }; }
 #else
  #define fastcpy(a,b,c) __movsq(pv(a), pv(b), (size_t)(c) / 8)
  
@@ -187,7 +190,7 @@ typedef void (*callback_ex)(void*,void*);
     if (!((s) % 4)) { __stosd(pv(m), 0, (size_t)(s) / 4); } else \
     if (!((s) % 2)) { __stosw(pv(m), 0, (size_t)(s) / 2); } else \
 	{ __stosb(pv(m), 0, (size_t)(s)); } }
-#endif  
+#endif
 
 #define lock_inc(x)    ( _InterlockedIncrement(x) )
 #define lock_dec(x)    ( _InterlockedDecrement(x) )

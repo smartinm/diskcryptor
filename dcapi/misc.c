@@ -273,70 +273,198 @@ int dc_fs_type(u8 *buff)
 	if (memcmp(buff + 3, "NTFS    ", 8) == 0) {
 		return FS_NTFS;
 	}
-
 	if (memcmp(buff + 54, "FAT12   ", 8) == 0) {
 		return FS_FAT12;
 	}
-
 	if (memcmp(buff + 54, "FAT16   ", 8) == 0) {
 		return FS_FAT16;
 	}
-
 	if (memcmp(buff + 82, "FAT32   ", 8) == 0) {
 		return FS_FAT32;
 	}
-
+	if (memcmp(buff + 3, "EXFAT   ", 8) == 0) {
+		return FS_EXFAT;
+	}
 	return FS_UNK;
 }
 
-HANDLE dc_disk_open(int dsk_num)
+dc_disk_p *dc_disk_open(int dsk_num, int is_cd)
 {
-	wchar_t device[MAX_PATH];
-	HANDLE  hdisk;
+	DISK_GEOMETRY dg;
+	wchar_t       device[MAX_PATH];
+	int           succs;	
+	dc_disk_p    *dp;
+	u32           bytes;
 
-	_snwprintf(
-		device, sizeof_w(device), L"\\\\.\\PhysicalDrive%d", dsk_num);
-
-	hdisk = CreateFile(
-		device, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, 
-		NULL, OPEN_EXISTING, 0, NULL);
-
-	if (hdisk == INVALID_HANDLE_VALUE) {
-		hdisk = NULL;
+	if (is_cd == 0)
+	{
+		_snwprintf(
+			device, sizeof_w(device), L"\\\\.\\PhysicalDrive%d", dsk_num);
+	} else {
+		_snwprintf(
+			device, sizeof_w(device), L"\\\\.\\CdRom%d", dsk_num);
 	}
-	return hdisk;
+
+	succs = 0;
+	do
+	{
+		if ( (dp = malloc(sizeof(dc_disk_p))) == NULL ) {
+			break;
+		}
+
+		dp->hdisk = CreateFile(
+			device, GENERIC_READ | GENERIC_WRITE, 
+			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+
+		if (dp->hdisk == INVALID_HANDLE_VALUE) {
+			dp->hdisk = NULL; break;
+		}
+
+		if (is_cd == 0)
+		{
+			succs = DeviceIoControl(
+				dp->hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg), &bytes, NULL);
+
+			if (succs != 0) {
+				dp->media = dg.MediaType;
+				dp->bps   = dg.BytesPerSector;
+				dp->spc   = dg.TracksPerCylinder * dg.SectorsPerTrack;
+				dp->size  = dg.Cylinders.QuadPart * d64(dp->spc) * d64(dp->bps);			
+			}
+		} else {
+			dp->media = Unknown;
+			dp->bps   = CD_SECTOR_SIZE;
+			dp->spc   = 0;
+			dp->size  = 0; succs = 1;
+		}
+	} while (0);
+
+	if ( (succs == 0) && (dp != NULL) ) 
+	{
+		if (dp->hdisk != NULL) {
+			CloseHandle(dp->hdisk);
+		}
+		free(dp); dp = NULL;
+	}
+
+	return dp;
 }
 
-int dc_disk_read(
-	  HANDLE hdisk, void *buff, int size, u64 offset
-	  )
+void dc_disk_close(dc_disk_p *dp)
 {
-	u32 bytes;
-
-	SetFilePointer(
-		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN);
-
-	if (ReadFile(hdisk, buff, size, &bytes, NULL) != 0) {
-		return ST_OK;
-	} else {
-		return ST_IO_ERROR;
-	}
+	CloseHandle(dp->hdisk);
+	free(dp);
 }
 
-int dc_disk_write(
-	  HANDLE hdisk, void *buff, int size, u64 offset
-	  )
+int dc_disk_read(dc_disk_p *dp, void *buff, int size, u64 offset)
 {
-	u32 bytes;
+	u64 n_offs;
+	u32 n_size, bytes;
+	u32 b_offs;
+	u8 *p_buff;
+	int resl;
 
-	SetFilePointer(
-		hdisk, (u32)(offset), &p32(&offset)[1], FILE_BEGIN);
-
-	if (WriteFile(hdisk, buff, size, &bytes, NULL) != 0) {
-		return ST_OK;
+	if ( (offset % dp->bps) || (size % dp->bps) ) 
+	{
+		b_offs = offset % dp->bps;
+		n_offs = offset - b_offs;
+		n_size = b_offs + size;
+		n_size = n_size + (dp->bps - (n_size % dp->bps));
+		p_buff = malloc(n_size);		
 	} else {
-		return ST_IO_ERROR;
+		n_offs = offset, n_size = size, p_buff = buff;
 	}
+	
+	do
+	{
+		if (p_buff == NULL) {
+			resl = ST_NOMEM; break;
+		}
+
+		bytes = SetFilePointer(
+			dp->hdisk, d32(n_offs), &p32(&n_offs)[1], FILE_BEGIN);
+
+		if (bytes == INVALID_SET_FILE_POINTER) {
+			resl = ST_IO_ERROR; break;
+		}
+
+		if (ReadFile(dp->hdisk, p_buff, n_size, &bytes, NULL) == 0) {
+			resl = ST_IO_ERROR;
+		} else {
+			resl = ST_OK;
+		}
+	} while (0);
+
+	if (p_buff != buff)
+	{
+		if (resl == ST_OK) {
+			fastcpy(buff, p_buff + b_offs, size);
+		}
+		free(p_buff);
+	}
+	
+	return resl;
+}
+
+int dc_disk_write(dc_disk_p *dp, void *buff, int size, u64 offset)
+{
+	u64 n_offs;
+	u32 n_size, bytes;
+	u32 b_offs;
+	u8 *p_buff;
+	int resl;
+
+	if ( (offset % dp->bps) || (size % dp->bps) ) 
+	{
+		b_offs = offset % dp->bps;
+		n_offs = offset - b_offs;
+		n_size = b_offs + size;
+		n_size = n_size + (dp->bps - (n_size % dp->bps));
+		p_buff = malloc(n_size);		
+	} else {
+		n_offs = offset, n_size = size, p_buff = buff;
+	}
+	
+	do
+	{
+		if (p_buff == NULL) {
+			resl = ST_NOMEM; break;
+		}
+
+		bytes = SetFilePointer(
+			dp->hdisk, d32(n_offs), &p32(&n_offs)[1], FILE_BEGIN);
+
+		if (bytes == INVALID_SET_FILE_POINTER) {
+			resl = ST_IO_ERROR; break;
+		}
+
+		if (p_buff != buff)
+		{
+			if (ReadFile(dp->hdisk, p_buff, n_size, &bytes, NULL) == 0) {
+				resl = ST_IO_ERROR; break;
+			}
+
+			fastcpy(p_buff + b_offs, buff, size);
+
+			SetFilePointer(
+				dp->hdisk, d32(n_offs), &p32(&n_offs)[1], FILE_BEGIN);
+
+			if (WriteFile(dp->hdisk, p_buff, n_size, &bytes, NULL) == 0) {
+				resl = ST_IO_ERROR;
+			} else { resl = ST_OK; }
+		} else 
+		{
+			if (WriteFile(dp->hdisk, p_buff, n_size, &bytes, NULL) == 0) {
+				resl = ST_IO_ERROR;
+			} else { resl = ST_OK; }
+		}
+	} while (0);
+
+	if (p_buff != buff) {		
+		free(p_buff);
+	}
+	
+	return resl;	
 }
 
 

@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2008
+	* Copyright (c) 2008-2009
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -93,7 +93,11 @@ static int dc_get_vol_info(wchar_t *name, vol_inf *info)
 
 		if (succs == 0) {
 			resl = ST_ERROR; break;
-		} else {
+		} else 
+		{
+			if (info->status.mnt_point[0] == 0) {
+				wcscpy(info->status.mnt_point, info->w32_device);
+			}
 			resl = ST_OK;
 		}
 	} while (0);
@@ -110,7 +114,7 @@ int dc_get_boot_device(wchar_t *device)
 	wcscpy(dctl.device, L"\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)");
 
 	succs = DeviceIoControl(
-		TlsGetValue(h_tls_idx), DC_CTL_RESOLVE,
+		TlsGetValue(h_tls_idx), DC_CTL_RESOLVE, 
 		&dctl, sizeof(dctl), &dctl, sizeof(dctl), &bytes, NULL);
 
 	if (succs != 0) 
@@ -189,7 +193,7 @@ int dc_clean_pass_cache()
 	}
 }
 
-int dc_mount_volume(wchar_t *device, dc_pass *password)
+int dc_mount_volume(wchar_t *device, dc_pass *password, int flags)
 {
 	dc_ioctl *dctl;
 	u32       bytes;
@@ -202,7 +206,7 @@ int dc_mount_volume(wchar_t *device, dc_pass *password)
 			resl = ST_NOMEM; break;
 		}
 
-		wcscpy(dctl->device, device);
+		wcscpy(dctl->device, device); dctl->flags = flags;
 
 		if (password != NULL) {
 			autocpy(&dctl->passw1, password, sizeof(dc_pass));
@@ -226,7 +230,7 @@ int dc_mount_volume(wchar_t *device, dc_pass *password)
 	return resl;
 }
 
-int dc_mount_all(dc_pass *password, int *mounted)
+int dc_mount_all(dc_pass *password, int *mounted, int flags)
 {
 	dc_ioctl *dctl;
 	u32       bytes;
@@ -241,7 +245,9 @@ int dc_mount_all(dc_pass *password, int *mounted)
 
 		if (password != NULL) {
 			autocpy(&dctl->passw1, password, sizeof(dc_pass));			
-		} 
+		}
+
+		dctl->flags = flags;
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_CTL_MOUNT_ALL,
@@ -264,39 +270,102 @@ int dc_mount_all(dc_pass *password, int *mounted)
 
 int dc_unmount_volume(wchar_t *device, int flags)
 {
-	dc_ioctl dctl;
-	int      succs;
-	u32      bytes;
+	HANDLE    h_device = TlsGetValue(h_tls_idx);
+	dc_ioctl  dctl;
+	dc_status status;
+	u32       bytes;
+	int       succs;
+	int       resl;
+	wchar_t   mnt_p[MAX_PATH];
 
 	wcscpy(dctl.device, device);
 
-	dctl.force = flags;
+	do
+	{
+		succs = DeviceIoControl(
+			h_device, DC_CTL_STATUS, 
+			&dctl, sizeof(dc_ioctl), &status, sizeof(dc_status), &bytes, NULL
+			);
 
-	succs = DeviceIoControl(
-		TlsGetValue(h_tls_idx), DC_CTL_UNMOUNT,
-		&dctl, sizeof(dc_ioctl), &dctl, sizeof(dc_ioctl), &bytes, NULL);
+		if ( (succs == 0) || (IS_UNMOUNTABLE(&status) == 0) ) {
+			resl = ST_UNMOUNTABLE; break;
+		}
 
-	if (succs == 0) {
-		return ST_ERROR;
-	}
+		dctl.flags = flags;
 
-	return dctl.status;
+		succs = DeviceIoControl(
+			h_device, DC_CTL_UNMOUNT,
+			&dctl, sizeof(dc_ioctl), &dctl, sizeof(dc_ioctl), &bytes, NULL
+			);
+
+		if (succs == 0) {
+			resl = ST_ERROR; break;
+		}
+
+		if ( (resl = dctl.status) != ST_OK ) {
+			break;
+		}
+
+		if ( (flags & MF_DELMP) || (status.mnt_flags & MF_DELMP) ) 
+		{
+			_snwprintf(
+				mnt_p, sizeof_w(mnt_p), L"%s\\", status.mnt_point);
+
+			DeleteVolumeMountPoint(mnt_p);
+		}
+	} while (0);
+
+	return resl;
 }
 
 int dc_unmount_all()
 {
-	int succs;
-	u32 bytes;
-
-	succs = DeviceIoControl(
-		TlsGetValue(h_tls_idx), DC_CTL_UNMOUNT_ALL,
-		NULL, 0, NULL, 0, &bytes, NULL);
-
-	if (succs == 0) {
-		return ST_ERROR;
-	} else {
-		return ST_OK;
+	vol_inf info;
+	
+	if (dc_first_volume(&info) == ST_OK)
+	{
+		do
+		{
+			if (info.status.flags & F_ENABLED) {
+				dc_unmount_volume(info.device, MF_FORCE);
+			}
+		} while (dc_next_volume(&info) == ST_OK);
 	}
+	
+	return ST_OK;
+}
+
+int dc_add_password(dc_pass *password)
+{
+	dc_ioctl *dctl;
+	u32       bytes;
+	int       resl;
+	int       succs;
+
+	do
+	{
+		if ( (dctl = secure_alloc(sizeof(dc_ioctl))) == NULL ) {
+			resl = ST_NOMEM; break;
+		}
+
+		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+
+		succs = DeviceIoControl(
+			TlsGetValue(h_tls_idx), DC_CTL_ADD_PASS,
+			dctl, sizeof(dc_ioctl), dctl, sizeof(dc_ioctl), &bytes, NULL
+			);
+
+		if (succs == 0) {
+			resl = ST_ERROR;
+		} else {
+			resl = dctl->status;
+		}
+	} while (0);
+
+	if (dctl != NULL) {
+		secure_free(dctl);
+	}
+	return resl;
 }
 
 int dc_start_encrypt(wchar_t *device, dc_pass *password, crypt_info *crypt)
@@ -536,7 +605,11 @@ int dc_get_device_status(wchar_t *device, dc_status *status)
 
 	if (succs == 0) {
 		return ST_ERROR;
-	} else {
+	} else
+	{
+		if (status->mnt_point[0] == 0) {
+			wcscpy(status->mnt_point, device); /* -- */
+		}
 		return dctl.status;
 	}
 }
@@ -558,12 +631,16 @@ int dc_add_seed(void *data, int size)
 
 int dc_get_random(void *data, int size)
 {
-	u32 bytes;
-	int succs;
+	dc_rand_ctl rctl;
+	u32         bytes;
+	int         succs;
+
+	rctl.buff = data;
+	rctl.size = size;
 
 	succs = DeviceIoControl(
 		TlsGetValue(h_tls_idx), 
-		DC_CTL_GET_RAND, NULL, 0, data, size, &bytes, NULL);
+		DC_CTL_GET_RAND, &rctl, sizeof(rctl), NULL, 0, &bytes, NULL);
 
 	if (succs == 0) {
 		return ST_ERROR;

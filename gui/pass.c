@@ -194,7 +194,7 @@ dc_pass *__get_pass_keyfiles(
 				rlt = dc_add_keyfiles(pass, key_file->path);
 				if (rlt != ST_OK)
 				{
-					_error_s(GetParent(h_pass), L"Keyfiles not loaded", rlt);
+					__error_s( GetParent(h_pass), L"Keyfiles not loaded", rlt );
 
 					secure_free(pass); pass = NULL;
 					break;

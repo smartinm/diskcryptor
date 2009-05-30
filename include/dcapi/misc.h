@@ -12,7 +12,7 @@ int dc_api is_win_vista();
 void dc_api *secure_alloc(u32 size);
 void dc_api secure_free(void *mem);
   
-HANDLE dc_api dc_disk_open(int dsk_num);	  
+
 
 void dc_api dc_format_byte_size(
 	   wchar_t *wc_buf, int wc_size, u64 num_bytes
@@ -30,18 +30,25 @@ int dc_api load_file(wchar_t *name, void **data, int *size);
 
 int dc_fs_type(u8 *buff);
 
-int dc_disk_read(
-	  HANDLE hdisk, void *buff, int size, u64 offset
-	  );
+typedef struct _dc_disk_p {
+	HANDLE     hdisk;
+	MEDIA_TYPE media;
+	u32        bps;   /* bytes per sector */
+	u32        spc;   /* sectors per cylinder */
+	u64        size;  /* disk size */
 
-int dc_disk_write(
-	  HANDLE hdisk, void *buff, int size, u64 offset
-	  );
+} dc_disk_p;
+
+dc_disk_p  dc_api *dc_disk_open(int dsk_num, int is_cd);
+void       dc_api  dc_disk_close(dc_disk_p *dp);
+int        dc_api  dc_disk_read(dc_disk_p *dp, void *buff, int size, u64 offset);
+int        dc_api  dc_disk_write(dc_disk_p *dp, void *buff, int size, u64 offset);
 
 #define FS_UNK   0
 #define FS_FAT12 1
 #define FS_FAT16 2
 #define FS_FAT32 3
 #define FS_NTFS  4
+#define FS_EXFAT 5
 
 #endif

@@ -70,26 +70,46 @@ void clean_cmd_line()
 	zeromem(cmd_a, strlen(cmd_a) * sizeof(char));	
 }
 
-int s_gets(char *buff, size_t size)
+/*
+    fucking Micro$oft!!!
+	gets  - unsafe (buffer overflows)
+	cgets - not work on Vista x64
+	fgets - not work on win2k sp2 because __iob_func not found in msvcrt.dll
+*/
+int s_gets(char *buff, int size)
 {
-	char buf[MAX_PATH];
-	buf[0] = d8(min(127, size-2));
-	buff[0] = 0;
-	if (_cgets(buf) == buf + 2) {
-		strcpy(buff, buf + 2);
+	int pn = 0;
+	u8  ch;
+	
+	while ((ch = _getch()) != '\r')
+	{
+		if ( (ch == 0) || (ch == 0xE0) ) {
+			_getch();
+		} else if (ch == 8) 
+		{
+			if (pn > 0) {
+				pn--; _putch(8); _putch(' '); _putch(8);
+			}
+		} else 
+		{
+			if (pn < (size - 1)) {
+				buff[pn++] = ch; _putch(ch);
+			}
+		}
 	}
+	_putch('\n'); buff[pn] = 0;
 	return buff[0] != 0;
 }
 
-int s_wgets(wchar_t *buff, size_t size)
+
+int s_wgets(wchar_t *buff, int size)
 {
 	char buf[MAX_PATH];
 
-	if (s_gets(buf, sizeof(buf)) != 0)
-	{
-		mbstowcs(buff, buf, sizeof(buf));
-		return 1;
+	if (s_gets(buf, min(size / sizeof(wchar_t), MAX_PATH)) != 0) {
+		mbstowcs(buff, buf, size);
 	} else {
-		return 0;
-	}		
+		buff[0] = 0;
+	}
+	return buff[0] != 0;
 }

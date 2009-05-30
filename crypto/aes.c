@@ -28,7 +28,12 @@
 #include "aes.h"
 #include "aes_tab.h"
 
-#ifdef AES_ASM
+#if (defined(AES_ASM_1) && defined(AES_ASM_2)) || defined(AES_ASM_VIA)
+  aescode p_aes_encrypt;
+  aescode p_aes_decrypt;
+#endif
+
+#ifdef AES_ASM_1
  void gen_cipher_code(u8 *dst, void *src, int srclen, u32 *rk);
 #endif
 
@@ -86,7 +91,7 @@ static u32 key_mix2(u32 t)
 
 #endif
 
-#ifdef AES_ASM
+#ifdef AES_ASM_1
  extern int aes_enc_begin;
  extern int aes_dec_begin;
  extern int aes_enc_size;
@@ -141,13 +146,106 @@ void aes256_set_key(unsigned char *data, aes256_key *key)
 	do {
 		dk[4] = key_mix2(dk[4]); dk++;
 	} while (--i);
-#ifdef AES_ASM
+#ifdef AES_ASM_1
 	gen_cipher_code(key->dk_code, &aes_dec_begin, aes_dec_size, key->dec_key);
 	gen_cipher_code(key->ek_code, &aes_enc_begin, aes_enc_size, key->enc_key);
 #endif
 }
 
-#ifdef AES_ASM
+#if (defined(AES_ASM_1) && defined(AES_ASM_2)) || defined(AES_ASM_VIA)
+
+#ifdef IS_DRIVER
+ #define TST_BLKS ( (8*1024*1024) / 16 )
+#else
+ #define TST_BLKS ( (16*1024*1024) / 16 )
+#endif
+
+void aes256_select_alg(int hw_crypt)
+{
+#if !defined(IS_DRIVER) && defined(AES_ASM_1)
+	ULONG_PTR   old_af;
+	int         old_pr;
+#endif
+#ifdef AES_ASM_1
+	aes256_key *key;
+	u8          k_d[AES_KEY_SIZE];
+	u8 calign   blk[AES_BLOCK_SIZE];
+	u64         t1, t2;
+	int         i;
+#endif
+
+	if (hw_crypt != 0)
+	{
+#ifdef AES_ASM_VIA
+		if (aes256_ace_available() != 0) {
+			p_aes_encrypt = aes256_encrypt_ace;
+			p_aes_decrypt = aes256_decrypt_ace;
+			return;
+		}
+#endif
+	}
+#ifdef AES_ASM_1
+#ifdef IS_DRIVER
+	if ( (key = mem_alloc(sizeof(aes256_key))) == NULL ) {
+		return;
+	}
+	_disable();
+#else
+	key = VirtualAlloc(NULL, sizeof(aes256_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (key == NULL) {
+		return;
+	}
+	old_af = SetThreadAffinityMask(GetCurrentThread(), 1);
+	old_pr = GetThreadPriority(GetCurrentThread());
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+#endif
+	for (i = 0; i < AES_KEY_SIZE; i++) {
+		k_d[i] = i; blk[i % AES_BLOCK_SIZE] = i;
+	}
+	aes256_set_key(k_d, key);
+
+	/* do test */
+	t1 = __rdtsc();
+	for (i = 0; i < TST_BLKS; i++) {
+		((aescode)(key->ek_code))(blk, blk, key);
+	}
+	t1 = __rdtsc() - t1;
+
+	t2 = __rdtsc();
+	for (i = 0; i < TST_BLKS; i++) {
+		aes256_encrypt_gd(blk, blk, key);
+	}
+	t2 = __rdtsc() - t2;
+
+	if (t1 < t2) {
+		p_aes_encrypt = NULL;
+		p_aes_decrypt = NULL;
+	} else {
+		p_aes_encrypt = aes256_encrypt_gd;
+		p_aes_decrypt = aes256_decrypt_gd;
+	}
+#ifdef IS_DRIVER
+	_enable();
+	mem_free(key);
+#else
+	SetThreadPriority(GetCurrentThread(), old_pr);
+	SetThreadAffinityMask(GetCurrentThread(), old_af);
+	VirtualFree(key, 0, MEM_RELEASE);
+#endif
+#else  /* AES_ASM_1 */
+#ifdef AES_ASM_2
+  p_aes_encrypt = aes256_encrypt_gd;
+  p_aes_decrypt = aes256_decrypt_gd;
+#else /* AES_ASM_2 */
+  p_aes_encrypt = aes256_encrypt_c;
+  p_aes_decrypt = aes256_decrypt_c;
+#endif
+#endif /* AES_ASM_1 */
+}
+
+#endif
+
+#ifdef AES_ASM_1
 
 static void gen_cipher_code(u8 *dst, void *src, int srclen, u32 *rk)
 {
@@ -178,11 +276,12 @@ static void gen_cipher_code(u8 *dst, void *src, int srclen, u32 *rk)
 	}
 }
 
-#else /* AES_ASM */
+#endif /* AES_ASM_1 */
  
+#ifdef AES_C
 #ifdef SMALL_CODE
 
-void aes256_encrypt(unsigned char *in, unsigned char *out, aes256_key *key)
+void aes256_encrypt_c(unsigned char *in, unsigned char *out, aes256_key *key)
 {
 	u32  s[4];
 	u32  t[4];
@@ -227,7 +326,7 @@ void aes256_encrypt(unsigned char *in, unsigned char *out, aes256_key *key)
 	p32(out)[2] = s[2]; p32(out)[3] = s[3];	
 }
 
-void aes256_decrypt(u8 *in, u8 *out, aes256_key *key)
+void aes256_decrypt_c(u8 *in, u8 *out, aes256_key *key)
 {
 	u32  s[4];
 	u32  t[4];
@@ -319,7 +418,7 @@ void aes256_gentab()
 
 #else /* SMALL_CODE */
 
-void aes256_encrypt(unsigned char *in, unsigned char *out, aes256_key *key)
+void pcall aes256_encrypt_c(unsigned char *in, unsigned char *out, aes256_key *key)
 {
 	u32 *rk;
 	u32  s0, s1, s2, s3, t0, t1, t2, t3;
@@ -360,7 +459,7 @@ void aes256_encrypt(unsigned char *in, unsigned char *out, aes256_key *key)
 }
 
 
-void aes256_decrypt(unsigned char *in, unsigned char *out, aes256_key *key)
+void pcall aes256_decrypt_c(unsigned char *in, unsigned char *out, aes256_key *key)
 {
 	u32 *rk;
 	u32  s0, s1, s2, s3, t0, t1, t2, t3;
@@ -399,4 +498,4 @@ void aes256_decrypt(unsigned char *in, unsigned char *out, aes256_key *key)
 }
 
 #endif /* SMALL_CODE */
-#endif /* AES_ASM */
+#endif /* AES_C */

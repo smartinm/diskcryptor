@@ -5,109 +5,130 @@
 #include "pass.h"
 #include "resource.h"
 
-#define IDS_MOUNT				      L"Mount"
-#define IDS_UNMOUNT		        L"Unmount"
-#define IDS_ENCRYPT			      L"Encrypt"
-#define IDS_DECRYPT			      L"Decrypt"
+#define IDS_MOUNT			L"Mount"
+#define IDS_UNMOUNT			L"Unmount"
+#define IDS_ENCRYPT			L"Encrypt"
+#define IDS_DECRYPT			L"Decrypt"
 
-#define IDS_FORMAT            L"Format"
-#define IDS_REENCRYPT         L"Reencrypt"
+#define IDS_FORMAT			L"Format"
+#define IDS_REENCRYPT		L"Reencrypt"
 
-#define IDS_CHPASS			      L"Change Password"
+#define IDS_CHPASS			L"Change Password"
 
-#define IDS_BOOTINSTALL       L"Install Loader"
-#define IDS_BOOTREMOVE        L"Remove Loader"
-#define IDS_BOOTCREATE        L"Create Loader"
-#define IDS_SAVECHANGES       L"Save Changes"
+#define IDS_BOOTINSTALL		L"Install Loader"
+#define IDS_BOOTREMOVE		L"Remove Loader"
+#define IDS_BOOTCREATE		L"Create Loader"
+#define IDS_SAVECHANGES		L"Save Changes"
 
-#define IDS_BOOTUPDATE        L"Update Loader"
-#define IDS_BOOTCHANGECGF     L"Change Config"
+#define IDS_BOOTUPDATE		L"Update Loader"
+#define IDS_BOOTCHANGECGF	L"Change Config"
 
-#define IDS_MOUNTALL          L"Mount All"
-#define IDS_UNMOUNTALL        L"Unmount All"
+#define IDS_MOUNTALL		L"Mount All"
+#define IDS_UNMOUNTALL		L"Unmount All"
 
-#define IDS_SETTINGS          L"Settings"
-#define IDS_ABOUT             L"About"
-#define IDS_EXIT              L"Exit"
+#define IDS_SETTINGS		L"Settings"
+#define IDS_ABOUT			L"About"
+#define IDS_EXIT			L"Exit"
 
-#define IDS_EMPTY_LIST        L"< .. list is empty .. >"
+#define IDS_EMPTY_LIST		L"< .. list is empty .. >"
 
-#define IDS_USE_KEYFILES      L"Use Keyfiles"
-#define IDS_USE_KEYFILE       L"Use Keyfile"
+#define IDS_USE_KEYFILES	L"Use Keyfiles"
+#define IDS_USE_KEYFILE		L"Use Keyfile"
 
-#define IDS_MODE_NAME         L"XTS"
-#define IDS_PRF_NAME          L"HMAC-SHA-512"
+#define IDS_MODE_NAME		L"XTS"
+#define IDS_PRF_NAME		L"HMAC-SHA-512"
 
-#define DC_HOMEPAGE           L"http://diskcryptor.net/"
-#define DC_FORUMPAGE          L"http://diskcryptor.net/forum"
-#define DC_NAME			  	      L"DiskCryptor"
+#define DC_HOMEPAGE			L"http://diskcryptor.net/"
+#define DC_FORUMPAGE		L"http://diskcryptor.net/forum"
+#define DC_NAME				L"DiskCryptor"
 
-#define DC_MUTEX		  	      L"DC_UI_MUTEX"
-#define DC_CLASS		  	      L"DC_UI_DLG_CLASS"
+#define DC_MUTEX			L"DC_UI_MUTEX"
+#define DC_CLASS			L"DC_UI_DLG_CLASS"
 
-#define COL_SIZE              1
-#define COL_LABEL             2
-#define COL_TYPE              3
-#define COL_STATUS            4
-#define COL_MOUNTED           5
+#define STR_HEAD_NO_ICONS	L"[NO_ICONS]"
+#define STR_EMPTY			L"--"
 
-#define LGHT_CLR		          50
-#define DARK_CLR              45
+#define STR_SPACE			L" "
+#define STR_NULL			L""
 
-#define WM_APP_TRAY           1
-#define WM_APP_SHOW           2
-#define WM_APP_FILE           3
+#define COL_SIZE			1
+#define COL_LABEL			2
+#define COL_TYPE			3
+#define COL_STATUS			4
+#define COL_MOUNTED			5
 
-#define WM_THEMECHANGED       794
-#define WM_USER_CLICK         WM_USER + 01 
+#define LGHT_CLR			50
+#define DARK_CLR			45
 
-#define CL_WHITE              RGB(255,255,255)
-#define CL_BLUE               RGB(0,0,255)
-#define CL_GREEN              RGB(0,255,0)
-#define CL_RED                RGB(255,0,0)
+#define WM_APP_TRAY			1
+#define WM_APP_SHOW			2
+#define WM_APP_FILE			3
 
-#define CL_WARNING            RGB(218,18,18)
-#define CL_WARNING_BG         RGB(255,170,160)
-#define CL_WARNING_BG_LT      RGB(255,215,215)
+#define WM_THEMECHANGED		794
+#define WM_USER_CLICK		WM_USER + 01
+#define WM_CLOSE_DIALOG		WM_USER + 02
 
-#define PRG_STEP				      9000
-#define MAIN_DLG_MIN_HEIGHT   380
+#define CL_WHITE			RGB(255,255,255)
+#define CL_BLUE				RGB(0,0,255)
+#define CL_GREEN			RGB(0,255,0)
+#define CL_RED				RGB(255,0,0)
 
-#define _set_check(hwnd, id, state) (SendMessage(GetDlgItem( \
-	hwnd, id), BM_SETCHECK, state, 0))
+#define CL_WARNING			RGB(218,18,18)
+#define CL_WARNING_BG		RGB(255,170,160)
+#define CL_WARNING_BG_LT	RGB(255,215,215)
 
-#define _get_check(hwnd, id) (SendMessage(GetDlgItem( \
-	hwnd, id), BM_GETCHECK, 0, 0) == BST_CHECKED)
+#define PRG_STEP			9000
+#define MAIN_DLG_MIN_HEIGHT	380
 
-#define _menu_onoff(enable) \
+#define SUB_NONE			0
+#define SUB_KEY_PROC		1
+#define SUB_STATIC_PROC		2
+
+#define ALG_RIGHT			0
+#define ALG_LEFT			1
+
+#define IC_NONE				-3
+#define IC_CONTEXT			-2
+#define IC_BASE				-1
+
+#define _set_check( hwnd, id, state ) ( SendMessage( GetDlgItem( \
+	hwnd, id), BM_SETCHECK, state, 0 ) )
+
+#define _get_check( hwnd, id ) ( SendMessage( GetDlgItem( \
+	hwnd, id), BM_GETCHECK, 0, 0 ) == BST_CHECKED )
+
+#define _menu_onoff( enable ) \
 	( enable ? MF_ENABLED : MF_GRAYED )
 
-typedef struct _colinfo 
+typedef struct __colinfo 
 {
 	wchar_t *name;
 	int      width;
-} colinfo;
+	int      align;
+	BOOL     row_images;
+} _colinfo;
 
-typedef struct _tblinfo 
+typedef struct __tblinfo 
 {
-	int      id;
-	wchar_t *items[5];
-	colinfo  cols[2];	
-} tblinfo;
+	int       id;
+	wchar_t  *items[5];
+	_colinfo  cols[2];	
+} _tblinfo;
 
 typedef struct __wnd_data 
 {
 	WNDPROC old_proc;
 	BOOL    state;
 	UINT    vk;
-	HWND    dlg;
+	HWND    dlg[20];
 	void   *data;
 } _wnd_data, *_pwnd_data;
 
 typedef struct __tab_data 
 {
-	HWND curr;
+	HWND h_curr;
 	HWND active;
+	int  curr_tab;
 } _tab_data;
 
 typedef struct __static_view 
@@ -146,22 +167,23 @@ typedef struct __wz_sheets {
 	BOOL show;
 } _wz_sheets;
 
-#define WPAGE_ENC_TYPE      0x0000
-#define WPAGE_ENC_FRMT      0x0001
-#define WPAGE_ENC_CONF      0x0002
-#define WPAGE_ENC_BOOT      0x0003
-#define WPAGE_ENC_PASS      0x0004
+#define WPAGE_ENC_ISO         0
+#define WPAGE_ENC_FRMT        1
+#define WPAGE_ENC_CONF        2
+#define WPAGE_ENC_BOOT        3
+#define WPAGE_ENC_PASS        4
+#define WPAGE_ENC_PROGRESS    5
 
-#define CTL_LDR_MBR         0x0000
-#define CTL_LDR_STICK       0x0001
-#define CTL_LDR_ISO         0x0002
-#define CTL_LDR_PXE         0x0003
+#define CTL_LDR_MBR           0
+#define CTL_LDR_STICK         1
+#define CTL_LDR_ISO           2
+#define CTL_LDR_PXE           3
 
-extern colinfo _main_headers[ ];
-extern colinfo _boot_headers[ ];
+extern _colinfo _main_headers[ ];
+extern _colinfo _boot_headers[ ];
 
-extern colinfo _part_by_id_headers[ ];
-extern colinfo _benchmark_headers[ ];
+extern _colinfo _part_by_id_headers[ ];
+extern _colinfo _benchmark_headers[ ];
 
 extern _init_list wipe_modes[ ];
 extern _init_list kb_layouts[ ];
@@ -225,10 +247,17 @@ void _list_set_item_text(
 		wchar_t *text
 	);
 
-BOOL _list_insert_col(
+BOOL _set_header_text(
+		HWND     h_list,
+		int      idx,
+		wchar_t *s_header,
+		int      size
+	);
+
+int _list_insert_col(
 		HWND hlist,
 		int  cx
-	);
+	);  // ret ST_OK || ST_ERROR
 
 void _init_mount_points(
 		HWND hwnd
@@ -297,8 +326,9 @@ DWORD _cl(
 
 _wnd_data *_sub_class(
 		HWND hwnd,
+		int  proc_idx,
 		HWND dlg,
-		char key
+		...
 	);
 
 LRESULT 
@@ -379,8 +409,15 @@ void _enb_but_this(
 	);
 
 void _init_list_headers(
-		HWND     hwnd,
-		colinfo *cols
+		HWND      hwnd,
+		_colinfo *cols
+	);
+
+BOOL _get_header_text(
+		HWND     h_list,
+		int      idx,
+		wchar_t *s_header,
+		int      size
 	);
 
 int _draw_proc(
@@ -393,8 +430,27 @@ BOOL _is_duplicated_item(
 		wchar_t *s_item
 	);
 
+void _change_page(
+		HWND hwnd,
+		int  wnd_idx
+	);
+
 int _get_combo_val(HWND hwnd, _init_list *list);
 wchar_t *_get_text_name(int val, _init_list *list);
+
+BOOL _open_file_dialog(
+		HWND     h_parent,
+		wchar_t *s_path,
+		int      size,
+		wchar_t *s_title
+	);
+
+BOOL _save_file_dialog(
+		HWND     h_parent,
+		wchar_t *s_path,
+		int      size,
+		wchar_t *s_title
+	);
 
 extern HINSTANCE __hinst;
 

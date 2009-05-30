@@ -26,10 +26,12 @@
 			ConfigurationType="2"
 			UseOfMFC="2"
 			CharacterSet="1"
+			WholeProgramOptimization="0"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
+				CommandLine=""
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -46,42 +48,50 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				EnableIntrinsicFunctions="true"
 				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
-				PreprocessorDefinitions="WIN32;DCAPI_DLL;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
+				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
+				ExceptionHandling="0"
+				RuntimeLibrary="3"
+				BufferSecurityCheck="false"
 				UsePrecompiledHeader="0"
+				AssemblerOutput="0"
+				AssemblerListingLocation=""
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="4"
+				DebugInformationFormat="3"
+				CallingConvention="0"
+				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_AFXDLL;_DEBUG"
 				AdditionalIncludeDirectories="..\include;..\include\dcapi"
 				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
+				CommandLine=""
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				IgnoreImportLibrary="false"
 				LinkLibraryDependencies="false"
-				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
-				LinkIncremental="2"
+				AdditionalOptions="user32.lib msvcrt.lib psapi.lib advapi32.lib kernel32.lib"
+				LinkIncremental="1"
+				AdditionalLibraryDirectories="..\lib\i386"
 				GenerateManifest="true"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				UACExecutionLevel="2"
-				IgnoreAllDefaultLibraries="false"
+				IgnoreAllDefaultLibraries="true"
 				GenerateDebugInformation="true"
 				SubSystem="0"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
 				RandomizedBaseAddress="0"
 				DataExecutionPrevention="2"
 				TargetMachine="1"
@@ -91,9 +101,8 @@
 			/>
 			<Tool
 				Name="VCManifestTool"
-				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
+				AdditionalManifestFiles="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
 				EmbedManifest="false"
-				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
 				Name="VCXDCMakeTool"
@@ -109,104 +118,12 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				CommandLine=""
 			/>
 		</Configuration>
 		<Configuration
 			Name="Debug|x64"
 			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\amd64"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="2"
-			UseOfMFC="2"
-			CharacterSet="1"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-				TargetEnvironment="3"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
-				PreprocessorDefinitions="WIN32;DCAPI_DLL;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				XMLDocumentationFileName=""
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="_AFXDLL;_DEBUG;_WIN64"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
-				LinkIncremental="2"
-				GenerateManifest="true"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				UACExecutionLevel="2"
-				IgnoreAllDefaultLibraries="false"
-				GenerateDebugInformation="true"
-				SubSystem="0"
-				RandomizedBaseAddress="0"
-				DataExecutionPrevention="2"
-				TargetMachine="17"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				EmbedManifest="false"
-				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-		</Configuration>
-		<Configuration
-			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
 			IntermediateDirectory="$(ProjectDir)"
 			ConfigurationType="2"
 			UseOfMFC="2"
@@ -229,16 +146,120 @@
 			/>
 			<Tool
 				Name="VCMIDLTool"
+				TargetEnvironment="3"
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="1"
-				InlineFunctionExpansion="2"
+				Optimization="0"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
+				ExceptionHandling="0"
+				RuntimeLibrary="3"
+				BufferSecurityCheck="false"
+				UsePrecompiledHeader="0"
+				AssemblerOutput="0"
+				AssemblerListingLocation=""
+				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
+				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
+				XMLDocumentationFileName=""
+				WarningLevel="3"
+				Detect64BitPortabilityProblems="false"
+				DebugInformationFormat="3"
+				CallingConvention="0"
+				CompileAs="1"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="_AFXDLL;_WIN64"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi"
+				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				LinkLibraryDependencies="false"
+				AdditionalOptions="user32.lib msvcrt.lib psapi.lib advapi32.lib kernel32.lib"
+				LinkIncremental="2"
+				AdditionalLibraryDirectories="..\lib\amd64"
+				GenerateManifest="true"
+				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				IgnoreAllDefaultLibraries="true"
+				GenerateDebugInformation="true"
+				SubSystem="0"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
+				RandomizedBaseAddress="0"
+				DataExecutionPrevention="2"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+				AdditionalManifestFiles="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				EmbedManifest="false"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+				CommandLine=""
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release|Win32"
+			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
+			IntermediateDirectory="$(ProjectDir)"
+			ConfigurationType="2"
+			UseOfMFC="2"
+			CharacterSet="1"
+			WholeProgramOptimization="1"
+			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="3"
+				InlineFunctionExpansion="2"
+				EnableIntrinsicFunctions="true"
+				FavorSizeOrSpeed="1"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
+				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
@@ -280,7 +301,6 @@
 				SubSystem="0"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
 				RandomizedBaseAddress="0"
 				DataExecutionPrevention="2"
 				TargetMachine="1"
@@ -317,7 +337,7 @@
 			ConfigurationType="2"
 			UseOfMFC="2"
 			CharacterSet="1"
-			WholeProgramOptimization="0"
+			WholeProgramOptimization="1"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
 			>
 			<Tool
@@ -339,13 +359,13 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="1"
+				Optimization="3"
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
+				FavorSizeOrSpeed="1"
 				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\include\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
@@ -383,11 +403,9 @@
 				GenerateManifest="true"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
 				IgnoreAllDefaultLibraries="true"
-				GenerateDebugInformation="false"
 				SubSystem="0"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
 				RandomizedBaseAddress="0"
 				DataExecutionPrevention="2"
 				TargetMachine="17"
@@ -426,6 +444,10 @@
 			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			>
 			<File
+				RelativePath=".\cd_enc.c"
+				>
+			</File>
+			<File
 				RelativePath=".\dcapi.c"
 				>
 			</File>
@@ -457,15 +479,333 @@
 				RelativePath=".\rand.c"
 				>
 			</File>
-			<File
-				RelativePath="..\crypto\sha512.c"
+			<Filter
+				Name="crypto"
 				>
-			</File>
+				<File
+					RelativePath="..\crypto\aes.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\aes_tab.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crc32.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\crypto.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\gf128mul.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\pkcs5.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\serpent.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\sha512.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\tests.c"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\twofish.c"
+					>
+				</File>
+				<Filter
+					Name="i386"
+					>
+					<File
+						RelativePath="..\crypto\i386\aes_x86.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\aes_x86_gd.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\aes_x86_via.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\twofish-i586.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
+				<Filter
+					Name="amd64"
+					>
+					<File
+						RelativePath="..\crypto\amd64\aes_amd64.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\amd64\aes_amd64_via.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\amd64\twofish-x86_64.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			>
+			<File
+				RelativePath="..\include\dcapi\cd_enc.h"
+				>
+			</File>
 			<File
 				RelativePath="..\include\dcapi\dcapi.h"
 				>
@@ -522,6 +862,50 @@
 				RelativePath="..\include\version.h"
 				>
 			</File>
+			<Filter
+				Name="crypto"
+				>
+				<File
+					RelativePath="..\include\crypto\aes.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\aes_tab.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crc32.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\crypto.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\gf128mul.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\pkcs5.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\serpent.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\sha512.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\tests.h"
+					>
+				</File>
+				<File
+					RelativePath="..\include\crypto\twofish.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Resource Files"

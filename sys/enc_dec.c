@@ -394,7 +394,7 @@ static int dc_process_sync_packet(
 
 						if (resl == ST_OK) 
 						{
-							hook->crypt.wp_mode = new_wp;
+							hook->crypt.wp_mode = d8(new_wp);
 							dc_save_enc_state(hook, 0);
 						} else {
 							dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE);
@@ -424,7 +424,7 @@ static int dc_process_sync_packet(
 				if (ctx->finish == 0)
 				{
 					if ( (resl = dc_dec_update(hook)) == ST_FINISHED) {
-						dc_process_unmount(hook, UM_NOFSCTL | UM_NOSYNC);
+						dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC, 0);
 						ctx->finish = 1;
 					} else ctx->saved = 0;
 				} else {
@@ -530,8 +530,6 @@ static void dc_sync_op_routine(dev_hook *hook)
 				{
 					dc_sync_irp_io(
 						hook, CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry));
-
-					lock_dec(&hook->io_pending);
 				}
 			}
 
@@ -556,7 +554,7 @@ static void dc_sync_op_routine(dev_hook *hook)
 					&packet->sync_event, IO_NO_INCREMENT, FALSE);
 
 				if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {
-					dc_process_unmount(hook, UM_NOFSCTL | UM_NOSYNC);
+					dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC, 0);
 					resl = ST_FINISHED; sctx.finish = 1;
 				}
 			}
@@ -568,9 +566,7 @@ cleanup:;
 	while (entry = ExInterlockedRemoveHeadList(&hook->sync_irp_queue, &hook->sync_req_lock))
 	{
 		dc_read_write_irp(
-			hook->hook_dev, CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry));
-
-		lock_dec(&hook->io_pending);
+			hook, CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry));
 	}
 
 	/* free resources */
@@ -583,6 +579,8 @@ cleanup:;
 	}
 
 	/* prevent leaks */
+	wait_object_infinity(&hook->key_lock);
+
 	if (hook->hdr_key != NULL) 
 	{
 		zeroauto(hook->hdr_key, sizeof(dc_key));
@@ -598,6 +596,8 @@ cleanup:;
 	}
 
 	zeroauto(&hook->tmp_header, sizeof(hook->tmp_header));
+
+	KeReleaseMutex(&hook->key_lock, FALSE);
 
 	/* report init finished if initialization fails */
 	if (resl != ST_FINISHED)
@@ -734,7 +734,7 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 
 		wait_object_infinity(&hook->busy_lock);
 		
-		if (hook->flags & (F_ENABLED | F_UNSUPRT | F_DISABLE)) {
+		if (hook->flags & (F_ENABLED | F_UNSUPRT | F_DISABLE | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
 
@@ -845,7 +845,9 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 
 		wait_object_infinity(&hook->busy_lock);
 
-		if ( !(hook->flags & F_ENABLED) || (hook->flags & (F_SYNC | F_FORMATTING)) ) {
+		if ( !(hook->flags & F_ENABLED) || 
+			  (hook->flags & (F_SYNC | F_FORMATTING | F_CDROM)) ) 
+		{
 			resl = ST_ERROR; break;
 		}
 
@@ -966,7 +968,9 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 
 		wait_object_infinity(&hook->busy_lock);
 		
-		if ( !(hook->flags & F_ENABLED) || (hook->flags & (F_SYNC | F_FORMATTING)) ) {
+		if ( !(hook->flags & F_ENABLED) || 
+			  (hook->flags & (F_SYNC | F_FORMATTING | F_CDROM)) ) 
+		{
 			resl = ST_ERROR; break;
 		}
 
@@ -991,7 +995,7 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 			resl = ST_PASS_ERR;	break;
 		}
 
-		hook->crypt.cipher_id = header->alg_1;
+		hook->crypt.cipher_id = d8(header->alg_1);
 		hook->crypt.wp_mode   = WP_NONE;
 		
 		/* copy header to temp buffer */

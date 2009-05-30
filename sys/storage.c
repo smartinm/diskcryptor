@@ -57,6 +57,32 @@ typedef struct _fat_bpb {
 
 } fat_bpb;
 
+typedef struct exfat_bpb {
+	u8	jmp_boot[3];	     /* boot strap short or near jump */
+	u8	oem_id[8];		     /* oem-id */
+	u8	unused0;		     /* 0x00... */
+	u32	unused1[13];
+	u64	start_sector;		 /* start sector of partition */
+	u64	nr_sectors;		     /* number of sectors of partition */
+	u32	fat_blocknr;		 /* start blocknr of FAT */
+	u32	fat_block_counts;	 /* number of FAT blocks */
+	u32	clus_blocknr;		 /* start blocknr of cluster */
+	u32	total_clusters;		 /* number of total clusters */
+	u32	rootdir_clusnr;		 /* start clusnr of rootdir */
+	u32	serial_number;		 /* volume serial number */
+	u8	xxxx01;			     /* ??? (0x00 or any value (?)) */
+	u8	xxxx02;			     /* ??? (0x01 or 0x00 (?)) */
+	u16	state;			     /* state of this volume */
+	u8	blocksize_bits;		 /* bits of block size */
+	u8	block_per_clus_bits; /* bits of blocks per cluster */
+	u8	xxxx03;			     /* ??? (0x01 or 0x00 (?)) */
+	u8	xxxx04;			     /* ??? (0x80 or any value (?)) */
+	u8	allocated_percent;	 /* percentage of allocated space (?) */
+	u8	xxxx05[397];		 /* ??? (0x00...) */
+	u16	signature;		     /* 0xaa55 */
+
+} exfat_bpb; 
+
 #pragma pack (pop)
 
 #define FAT_DIRENTRY_LENGTH 32
@@ -68,24 +94,30 @@ typedef struct _fs_info {
 	u64                     free_clus;
 	u32                     clus_size;
 	NTFS_VOLUME_DATA_BUFFER ntb;
-	fat_bpb                 bpb;
+	union {
+		fat_bpb             bpb;
+		exfat_bpb           ex_bpb;
+	};
 
 } fs_info;
 
-#define FS_UNK  0
-#define FS_FAT  1
-#define FS_NTFS 2
+#define FS_UNK   0
+#define FS_FAT   1
+#define FS_NTFS  2
+#define FS_EXFAT 3
 
 static int get_fs_info(HANDLE h_device, fs_info *info)
 {
-	u8                             buff[SECTOR_SIZE];
-	FILE_FS_SIZE_INFORMATION       sinf;
+	u8                             buff[sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + 0x10];
 	PFILE_FS_ATTRIBUTE_INFORMATION ainf = pv(buff);
+	FILE_FS_SIZE_INFORMATION       sinf;	
 	IO_STATUS_BLOCK                iosb;
 	NTSTATUS                       status;
 	int                            resl;
-	u64                            offset = 0;
+	u8                            *data;
+	u64                            offset;
 
+	data = NULL; offset = 0;
 	do
 	{
 		status = ZwQueryVolumeInformationFile(
@@ -113,15 +145,28 @@ static int get_fs_info(HANDLE h_device, fs_info *info)
 		if ( (wcscmp(ainf->FileSystemName, L"FAT") == 0) || 
 			 (wcscmp(ainf->FileSystemName, L"FAT32") == 0) )
 		{
+			info->fs = FS_FAT;
+		}
+
+		if (wcscmp(ainf->FileSystemName, L"exFAT") == 0) {
+			info->fs = FS_EXFAT;
+		}
+
+		if ( (info->fs == FS_FAT) || (info->fs == FS_EXFAT) ) 
+		{
+			if ( (data = mem_alloc(info->bps)) == NULL ) {
+				resl = ST_ERROR; break;
+			}
+
 			status = ZwReadFile(
-				h_device, NULL, NULL, NULL, &iosb, buff, sizeof(buff), pv(&offset), NULL);
+				h_device, NULL, NULL, NULL, 
+				&iosb, data, info->bps, pv(&offset), NULL);
 
 			if (NT_SUCCESS(status) == FALSE) {				
 				resl = ST_ERROR; break;
 			}
-			autocpy(&info->bpb, buff, sizeof(info->bpb)); 
-			info->fs = FS_FAT;
-		} else 
+			autocpy(&info->ex_bpb, data, min(sizeof(info->ex_bpb), info->bps));
+		} 
 		
 		if (wcscmp(ainf->FileSystemName, L"NTFS") == 0) 
 		{
@@ -136,6 +181,10 @@ static int get_fs_info(HANDLE h_device, fs_info *info)
 		}
 		resl = ST_OK;
 	} while (0);
+
+	if (data != NULL) {
+		mem_free(data);
+	}
 
 	return resl;
 }
@@ -361,25 +410,37 @@ int dc_create_storage(dev_hook *hook, u64 *storage)
 		DbgMsg("cluster %0.8x%0.8x\n", p32(&cluster)[1], p32(&cluster)[0]);
 
 		/* translate cluster number to volume offset */
-		if (info.fs == FS_FAT)
+		switch (info.fs)
 		{
-			u32 fat_offset, fat_length;
-			u32 root_max, data_offset;
-			u32 root_offset;
+			case FS_FAT:
+				{
+					u32 fat_offset, fat_length;
+					u32 root_max, data_offset;
+					u32 root_offset;
 
-			fat_offset = info.bpb.reserved_sects;
-			fat_length = info.bpb.fat_length ? info.bpb.fat_length:info.bpb.fat32_length;
-			root_offset = fat_offset + (info.bpb.num_fats * fat_length);
-			
-			if (root_max = info.bpb.dir_entries * FAT_DIRENTRY_LENGTH) {
-				data_offset = root_offset + ((root_max - 1) / info.bps) + 1;
-			} else {
-				data_offset = root_offset;
-			}
-			offset = (d64(data_offset) * d64(info.bps)) + (cluster * d64(info.clus_size));
-		} else {
-			offset = cluster * d64(info.clus_size);
-		}
+					fat_offset = info.bpb.reserved_sects;
+					fat_length = info.bpb.fat_length ? info.bpb.fat_length:info.bpb.fat32_length;
+					root_offset = fat_offset + (info.bpb.num_fats * fat_length);
+
+					if (root_max = info.bpb.dir_entries * FAT_DIRENTRY_LENGTH) {
+						data_offset = root_offset + ((root_max - 1) / info.bps) + 1;
+					} else {
+						data_offset = root_offset;
+					}
+					offset = (d64(data_offset) * d64(info.bps)) + (cluster * d64(info.clus_size));
+				}
+			break;
+			case FS_EXFAT:
+				{
+					offset = (cluster * d64(info.clus_size)) + (info.ex_bpb.clus_blocknr * info.bps);
+				}
+			break;
+			case FS_NTFS:
+				{
+					offset = cluster * d64(info.clus_size);
+				}
+			break;
+		}		
 		DbgMsg("offset %0.8x%0.8x\n", p32(&offset)[1], p32(&offset)[0]);
 		storage[0] = offset; resl = ST_OK;
 	} while (0);

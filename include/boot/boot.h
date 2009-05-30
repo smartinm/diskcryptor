@@ -18,6 +18,7 @@
 #define ET_BOOT_ACTIVE  4  /* boot from active partition */
 #define ET_EXIT_TO_BIOS 8  /* exit to bios               */
 #define ET_RETRY        16 /* retry authentication again */
+#define ET_MBR_BOOT     32 /* load boot disk MBR */
 
 #define BT_MBR_BOOT     1 /* load boot disk MBR                                  */
 #define BT_MBR_FIRST    2 /* load first disk MBR                                 */
@@ -29,10 +30,11 @@
 #define KB_QWERTZ       1 /* QWERTZ keyboard layout */
 #define KB_AZERTY       2 /* AZERTY keyboard layout */
 
-#define OP_EXTERNAL     1 /* this option indicate external bootloader usage       */
-#define OP_EPS_TMO      2 /* set time limit for password entering                 */
-#define OP_TMO_STOP     4 /* cancel timeout if any key pressed                    */
-#define OP_NOPASS_ERROR 8 /* use incorrect password action if no password entered */
+#define OP_EXTERNAL     0x01 /* this option indicate external bootloader usage       */
+#define OP_EPS_TMO      0x02 /* set time limit for password entering                 */
+#define OP_TMO_STOP     0x04 /* cancel timeout if any key pressed                    */
+#define OP_NOPASS_ERROR 0x08 /* use incorrect password action if no password entered */
+#define OP_HW_CRYPTO    0x10 /* use hardware cryptography when possible              */
 
 #pragma pack (push, 1)
 

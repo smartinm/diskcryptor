@@ -33,43 +33,17 @@
 
 
 static
-NTSTATUS
-  dc_pnp_remove_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
-{
-	dev_hook *hook = dev_obj->DeviceExtension;
-	NTSTATUS  status;
-		
-	IoReleaseRemoveLockAndWait(&hook->remv_lock, irp);
-
-	if (NT_SUCCESS(status = dc_forward_irp(dev_obj, irp))) 
-	{
-		dc_process_unmount(hook, UM_NOFSCTL);
-		dc_remove_hook(hook);
-
-		IoDetachDevice(hook->orig_dev);
-		IoDeleteDevice(dev_obj);
-	}
-
-	return status;
-}
-
-static
-NTSTATUS
-  dc_pnp_usage_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_pnp_usage_irp(dev_hook *hook, PIRP irp)
 {
 	DEVICE_USAGE_NOTIFICATION_TYPE usage;
 	PIO_STACK_LOCATION             irp_sp;
-	dev_hook                      *hook;
 	NTSTATUS                       status;
 	int                            setpg;
 	int                            complete;
 	BOOLEAN                        inpath;
+	PDEVICE_OBJECT                 dev_obj;
 
-	hook     = dev_obj->DeviceExtension;
+	dev_obj  = hook->hook_dev;
 	irp_sp   = IoGetCurrentIrpStackLocation(irp);
 	usage    = irp_sp->Parameters.UsageNotification.Type;
 	inpath   = irp_sp->Parameters.UsageNotification.InPath;
@@ -83,16 +57,10 @@ NTSTATUS
 
 		if (usage == DeviceUsageTypeHibernation) 
 		{
-			/* preventing hibernate if memory contain sensitive data */
-			if (is_hiber_crypt() == 0) 
-			{
-				if (dc_num_mount() != 0) {
-					status = STATUS_UNSUCCESSFUL; complete = 1;
-				} else {
-					/* clear pass cache to prevent leaks */
-					dc_clean_pass_cache();
-				}
-			}		
+			if ( (dc_os_type == OS_VISTA) && (dump_hibernate_action() != 0) ) {
+				/* preventing hibernate if memory contain sensitive data */
+				status = STATUS_UNSUCCESSFUL; complete = 1;
+			}
 			
 			if (inpath) {
 				hook->flags |= F_HIBERNATE;
@@ -104,7 +72,8 @@ NTSTATUS
 		if (complete != 0) {
 			status = dc_complete_irp(irp, status, 0);
 		} else {
-			status = dc_forward_irp(dev_obj, irp);
+			IoSkipCurrentIrpStackLocation(irp);
+			status = IoCallDriver(hook->orig_dev, irp);
 		}
 	} else
 	{
@@ -122,8 +91,7 @@ NTSTATUS
 		}
 
 		/* send the irp synchronously */
-
-		status = dc_forward_irp_sync(dev_obj, irp);
+		status = dc_forward_irp_sync(hook, irp);
 
 		/* 
 		   now deal with the failure and success cases.
@@ -133,8 +101,7 @@ NTSTATUS
 
 		if (NT_SUCCESS(status)) 
 		{
-			IoAdjustPagingPathCount(
-				&hook->paging_count, inpath);
+			IoAdjustPagingPathCount(&hook->paging_count, inpath);
 
 			if ( (inpath == TRUE) && (hook->paging_count == 1) ) {
 				/* first paging file addition */
@@ -157,42 +124,82 @@ NTSTATUS
 			irp, status, irp->IoStatus.Information);
 	}
 
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
+
 	return status;
 }
 
-NTSTATUS
-  dc_pnp_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
-	dev_hook          *hook;
 	NTSTATUS           status;
-	USHORT             funct;
+	int                is_sync;
 		
-	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	hook   = dev_obj->DeviceExtension;
-	funct  = irp_sp->MinorFunction;
+	irp_sp  = IoGetCurrentIrpStackLocation(irp);
+	is_sync = 0;
 	
-	status = IoAcquireRemoveLock(&hook->remv_lock, irp);
-    
-	if (NT_SUCCESS(status) == FALSE) {
-        return dc_complete_irp(irp, status, 0);
-    }
+	switch (irp_sp->MinorFunction)
+	{
+		case IRP_MN_REMOVE_DEVICE:
+		case IRP_MN_SURPRISE_REMOVAL:
+			{
+				dc_set_pnp_state(hook, Deleted);
+				IoReleaseRemoveLockAndWait(&hook->remv_lock, irp);
 
-	if ( (funct == IRP_MN_REMOVE_DEVICE) ||
-		 (funct == IRP_MN_SURPRISE_REMOVAL) )
-	{
-		status = dc_pnp_remove_irp(dev_obj, irp);		
-	} else
-	{
-		if (funct == IRP_MN_DEVICE_USAGE_NOTIFICATION) {
-			status = dc_pnp_usage_irp(dev_obj, irp);
-		} else {
-			status = dc_forward_irp(dev_obj, irp);
-		}
-		
-		IoReleaseRemoveLock(&hook->remv_lock, irp); 
+				DbgMsg("remove device %ws\n", hook->dev_name);
+
+				status = dc_forward_irp(hook, irp);
+
+				dc_process_unmount(hook, MF_NOFSCTL, 0);
+				dc_remove_hook(hook);
+
+				IoDetachDevice(hook->orig_dev);
+				IoDeleteDevice(hook->hook_dev);
+			}
+		break;
+		case IRP_MN_DEVICE_USAGE_NOTIFICATION:
+			{
+				status = dc_pnp_usage_irp(hook, irp);
+			}
+		break;
+		case IRP_MN_START_DEVICE:
+			{
+				status = dc_forward_irp_sync(hook, irp);
+
+				if (NT_SUCCESS(status) != FALSE)
+				{
+					if (hook->orig_dev->Characteristics & FILE_REMOVABLE_MEDIA) {
+						hook->hook_dev->Characteristics |= FILE_REMOVABLE_MEDIA;
+						hook->flags |= F_REMOVABLE;
+					}
+
+					dc_set_pnp_state(hook, Started);
+				}
+				is_sync = 1;
+			}
+		break;
+		case IRP_MN_STOP_DEVICE:
+			{
+				dc_set_pnp_state(hook, Stopped);
+
+				status = dc_forward_irp_sync(hook, irp);
+
+				if ( (NT_SUCCESS(status) == FALSE) && (hook->pnp_state == Stopped) ) {
+					dc_restore_pnp_state(hook);
+				}
+				is_sync = 1;
+			}
+		break;
+		default:
+			{
+				status = dc_forward_irp(hook, irp);
+			}
+		break;
+	}
+
+	if (is_sync != 0) {
+		dc_complete_irp(irp, status, irp->IoStatus.Information);
+		IoReleaseRemoveLock(&hook->remv_lock, irp);
 	}
 
 	return status;
@@ -204,17 +211,38 @@ NTSTATUS
      PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT dev_obj
 	 )
 {
+	PDEVICE_OBJECT hi_dev;
 	PDEVICE_OBJECT hook_dev = NULL;
 	dev_hook      *hook     = NULL;
 	int            succs    = 0;
 	NTSTATUS       status;
+	wchar_t        dname[MAX_DEVICE + 1];	
+
+	hi_dev = IoGetAttachedDevice(dev_obj);
+
+	if (hi_dev->DeviceType == FILE_DEVICE_CD_ROM)
+	{
+		do
+		{
+			if ( (dev_obj = dev_obj->AttachedDevice) == NULL ) {
+				break;							
+			}
+			dc_query_object_name(dev_obj, dname, sizeof(dname));
+		} while (wcsncmp(dname, L"\\Device\\CdRom", 13) != 0);
+	} else {
+		dc_query_object_name(dev_obj, dname, sizeof(dname));
+	}
 
 	rnd_reseed_now();
+
+	if ( (dev_obj == NULL) || (dname[0] == 0) ) {
+		return STATUS_SUCCESS;
+	}
 
 	do
 	{
 		status = IoCreateDevice(
-			drv_obj, sizeof(dev_hook), NULL, FILE_DEVICE_DISK, 
+			drv_obj, sizeof(dev_hook), NULL, hi_dev->DeviceType, 
 			FILE_DEVICE_SECURE_OPEN, FALSE, &hook_dev);
 
 		if (NT_SUCCESS(status) == FALSE) {
@@ -226,7 +254,7 @@ NTSTATUS
 		hook           = hook_dev->DeviceExtension;
 		hook->hook_dev = hook_dev;
 		hook->pdo_dev  = dev_obj;
-		hook->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, dev_obj);
+		hook->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, hi_dev);
 		
 		if (hook->orig_dev == NULL) {
 			break;
@@ -234,11 +262,14 @@ NTSTATUS
 
 		if (dev_obj->Characteristics & FILE_REMOVABLE_MEDIA) {
 			hook->flags |= F_REMOVABLE;
-		} 
+		}
 
-		hook_dev->DeviceType      = hook->orig_dev->DeviceType;
-		hook_dev->Characteristics = hook->orig_dev->Characteristics;
-		hook_dev->Flags          |= (DO_DIRECT_IO | DO_POWER_PAGABLE); 
+		if (dev_obj->DeviceType == FILE_DEVICE_CD_ROM) {
+			hook->flags |= F_CDROM;
+		}
+
+		hook_dev->Characteristics |= (dev_obj->Characteristics & FILE_REMOVABLE_MEDIA);
+		hook_dev->Flags           |= (DO_DIRECT_IO | DO_POWER_PAGABLE); 
 		
 		IoInitializeRemoveLock(&hook->remv_lock, 0, 0, 0);
 
@@ -246,20 +277,19 @@ NTSTATUS
 			&hook->paging_count_event, NotificationEvent, TRUE);
 
 		KeInitializeMutex(&hook->busy_lock, 0);
+		KeInitializeMutex(&hook->key_lock, 0);
 
-		dc_query_object_name(
-			dev_obj, hook->dev_name, sizeof(hook->dev_name));
+		DbgMsg("dc_add_device %ws\n", dname);
 
-		DbgMsg("add device %ws\n", hook->dev_name);
+		wcscpy(hook->dev_name, dname);
+		dc_insert_hook(hook); 
 
-		hook_dev->Flags &= ~DO_DEVICE_INITIALIZING;
-
-		dc_insert_hook(hook); succs = 1;
+		hook_dev->Flags &= ~DO_DEVICE_INITIALIZING; succs = 1;
 	} while (0);
 
 	if ( (succs == 0) && (hook_dev != NULL) ) {
 		IoDeleteDevice(hook_dev);
-	} 
+	}
 
 	return STATUS_SUCCESS;
 }

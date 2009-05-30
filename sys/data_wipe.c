@@ -97,12 +97,7 @@ static wipe_mode *wipe_modes[] = {
 };
 
 
-int dc_wipe_init(
-		wipe_ctx *ctx,
-		void     *hook, 
-		int       max_size,
-		int       method
-		)
+int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method)
 {
 	int resl;
 
@@ -112,8 +107,7 @@ int dc_wipe_init(
 		ctx->rand = NULL;
 		
 		if (method > sizeof(wipe_modes) / sizeof(wipe_mode)) {
-			resl = ST_INV_WIPE_MODE;
-			break;
+			resl = ST_INV_WIPE_MODE; break;
 		}
 
 		ctx->mode = wipe_modes[method];
@@ -124,7 +118,6 @@ int dc_wipe_init(
 			if ( (ctx->buff = mem_alloc(max_size)) == NULL ) {
 				break;
 			}
-
 			if ( (ctx->rand = rnd_fast_init()) == NULL ) {
 				break;
 			}
@@ -140,7 +133,6 @@ int dc_wipe_init(
 		if (ctx->buff != NULL) {
 			mem_free(ctx->buff);
 		}
-
 		if (ctx->rand != NULL) {
 			rnd_fast_free(ctx->rand);
 		}
@@ -161,6 +153,9 @@ void dc_wipe_free(wipe_ctx *ctx)
 	if (ctx->rand != NULL) {
 		rnd_fast_free(ctx->rand);
 	}
+
+	ctx->buff = NULL;
+	ctx->rand = NULL;
 }
 
 int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)

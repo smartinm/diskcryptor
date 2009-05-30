@@ -53,7 +53,8 @@ static PMDL         dump_mdl;
 static PVOID        dump_imgbase;
 static FAST_MUTEX   dump_sync;
 static dump_entry   dump_old_entry;
-static dump_context dump_ctx[2];
+static dump_context dump_crash_ctx;
+static dump_context dump_hiber_ctx;
 
 #define DUMP_MEM_SIZE 4096 * 16
 
@@ -275,8 +276,7 @@ NTSTATUS
        PLARGE_INTEGER disk_offset, PMDL mdl
 	   )
 {
-	return dump_write_routine(		
-		&dump_ctx[0], disk_offset->QuadPart, mdl, NULL);
+	return dump_write_routine(&dump_crash_ctx, disk_offset->QuadPart, mdl, NULL);
 }
 
 static
@@ -285,8 +285,7 @@ NTSTATUS
        PLARGE_INTEGER disk_offset, PMDL mdl
 	   )
 {
-	return dump_write_routine(		
-		&dump_ctx[1], disk_offset->QuadPart, mdl, NULL);
+	return dump_write_routine(&dump_hiber_ctx, disk_offset->QuadPart, mdl, NULL);
 }
 
 static
@@ -298,7 +297,7 @@ NTSTATUS
 	   IN PVOID          local_data
 	   )
 {
-	dump_context *dump = &dump_ctx[0];
+	dump_context *dump = &dump_crash_ctx;
 	NTSTATUS      status;
 	
 	if (action == IO_DUMP_WRITE_START) {
@@ -326,7 +325,7 @@ NTSTATUS
 	   IN PVOID          local_data
 	   )
 {
-	dump_context *dump = &dump_ctx[1];
+	dump_context *dump = &dump_hiber_ctx;
 	NTSTATUS      status;
 	
 	if (action == IO_DUMP_WRITE_START) {
@@ -347,8 +346,8 @@ NTSTATUS
 
 static void dump_crash_finish(void)
 {
-	if (dump_ctx[0].FinishRoutine != NULL) {
-		dump_ctx[0].FinishRoutine();
+	if (dump_crash_ctx.FinishRoutine != NULL) {
+		dump_crash_ctx.FinishRoutine();
 	}
 
 	dc_clean_pass_cache();
@@ -360,31 +359,69 @@ static void dump_crash_finish(void)
 
 static void dump_hiber_finish(void)
 {
-	if (dump_ctx[1].FinishRoutine != NULL) {
-		dump_ctx[1].FinishRoutine();
+	if (dump_hiber_ctx.FinishRoutine != NULL) {
+		dump_hiber_ctx.FinishRoutine();
 	}
 
 	dc_clean_pass_cache();
 	dc_clean_locked_mem(NULL);
 	dc_clean_keys();
 
-	dump_ctx[1].pg_init    = 0;
-	dump_ctx[1].pg_pending = 0;
-	dump_ctx[1].a_data     = NULL;
+	dump_hiber_ctx.pg_init    = 0;
+	dump_hiber_ctx.pg_pending = 0;
+	dump_hiber_ctx.a_data     = NULL;
 
 	zeroauto(dump_mem, DUMP_MEM_SIZE);	
 }
 
-int is_dump_crypt() 
+static int is_dump_crypt() 
 {
-	return (dump_ctx[0].hook != NULL) && 
-		   (dump_ctx[0].hook->flags & F_ENABLED);
+	return (dump_crash_ctx.hook != NULL) && 
+		   (dump_crash_ctx.hook->flags & F_ENABLED);
 }
 
-int is_hiber_crypt() 
+static dev_hook *dc_get_sys_hook()
 {
-	return (dump_ctx[1].hook != NULL) && 
-		   (dump_ctx[1].hook->flags & F_ENABLED);
+	dev_hook *hook = NULL;
+	dev_hook *find;
+
+	if (find = dc_first_hook())
+	{
+		do
+		{
+			if (find->pdo_dev->Flags & DO_SYSTEM_BOOT_PARTITION) {
+				hook = find;
+			}
+		} while (find = dc_next_hook(find));
+	}
+	return hook;
+}
+
+static int is_hiber_crypt()
+{
+	dev_hook *hook = NULL;
+
+	if (dump_hiber_ctx.hook == NULL) {
+		hook = dc_get_sys_hook();
+	} else {
+		hook = dump_hiber_ctx.hook;
+	}
+
+	return (hook != NULL) && (hook->flags & F_ENABLED);
+}
+
+int dump_hibernate_action()
+{
+	int prevent = 0;
+
+	if (is_hiber_crypt() == 0) 
+	{
+		if (dc_num_mount() == 0) {
+			/* clear password cache to prevent leaks */
+			dc_clean_pass_cache();
+		} else { prevent = 1; }
+	}
+	return prevent;
 }
 
 static
@@ -406,8 +443,25 @@ BOOLEAN
 		}
 	}
 
-	if ( (allow != 0) && (dump_ctx[0].OpenRoutine) ) {
-		return dump_ctx[0].OpenRoutine(part_offs);
+	if ( (allow != 0) && (dump_crash_ctx.OpenRoutine) ) {
+		return dump_crash_ctx.OpenRoutine(part_offs);
+	} else {
+		return FALSE;
+	}
+}
+
+static
+BOOLEAN
+   dump_hiber_open(
+       IN LARGE_INTEGER part_offs
+	   )
+{
+	if (dump_hiber_ctx.hook == NULL) {
+		dump_hiber_ctx.hook = dc_get_sys_hook();
+	}
+
+	if (dump_hiber_ctx.OpenRoutine != NULL) {
+		return dump_hiber_ctx.OpenRoutine(part_offs);
 	} else {
 		return FALSE;
 	}
@@ -423,7 +477,7 @@ NTSTATUS
 {
 	PDUMP_INITIALIZATION_CONTEXT init;
 	NTSTATUS                     status = STATUS_UNSUCCESSFUL;
-	int                          idx;
+	int                          is_hiber;
 	
 	if (ehook->old_entry) {
 		status = ehook->old_entry(unk, stack);
@@ -432,33 +486,36 @@ NTSTATUS
 
 	if (NT_SUCCESS(status) && (unk == NULL) && (stack != NULL) )
 	{
-		init = &stack->Init; idx = 0;
+		init = &stack->Init; is_hiber = 0;
 
 		if (stack->UsageType == DeviceUsageTypeHibernation) {
-			idx++;
-		} else {
-			if (stack->UsageType != DeviceUsageTypeDumpFile) {
-				idx += (init->CrashDump == FALSE);
-			}
+			is_hiber = 1;
+		} else if (stack->UsageType != DeviceUsageTypeDumpFile) {
+			is_hiber = (init->CrashDump == FALSE);
 		}
 
-		dump_ctx[idx].OpenRoutine         = init->OpenRoutine;
-		dump_ctx[idx].WriteRoutine        = init->WriteRoutine;	
-		dump_ctx[idx].WritePendingRoutine = init->WritePendingRoutine;
-		dump_ctx[idx].FinishRoutine       = init->FinishRoutine;
-		
-		if (idx == 0) 
+		if (is_hiber == 0) 
 		{
-			if (init->WriteRoutine) {
+			dump_crash_ctx.OpenRoutine         = init->OpenRoutine;
+			dump_crash_ctx.WriteRoutine        = init->WriteRoutine;
+			dump_crash_ctx.WritePendingRoutine = init->WritePendingRoutine;
+			dump_crash_ctx.FinishRoutine       = init->FinishRoutine;
+
+			if (init->WriteRoutine != NULL) {
 				init->WriteRoutine = dump_crash_write;
 			}
-			if (init->WritePendingRoutine) {
+			if (init->WritePendingRoutine != NULL) {
 				init->WritePendingRoutine = dump_crash_write_pend;
 			}
 			init->OpenRoutine   = dump_crash_open;
 			init->FinishRoutine = dump_crash_finish;
 		} else
 		{
+			dump_hiber_ctx.OpenRoutine         = init->OpenRoutine;
+			dump_hiber_ctx.WriteRoutine        = init->WriteRoutine;
+			dump_hiber_ctx.WritePendingRoutine = init->WritePendingRoutine;
+			dump_hiber_ctx.FinishRoutine       = init->FinishRoutine;
+
 			if (init->WriteRoutine) {
 				init->WriteRoutine = dump_hiber_write;
 			}
@@ -466,6 +523,7 @@ NTSTATUS
 				init->WritePendingRoutine = dump_hiber_write_pend;
 			}
 			init->FinishRoutine = dump_hiber_finish;
+			init->OpenRoutine   = dump_hiber_open;
 		}
 	}
 
@@ -532,11 +590,11 @@ void dump_usage_notify(
 		 )
 {
 	if (type == DeviceUsageTypeDumpFile) {
-		dump_ctx[0].hook = hook;
+		dump_crash_ctx.hook = hook;
 	}
 
 	if (type == DeviceUsageTypeHibernation) {
-		dump_ctx[1].hook = hook;
+		dump_hiber_ctx.hook = hook;
 	}
 
 	if (dc_os_type == OS_WIN2K) {

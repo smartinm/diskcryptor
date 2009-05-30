@@ -440,6 +440,10 @@ use32
  mov	es, ax
  mov	gs, ax
  mov	ss, ax
+ ; enable SSE
+ mov	eax, cr4
+ or	eax, 200h ; OSFXSR bit
+ mov	cr4, eax
  ; load PM stack
  mov	esp, [fs:bdb.esp_32]
  ; return to caller

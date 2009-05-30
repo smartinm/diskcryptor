@@ -20,186 +20,6 @@
 	</ToolFiles>
 	<Configurations>
 		<Configuration
-			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="1"
-			UseOfMFC="2"
-			CharacterSet="1"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories="..\include"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS;NTDDI_VERSION=NTDDI_WIN2K"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				XMLDocumentationFileName=""
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="4"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\include"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				AdditionalOptions="advapi32.lib setupapi.lib user32.lib gdi32.lib comctl32.lib"
-				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\i386"
-				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				UACExecutionLevel="2"
-				GenerateDebugInformation="true"
-				SubSystem="1"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
-				TargetMachine="1"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				EmbedManifest="false"
-				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-		</Configuration>
-		<Configuration
-			Name="Debug|x64"
-			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\amd64"
-			IntermediateDirectory="$(ProjectDir)"
-			ConfigurationType="1"
-			UseOfMFC="2"
-			CharacterSet="1"
-			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-				TargetEnvironment="3"
-			/>
-			<Tool
-				Name="VCCLCompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories="..\include"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="3"
-				UsePrecompiledHeader="0"
-				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
-				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
-				XMLDocumentationFileName=""
-				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="..\include"
-				ResourceOutputFileName="$(OutDir)\obj\$(ProjectName)\$(InputName).res"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLinkerTool"
-				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\amd64"
-				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				GenerateDebugInformation="true"
-				SubSystem="1"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
-				TargetMachine="17"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCManifestTool"
-				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
-				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				EmbedManifest="false"
-				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
-			/>
-			<Tool
-				Name="VCXDCMakeTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCFxCopTool"
-			/>
-			<Tool
-				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-		</Configuration>
-		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
 			IntermediateDirectory="$(ProjectDir)"
@@ -234,6 +54,7 @@
 				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
@@ -341,6 +162,7 @@
 				WholeProgramOptimization="false"
 				AdditionalIncludeDirectories="..\include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"

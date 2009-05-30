@@ -99,14 +99,9 @@ static void menu_0_1(ldr_config *conf)
 			}
 		}
 
-		if (ch == '3')
-		{
-			char text[MAX_PATH];
-
+		if (ch == '3') {
 			wprintf(L"Enter new prompt text: ");
-
-			text[0] = sizeof(conf->eps_msg) - 1; 
-			_cgets(text); strcpy(conf->eps_msg, text+2);				
+			s_gets(conf->eps_msg, sizeof(conf->eps_msg));			
 		}
 
 		if (ch == '4')
@@ -118,7 +113,8 @@ static void menu_0_1(ldr_config *conf)
 			wprintf(L"Please enter path to keyfile: ");
 
 			zeroauto(&conf->emb_key, sizeof(conf->emb_key));
-			set_flag(conf->logon_type, LT_EMBED_KEY, 0);
+			conf->logon_type &= ~LT_EMBED_KEY;
+			conf->logon_type |= LT_GET_PASS;
 			
 			if (s_wgets(path, sizeof(path)) != 0)
 			{
@@ -130,9 +126,18 @@ static void menu_0_1(ldr_config *conf)
 					if (keysize != 64) {
 						wprintf(L"Embedded keyfile must be 64byte size\n");						
 						Sleep(1000);
-					} else {
+					} else 
+					{
+						wprintf(
+							L"1 - Use embedded keyfile and password\n"
+							L"2 - Use only embedded keyfile\n");
+
+						if (getchr('1', '2') == '2') {							
+							conf->logon_type &= ~LT_GET_PASS;
+						}
+
 						autocpy(&conf->emb_key, keyfile, sizeof(conf->emb_key));
-						set_flag(conf->logon_type, LT_EMBED_KEY, 1);
+						conf->logon_type |= LT_EMBED_KEY;
 					}
 					zeromem(keyfile, keysize);
 					free(keyfile);
@@ -189,6 +194,10 @@ static void menu_0_2(ldr_config *conf)
 			action = L"retry authentication";
 		}
 
+		if (conf->error_type & ET_MBR_BOOT) {
+			action = L"load boot disk MBR";
+		}
+
 		for (i = 0, j = 0; i < sizeof(conf->err_msg); i++) {
 			if (conf->err_msg[i] != '\n') {
 				inv_msg[j++] = conf->err_msg[i];
@@ -221,18 +230,20 @@ static void menu_0_2(ldr_config *conf)
 				L"1 - halt system\n"
 				L"2 - reboot system\n"
 				L"3 - boot from active partition\n"
-				L"4 - exit to BIOS\n"
-				L"5 - retry authentication\n");
+				L"4 - load boot disk MBR\n"
+				L"5 - exit to BIOS\n"
+				L"6 - retry authentication\n");
 
 			msgf = (conf->error_type & ET_MESSAGE);
 
-			switch (getchr('1', '5'))
+			switch (getchr('1', '6'))
 			{
 				case '1': conf->error_type = 0; break;
 				case '2': conf->error_type = ET_REBOOT; break;
 				case '3': conf->error_type = ET_BOOT_ACTIVE; break;
-				case '4': conf->error_type = ET_EXIT_TO_BIOS; break;
-				case '5': conf->error_type = ET_RETRY; break;
+				case '4': conf->error_type = ET_MBR_BOOT; break;
+				case '5': conf->error_type = ET_EXIT_TO_BIOS; break;
+				case '6': conf->error_type = ET_RETRY; break;
 			}
 
 			conf->error_type |= msgf;
@@ -240,14 +251,14 @@ static void menu_0_2(ldr_config *conf)
 
 		if (ch == '3') 
 		{
-			char text[MAX_PATH];
+			size_t sz;
 
 			wprintf(L"Enter new message text: ");
 
-			text[0] = sizeof(conf->err_msg) - 2;
-			 _cgets(text); text[text[1] + 3] = 0;
-			 text[text[1] + 2] = '\n';
-			 strcpy(conf->err_msg, text+2);		
+			if (s_gets(conf->err_msg, sizeof(conf->err_msg) - 2) != 0) {
+				sz = strlen(conf->err_msg);
+				conf->err_msg[sz] = '\n'; conf->err_msg[sz+1] = 0;
+			}
 		}
 	} while (1);
 }
@@ -460,12 +471,15 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 			L"1 - Change logon options\n"
 			L"2 - Change incorrect password action\n"
 			L"3 - Use incorrect password action if no password entered (%s)\n"
-			L"4 - Set booting method\n"
-			L"5 - Set bootauth keyboard layout\n"
-			L"6 - Save changes and exit\n\n",
-			on_off(conf->options & OP_NOPASS_ERROR));
+			L"4 - Use hardware cryptography when possible (%s)\n"
+			L"5 - Set booting method\n"
+			L"6 - Set bootauth keyboard layout\n"
+			L"7 - Save changes and exit\n\n",
+			on_off(conf->options & OP_NOPASS_ERROR),
+			on_off(conf->options & OP_HW_CRYPTO)
+			);
 
-		if ( (ch = getchr('1', '6')) == '6' ) {
+		if ( (ch = getchr('1', '7')) == '7' ) {
 			break;
 		}
 
@@ -473,14 +487,16 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 		{
 			case '1': menu_0_1(conf); break;
 			case '2': menu_0_2(conf); break;
-			case '3': 
-				{
-					set_flag(
-						conf->options, OP_NOPASS_ERROR, onoff_req());
-				}
+			case '3': {
+				set_flag(conf->options, OP_NOPASS_ERROR, onoff_req());
+			}
 			break;
-			case '4': menu_0_3(conf); break;
-			case '5': menu_0_4(conf); break;
+			case '4': {
+				set_flag(conf->options, OP_HW_CRYPTO, onoff_req());
+			}
+			break;
+			case '5': menu_0_3(conf); break;
+			case '6': menu_0_4(conf); break;
 		}
 	} while (1);
 }
@@ -508,25 +524,24 @@ int boot_menu(int argc, wchar_t *argv[])
 			wchar_t  h_name[MAX_PATH];
 			wchar_t *str;
 			u64      size;
-			int      i, bootd;
+			int      i, bd_1, bd_2;
 
 			wprintf(
 				L"--------------------------------------------------------------\n"
-				L"HDD |          name          |  size   | bootable | bootloader\n" 
-				L"----+------------------------+---------+----------+-----------\n");
+				L"HDD |           name           |  size   | bootable | bootloader\n" 
+				L"----+--------------------------+---------+----------+-----------\n");
 
-			if (dc_get_boot_disk(&bootd) != ST_OK) {
-				bootd = -1;
+			if (dc_get_boot_disk(&bd_1, &bd_2) != ST_OK) {
+				bd_1 = bd_2 = -1;
 			}
 
 			for (i = 0; i < 100; i++)
 			{
 				if (size = dc_dsk_get_size(i, 0)) 
 				{
-					dc_format_byte_size(
-						s_size, sizeof_w(s_size), size);
+					dc_format_byte_size(s_size, sizeof_w(s_size), size);
 
-					if (dc_get_hdd_name(i, h_name, sizeof_w(h_name)) != ST_OK) {
+					if (dc_get_hw_name(i, 0, h_name, sizeof_w(h_name)) != ST_OK) {
 						h_name[0] = 0;
 					}
 					
@@ -537,8 +552,9 @@ int boot_menu(int argc, wchar_t *argv[])
 					}
 
 					wprintf(
-						L"hd%d | %-22s | %-8s| %-8s | %s\n", 
-						i, h_name, s_size, i == bootd ? L"yes":L"no", str);
+						L"hd%d | %-24s | %-8s| %-8s | %s\n", 
+						i, h_name, s_size, (i == bd_1) || (i == bd_2) ? L"yes":L"no", str
+						);
 				} 
 			}
 			resl = ST_OK; break;
@@ -610,7 +626,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options   = OP_EXTERNAL;
+			conf.options  |= OP_EXTERNAL;
 			conf.boot_type = BT_AP_PASSWORD;
 
 			boot_conf_menu(
@@ -633,7 +649,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options   = OP_EXTERNAL;
+			conf.options  |= OP_EXTERNAL;
 			conf.boot_type = BT_MBR_FIRST;
 
 			boot_conf_menu(
@@ -656,7 +672,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options   = OP_EXTERNAL;
+			conf.options  |= OP_EXTERNAL;
 			conf.boot_type = BT_MBR_FIRST;
 
 			boot_conf_menu(

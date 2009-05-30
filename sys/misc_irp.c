@@ -28,6 +28,8 @@
 #include "mount.h"
 #include "enc_dec.h"
 #include "mem_lock.h"
+#include "debug.h"
+#include "dump_hook.h"
 
 typedef struct _pw_irp_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
@@ -49,26 +51,22 @@ NTSTATUS
 	return status;
 }
 
-NTSTATUS
-  dc_forward_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_release_irp(dev_hook *hook, PIRP irp, NTSTATUS status)
 {
-	dev_hook *hook = dev_obj->DeviceExtension;
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
+	return dc_complete_irp(irp, status, 0);
+}
+
+NTSTATUS dc_forward_irp(dev_hook *hook, PIRP irp)
+{
+	NTSTATUS status;
 
 	IoSkipCurrentIrpStackLocation(irp);
-
-	return IoCallDriver(hook->orig_dev, irp);
+	status = IoCallDriver(hook->orig_dev, irp);
+			
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
+	return status;
 }
-
-NTSTATUS
-  dc_invalid_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
-{
-	return dc_complete_irp(irp, STATUS_DRIVER_INTERNAL_ERROR, 0);
-}
-
 
 static
 NTSTATUS
@@ -81,14 +79,10 @@ NTSTATUS
     return STATUS_MORE_PROCESSING_REQUIRED;
 }
 
-NTSTATUS
-  dc_forward_irp_sync(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_forward_irp_sync(dev_hook *hook, PIRP irp)
 {
-	dev_hook *hook = dev_obj->DeviceExtension;
-	KEVENT    sync;
-	NTSTATUS  status;
+	KEVENT   sync;
+	NTSTATUS status;
 
 	KeInitializeEvent(
 		&sync, NotificationEvent, FALSE);
@@ -131,9 +125,9 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 {
 	NTSTATUS           status;
 	PIO_STACK_LOCATION irp_sp;
+	int                no_pass = 0;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	status = IoAcquireRemoveLock(&hook->remv_lock, irp);
 
 	if ( (irp_sp->MinorFunction == IRP_MN_SET_POWER) && 
 		 (irp_sp->Parameters.Power.Type == SystemPowerState) )
@@ -155,20 +149,24 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 	}
 
-	if (NT_SUCCESS(status) == FALSE)
+	if ( (irp_sp->MinorFunction == IRP_MN_QUERY_POWER) && 
+		 (irp_sp->Parameters.Power.Type == SystemPowerState) &&
+		 (irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate) )
 	{
-		irp->IoStatus.Status = status;
-		PoStartNextPowerIrp(irp);
-		IoCompleteRequest(irp, IO_NO_INCREMENT);			
-	} else
-	{
+		if ( (dc_os_type != OS_VISTA) && (dump_hibernate_action() != 0) ) {
+			PoStartNextPowerIrp(irp);
+			status  = dc_complete_irp(irp, STATUS_UNSUCCESSFUL, 0);
+			no_pass = 1;
+		}
+	}
+
+	if (no_pass == 0) {
 		PoStartNextPowerIrp(irp);
 		IoSkipCurrentIrpStackLocation(irp);
-
 		status = PoCallDriver(hook->orig_dev, irp);
-
-		IoReleaseRemoveLock(&hook->remv_lock, irp);
 	}
+
+	IoReleaseRemoveLock(&hook->remv_lock, irp);
 
 	return status;
 }
@@ -179,15 +177,9 @@ static void dc_power_irp_worker(pw_irp_ctx *pwc)
 	mem_free(pwc);
 }
 
-NTSTATUS
-  dc_power_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_power_irp(dev_hook *hook, PIRP irp)
 {
 	pw_irp_ctx *pwc;
-	dev_hook   *hook;
-
-	hook = dev_obj->DeviceExtension;
 
 	if (KeGetCurrentIrql() == PASSIVE_LEVEL) {
 		return dc_process_power_irp(hook, irp);
@@ -195,10 +187,8 @@ NTSTATUS
 
 	if ( (pwc = mem_alloc(sizeof(pw_irp_ctx))) == NULL )
 	{
-		irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-		PoStartNextPowerIrp(irp);			
-		IoCompleteRequest(irp, IO_NO_INCREMENT);
-		return STATUS_INSUFFICIENT_RESOURCES;
+		PoStartNextPowerIrp(irp);		
+		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
 
 	pwc->hook = hook;
@@ -206,11 +196,8 @@ NTSTATUS
 
 	IoMarkIrpPending(irp);
 
-	ExInitializeWorkItem(
-		&pwc->wrk_item, dc_power_irp_worker, pwc);
-
-	ExQueueWorkItem(
-		&pwc->wrk_item, DelayedWorkQueue);
+	ExInitializeWorkItem(&pwc->wrk_item, dc_power_irp_worker, pwc);
+	ExQueueWorkItem(&pwc->wrk_item, DelayedWorkQueue);
 
 	return STATUS_PENDING;
 }

@@ -40,6 +40,10 @@ NTSTATUS
 	NTSTATUS        status;
 	PIRP            irp;
 
+	if (hook->pnp_state != Started) {
+		return STATUS_INVALID_DEVICE_STATE;
+	}
+
 	KeInitializeEvent(
 		&sync_event, NotificationEvent, FALSE);
 
@@ -164,6 +168,10 @@ int dc_device_rw(
 	NTSTATUS                   status;
 	u32                        max_trans;
 
+	if (hook->pnp_state != Started) {
+		return STATUS_INVALID_DEVICE_STATE;
+	}
+
 	if (hook->max_chunk == 0) 
 	{
 		/* get MaximumTransferLength */
@@ -186,7 +194,7 @@ int dc_device_rw(
 	for (resl = ST_OK; size != 0;)
 	{
 		blen = min(size, max_trans);
-		
+
 		status = io_device_rw_block(
 			hook->orig_dev, function, buff, blen, offset, 0);
 
@@ -465,7 +473,8 @@ u32 intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2)
 void dc_delay(u32 msecs)
 {
 	LARGE_INTEGER time;
-	time.QuadPart = msecs * -10000;
+
+	time.QuadPart = d64(msecs) * -10000;	
 	KeDelayExecutionThread(KernelMode, FALSE, &time);
 }
 

@@ -9,22 +9,20 @@
 ;       EDX:EAX - shifted value
 ;*******************************************************************************
 
-format MS COFF
+SECTION .text
 
-section '.text' code readable executable
-
-public __allshl as '__allshl'
+global __allshl
 
 __allshl:
 	cmp	cl, 64
 	jae	clean
 	cmp	cl, 32
-	jae	@f
+	jae	shift
 	shld	edx, eax, cl
 	shl	eax, cl
 	ret
 
-@@:	mov	edx, eax
+shift:	mov	edx, eax
 	xor	eax, eax
 	and	cl, 31
 	shl	edx, cl

@@ -8,7 +8,7 @@ void clean_cmd_line();
 
 wchar_t *get_param(wchar_t *name);
 
-int s_gets(char *buff, size_t size);
-int s_wgets(wchar_t *buff, size_t size);
+int s_gets(char *buff, int size);
+int s_wgets(wchar_t *buff, int size);
 
 #endif

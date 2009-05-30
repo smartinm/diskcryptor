@@ -50,6 +50,7 @@
 				FavorSizeOrSpeed="2"
 				AdditionalIncludeDirectories="..\include;..\include\boot;..\include\crypto"
 				PreprocessorDefinitions="BOOT_LDR"
+				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				StructMemberAlignment="1"
@@ -201,7 +202,7 @@
 						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+							CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
 							Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
 						/>
 					</FileConfiguration>
@@ -238,6 +239,23 @@
 					RelativePath="..\crypto\twofish.c"
 					>
 				</File>
+				<Filter
+					Name="i386"
+					>
+					<File
+						RelativePath="..\crypto\i386\aes_x86_via.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
 			</Filter>
 		</Filter>
 		<Filter

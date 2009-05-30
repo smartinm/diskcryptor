@@ -21,7 +21,7 @@
 
 #include <windows.h>
 #include <stdio.h>
-#include "..\sys\driver.h"
+#include "dcconst.h"
 #include "..\boot\boot.h"
 #include "mbrinst.h"
 #include "dcres.h"
@@ -36,68 +36,55 @@
 
 u64 dc_dsk_get_size(int dsk_num, int precision) 
 {
-	HANDLE           hdisk = NULL;
+	dc_disk_p       *dp = NULL;
 	u64              mid, size  = 0;
 	u64              high, low;
 	u64              bps, pos;
 	u32              bytes;
 	DISK_GEOMETRY_EX dgx;
-	DISK_GEOMETRY    dg;
 	u8               buff[SECTOR_SIZE];
 
 	do
 	{
-		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
+		if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
 			break;
 		}
 		
 		if (DeviceIoControl(
-			 hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, 
+			 dp->hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, 
 			 NULL, 0, &dgx, sizeof(dgx), &bytes, NULL)) 
 		{
 			size = dgx.DiskSize.QuadPart; break;
 		}
 
-		if (DeviceIoControl(
-			 hdisk, IOCTL_DISK_GET_DRIVE_GEOMETRY, 
-			 NULL, 0, &dg, sizeof(dg), &bytes, NULL)) 
+		bps  = d64(dp->bps);
+		high = ( (d64(dp->spc) * bps) + dp->size) / bps;
+		low  = dp->size / bps;	
+		size = dp->size;
+
+		/* binary search disk space in hidden cylinder */
+		if (precision != 0) 
 		{
-			bps  = dg.BytesPerSector;
-			high = (u64)dg.SectorsPerTrack * (u64)dg.TracksPerCylinder * bps;
-			size = high * dg.Cylinders.QuadPart;
-			high = (high + size) / bps;
-			low  = size / bps;			
-
-			/* binary search disk space in hidden cylinder */
-			if (precision != 0) 
+			do
 			{
-				do
-				{
-					mid = (high + low) / 2;
-					pos = mid * bps;
+				mid = (high + low) / 2;
+				pos = mid * bps;
 
-					SetFilePointer(
-						hdisk, (u32)(pos), &p32(&pos)[1], FILE_BEGIN
-						);
+				if (dc_disk_read(dp, buff, sizeof(buff), pos) == ST_OK) {
+					low = mid+1; 
+				} else {
+					high = mid-1;
+				}
 
-					if (ReadFile(hdisk, buff, sizeof(buff), &bytes, NULL) != FALSE) {
-						low = mid+1; 
-					} else {
-						high = mid-1;
-					}
-
-					if (high <= low) {
-						size = low * bps;
-						break;
-					}
-				} while (1);
-			}
-			break;
-		}		
+				if (high <= low) {
+					size = low * bps; break;
+				}
+			} while (1);
+		}
 	} while (0);
 
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
 	}
 
 	return size;
@@ -258,34 +245,34 @@ int dc_make_pxe(wchar_t *file)
 }
 
 
-int dc_get_boot_disk(int *dsk_num)
+int dc_get_boot_disk(int *dsk_1, int *dsk_2)
 {
-	HANDLE    device = NULL;
 	drive_inf info;
 	int       resl;
 
-	do
+	resl = dc_get_drive_info(
+		L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info
+		);
+
+	if ( (resl != ST_OK) || (info.dsk_num > 2) ) {
+		resl = ST_NF_BOOT_DEV;
+	} else 
 	{
-		resl = dc_get_drive_info(
-			L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info);
-
-		if ( (resl != ST_OK) || (info.dsk_type == DSK_DYN_SPANNED) ) {
-			resl = ST_NF_BOOT_DEV; break;
+		if (info.dsk_num > 1) {
+			*dsk_1 = info.disks[0].number;
+			*dsk_2 = info.disks[1].number;
 		} else {
-			*dsk_num = info.disks[0].number;			
+			*dsk_1 = info.disks[0].number;
+			*dsk_2 = info.disks[0].number;
 		}
-
-	} while (0);
-
-	if (device != INVALID_HANDLE_VALUE) {
-		CloseHandle(device);
 	}
 
 	return resl;
 }
 
 static int dc_format_media_and_set_boot(
-			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg)
+			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg
+			 )
 {
 	u8                        buff[sizeof(DRIVE_LAYOUT_INFORMATION) + 
 		                           sizeof(PARTITION_INFORMATION) * 3];
@@ -294,13 +281,13 @@ static int dc_format_media_and_set_boot(
 	u32                       bytes;
 	int                       resl, succs;
 	int                       locked;
-	u8                        mbr_sec[SECTOR_SIZE];
+	u8                       *mbr_sec;
 	
-	locked = 0;
+	locked = 0; mbr_sec = NULL;
 	do
 	{
-		d_size = (u64)dg->Cylinders.QuadPart * (u64)dg->SectorsPerTrack * 
-			     (u64)dg->TracksPerCylinder  * SECTOR_SIZE;
+		d_size = d64(dg->Cylinders.QuadPart) * d64(dg->SectorsPerTrack) * 
+			     d64(dg->TracksPerCylinder)  * d64(dg->BytesPerSector);
 
 		if (d_size < K64_SIZE) {
 			resl = ST_NF_SPACE; break;
@@ -318,16 +305,14 @@ static int dc_format_media_and_set_boot(
 		DeviceIoControl(
 			h_device, IOCTL_DISK_DELETE_DRIVE_LAYOUT, NULL, 0, NULL, 0, &bytes, NULL);
 
-		zeroauto(mbr_sec, sizeof(mbr_sec));
+		if ( (mbr_sec = malloc(dg->BytesPerSector)) == NULL ) {
+			resl = ST_NOMEM; break;
+		}
+		zerofast(mbr_sec, dg->BytesPerSector);
 		zeroauto(buff, sizeof(buff));
 
-		resl = dc_disk_write(
-			h_device, mbr_sec, sizeof(mbr_sec), 0);
-
-		if (resl != ST_OK) {
-			break;
-		}
-
+		WriteFile(h_device, mbr_sec, dg->BytesPerSector, &bytes, NULL);
+		
 		dli->PartitionCount = 4;
 		dli->Signature      = 0;
 		dli->PartitionEntry[0].StartingOffset.QuadPart  = K64_SIZE;
@@ -352,16 +337,13 @@ static int dc_format_media_and_set_boot(
 		succs = DeviceIoControl(
 			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 
-		if (succs != 0) {
-			locked = 0;
-		}
+		if (succs != 0) { locked = 0; }
 
 		CloseHandle(h_device); h_device = NULL;
 
 		if ( (resl = dc_format_fs(root, L"FAT32")) != ST_OK ) {
 			break;
-		}
-		
+		}		
 		resl = dc_set_mbr(dsk_num, 1);		
 	} while(0);
 
@@ -374,23 +356,26 @@ static int dc_format_media_and_set_boot(
 	if (h_device != NULL) {
 		CloseHandle(h_device);
 	}
+	if (mbr_sec != NULL) {
+		free(mbr_sec);
+	}
 
 	return resl;
 }
 
 static int dc_is_mbr_present(int dsk_num)
 {
-	HANDLE hdisk;
-	dc_mbr mbr;
-	int    resl;
+	dc_disk_p *dp;
+	dc_mbr     mbr;
+	int        resl;
 
 	do
 	{
-		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
+		if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
 			resl = ST_ERROR; break;
 		}
 
-		if ( (resl = dc_disk_read(hdisk, &mbr, sizeof(mbr), 0)) != ST_OK ) {
+		if ( (resl = dc_disk_read(dp, &mbr, sizeof(mbr), 0)) != ST_OK ) {
 			break;
 		}
 
@@ -401,8 +386,8 @@ static int dc_is_mbr_present(int dsk_num)
 		}
 	} while (0);
 
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
 	}
 
 	return resl;
@@ -432,8 +417,7 @@ int dc_set_boot(wchar_t *root, int format)
 			disk, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 
 		if (hdisk == INVALID_HANDLE_VALUE) {			
-			resl  = ST_ACCESS_DENIED;
-			hdisk = NULL; break;
+			resl = ST_ACCESS_DENIED; hdisk = NULL; break;
 		}
 
 		succs = DeviceIoControl(
@@ -447,7 +431,7 @@ int dc_set_boot(wchar_t *root, int format)
 			resl = ST_INV_MEDIA_TYPE; break;
 		}
 
-		if (dg.BytesPerSector > SECTOR_SIZE) {
+		if (IS_INVALID_SECTOR_SIZE(dg.BytesPerSector) != 0) {
 			resl = ST_INV_SECT; break;
 		}
 
@@ -480,11 +464,10 @@ int dc_set_boot(wchar_t *root, int format)
 	if (hdisk != NULL) {
 		CloseHandle(hdisk);
 	}
-
 	return resl;
 }
 
-int dc_set_mbr(int dsk_num, int begin)
+static int dc_set_mbr_i(int dsk_num, int begin)
 {
 	dc_mbr      mbr;
 	dc_mbr      old_mbr;
@@ -497,21 +480,17 @@ int dc_set_mbr(int dsk_num, int begin)
 	void       *data, *n_data;
 	int         size, i;
 	int         resl, n_size;
-	HANDLE      hdisk;
+	dc_disk_p  *dp;
 
-	hdisk = NULL; n_data = NULL;
+	dp = NULL; n_data = NULL;
 	do
 	{
-		/* if dsk_num == -1 then find boot disk */
-		if (dsk_num == -1) 
-		{
-			if ( (resl = dc_get_boot_disk(&dsk_num)) != ST_OK ) {				
-				break;
-			}
+		if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
+			resl = ST_ERROR; break;
 		}
 
-		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
-			break;
+		if (IS_INVALID_SECTOR_SIZE(dp->bps) != 0) {
+			resl = ST_INV_SECT; break;
 		}
 
 		if (data = dc_extract_rsrc(&size, IDR_MBR)) {
@@ -545,11 +524,11 @@ int dc_set_mbr(int dsk_num, int begin)
 		}
 
 		/* read disk MBR */
-		if ( (resl = dc_disk_read(hdisk, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {			
+		if ( (resl = dc_disk_read(dp, &old_mbr, sizeof(old_mbr), 0)) != ST_OK ) {
 			break;
 		}
 
-		if (old_mbr.magic != 0xAA55) {			
+		if ( (old_mbr.magic != 0xAA55) || (dc_fs_type(pv(&old_mbr)) != FS_UNK) ) {
 			resl = ST_MBR_ERR; break;
 		}
 
@@ -568,15 +547,13 @@ int dc_set_mbr(int dsk_num, int begin)
 			min_str = min(min_str, pt->start_sect);
 			max_end = max(max_end, pt->start_sect + pt->prt_size);
 		}
-
-		max_end *= SECTOR_SIZE; min_str *= SECTOR_SIZE;
+		max_end *= d64(dp->bps); min_str *= d64(dp->bps);
 
 		if (begin != 0) 
 		{
 			if (min_str < n_size + SECTOR_SIZE) {
 				resl = ST_NF_SPACE; break;
 			}
-
 			ldr_off = SECTOR_SIZE;		
 		} else 
 		{
@@ -597,35 +574,56 @@ int dc_set_mbr(int dsk_num, int begin)
 		mbr.set.numb   = n_size / SECTOR_SIZE;
 
 		/* write bootloader data */
-		if ( (resl = dc_disk_write(hdisk, n_data, n_size, ldr_off)) != ST_OK ) {
+		if ( (resl = dc_disk_write(dp, n_data, n_size, ldr_off)) != ST_OK ) {
 			break;
-		}
-
-		if ( (resl = dc_disk_write(hdisk, &mbr, sizeof(mbr), 0)) != ST_OK ) {
+		}		
+		if ( (resl = dc_disk_write(dp, &mbr, sizeof(mbr), 0)) != ST_OK ) {
 			break;
 		}
 	} while (0);
 
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
 	}
-
 	if (n_data != NULL) {
 		free(n_data);
+	}	
+	return resl;
+}
+
+int dc_set_mbr(int dsk_num, int begin)
+{
+	int dsk_1, dsk_2;
+	int resl;
+
+	/* if dsk_num == -1 then find boot disk */
+	if (dsk_num == -1) 
+	{
+		resl = dc_get_boot_disk(&dsk_1, &dsk_2);
+
+		if (resl == ST_OK)
+		{
+			resl = dc_set_mbr_i(dsk_1, begin);
+
+			if ( (resl == ST_OK) && (dsk_1 != dsk_2) ) {
+				resl = dc_set_mbr_i(dsk_2, begin);
+			}
+		}
+	} else {
+		resl = dc_set_mbr_i(dsk_num, begin);
 	}
 
 	return resl;
 }
 
 static
-int get_ldr_body_ptr(
-	   HANDLE hdisk, dc_mbr *mbr, u64 *start, int *size)
+int get_ldr_body_ptr(dc_disk_p *dp, dc_mbr *mbr, u64 *start, int *size)
 {
 	int resl;
 
 	do
 	{
-		if ( (resl = dc_disk_read(hdisk, mbr, sizeof(dc_mbr), 0)) != ST_OK ) {
+		if ( (resl = dc_disk_read(dp, mbr, sizeof(dc_mbr), 0)) != ST_OK ) {
 			break;
 		}
 
@@ -639,30 +637,32 @@ int get_ldr_body_ptr(
 
 		*start = mbr->set.sector * SECTOR_SIZE;
 		*size  = mbr->set.numb   * SECTOR_SIZE;
-		resl   = ST_OK;
 	} while (0);
 
 	return resl;
 }
 
 int dc_get_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf)
+	  int dsk_num, wchar_t *file, ldr_config *conf
+	  )
 {
 	ldr_config *cnf;
-	HANDLE      hfile, hdisk;
+	HANDLE      hfile;
 	void       *data;
 	int         size, resl;
 	dc_mbr      mbr;		
 	u64         offs;
 	u32         bytes;
+	int         dsk_2;
+	dc_disk_p  *dp;
 
-	hfile = NULL; hdisk = NULL; data = NULL;
+	hfile = NULL; dp = NULL; data = NULL;
 	do
 	{
 		/* if dsk_num == -1 then find boot disk */
 		if (dsk_num == -1) 
 		{
-			if ( (resl = dc_get_boot_disk(&dsk_num)) != ST_OK ) {
+			if ( (resl = dc_get_boot_disk(&dsk_num, &dsk_2)) != ST_OK ) {
 				break;
 			}
 		}
@@ -686,12 +686,11 @@ int dc_get_mbr_config(
 			}
 		} else 
 		{
-			if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
+			if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
 				break;
 			}
-
 			/* get bootloader body offset */
-			if ( (resl = get_ldr_body_ptr(hdisk, &mbr, &offs, &size)) != ST_OK ) {
+			if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {
 				break;
 			}
 		}
@@ -710,7 +709,7 @@ int dc_get_mbr_config(
 		} else 
 		{
 			/* read bootloader body from disk */
-			if ( (resl = dc_disk_read(hdisk, data, size, offs)) != ST_OK ) {				
+			if ( (resl = dc_disk_read(dp, data, size, offs)) != ST_OK ) {				
 				break;
 			}
 		}
@@ -727,40 +726,33 @@ int dc_get_mbr_config(
 	if (data != NULL) {
 		free(data);
 	}
-
 	if (hfile != NULL) {
 		CloseHandle(hfile);
 	}
-
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
 	}
 
 	return resl;
 }
 
-int dc_set_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf)
+static
+int dc_set_mbr_config_i(
+	  int dsk_num, wchar_t *file, ldr_config *conf
+	  )
 {
-	HANDLE      hfile, hdisk;
+	HANDLE      hfile;
 	int         size, resl;
 	ldr_config *cnf;	
 	dc_mbr      mbr;
 	void       *data;	
 	u64         offs;
-	u32         bytes;	
+	u32         bytes;
+	dc_disk_p  *dp;
 
-	hdisk = NULL; hfile = NULL; data = NULL;
+	dp = NULL; hfile = NULL; data = NULL;
 	do
 	{
-		/* if dsk_num == -1 then find boot disk */
-		if (dsk_num == -1) 
-		{
-			if ( (resl = dc_get_boot_disk(&dsk_num)) != ST_OK ) {
-				break;
-			}
-		}
-
 		if (file != NULL) 
 		{
 			/* open file */
@@ -781,11 +773,11 @@ int dc_set_mbr_config(
 			}
 		} else 
 		{
-			if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
+			if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
 				break;
 			}
 			/* get bootloader body offset */
-			if ( (resl = get_ldr_body_ptr(hdisk, &mbr, &offs, &size)) != ST_OK ) {
+			if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {
 				break;
 			}
 		}
@@ -804,7 +796,7 @@ int dc_set_mbr_config(
 		} else 
 		{
 			/* read bootloader body from disk */
-			if ( (resl = dc_disk_read(hdisk, data, size, offs)) != ST_OK ) {
+			if ( (resl = dc_disk_read(dp, data, size, offs)) != ST_OK ) {
 				break;
 			}
 		}
@@ -832,7 +824,7 @@ int dc_set_mbr_config(
 		} else 
 		{
 			/* save bootloader body to disk */
-			if ( (resl = dc_disk_write(hdisk, data, size, offs)) != ST_OK ) {
+			if ( (resl = dc_disk_write(dp, data, size, offs)) != ST_OK ) {
 				break;
 			}
 		}
@@ -847,15 +839,43 @@ int dc_set_mbr_config(
 		CloseHandle(hfile);
 	}
 
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
+	}
+
+	return resl;
+}
+
+int dc_set_mbr_config(
+	  int dsk_num, wchar_t *file, ldr_config *conf
+	  )
+{
+	int dsk_1, dsk_2;
+	int resl;
+
+	/* if dsk_num == -1 then find boot disk */
+	if (dsk_num == -1) 
+	{
+		resl = dc_get_boot_disk(&dsk_1, &dsk_2);
+
+		if (resl == ST_OK)
+		{
+			resl = dc_set_mbr_config_i(dsk_1, file, conf);
+
+			if ( (resl == ST_OK) && (dsk_1 != dsk_2) ) {
+				resl = dc_set_mbr_config_i(dsk_2, file, conf);
+			}
+		}
+	} else {
+		resl = dc_set_mbr_config_i(dsk_num, file, conf);
 	}
 
 	return resl;
 }
 
 int dc_mbr_config_by_partition(
-      wchar_t *root, int set_conf, ldr_config *conf)
+      wchar_t *root, int set_conf, ldr_config *conf
+	  )
 {
 	HANDLE        hdisk;
 	wchar_t       name[MAX_PATH];
@@ -915,7 +935,7 @@ int dc_mbr_config_by_partition(
 }
 
 
-int dc_unset_mbr(int dsk_num)
+static int dc_unset_mbr_i(int dsk_num)
 {
 	dc_mbr      mbr;
 	dc_mbr      old_mbr;
@@ -923,25 +943,17 @@ int dc_unset_mbr(int dsk_num)
 	ldr_config *conf;
 	void       *data;
 	u64         offs;
-	HANDLE      hdisk;
+	dc_disk_p  *dp;
 
-	data = NULL; hdisk = NULL;
+	data = NULL; dp = NULL;
 	do
 	{
-		/* if dsk_num == -1 then find boot disk */
-		if (dsk_num == -1) 
-		{
-			if ( (resl = dc_get_boot_disk(&dsk_num)) != ST_OK ) {				
-				break;
-			}
-		}
-
-		if ( (hdisk = dc_disk_open(dsk_num)) == NULL ) {
+		if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
 			break;
 		}
 
 		/* get bootloader body offset */
-		if ( (resl = get_ldr_body_ptr(hdisk, &mbr, &offs, &size)) != ST_OK ) {			
+		if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {			
 			break;
 		}
 
@@ -951,7 +963,7 @@ int dc_unset_mbr(int dsk_num)
 		}
 
 		/* read bootloader body */
-		if ( (resl = dc_disk_read(hdisk, data, size, offs)) != ST_OK ) {				
+		if ( (resl = dc_disk_read(dp, data, size, offs)) != ST_OK ) {				
 			break;
 		}
 
@@ -969,23 +981,48 @@ int dc_unset_mbr(int dsk_num)
 		zeroauto(&mbr, sizeof(mbr));
 			
 		for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
-			dc_disk_write(hdisk, &mbr, sizeof(mbr), offs);
+			dc_disk_write(dp, &mbr, sizeof(mbr), offs);
 		}
 
 		/* write new MBR */
-		resl = dc_disk_write(hdisk, &old_mbr, sizeof(old_mbr), 0);
+		resl = dc_disk_write(dp, &old_mbr, sizeof(old_mbr), 0);
 	} while (0);
 
 	if (data != NULL) {
 		free(data);
 	}
 
-	if (hdisk != NULL) {
-		CloseHandle(hdisk);
+	if (dp != NULL) {
+		dc_disk_close(dp);
 	}
 
 	return resl;
 
+}
+
+int dc_unset_mbr(int dsk_num)
+{
+	int dsk_1, dsk_2;
+	int resl;
+
+	/* if dsk_num == -1 then find boot disk */
+	if (dsk_num == -1) 
+	{
+		resl = dc_get_boot_disk(&dsk_1, &dsk_2);
+
+		if (resl == ST_OK)
+		{
+			resl = dc_unset_mbr_i(dsk_1);
+
+			if ( (resl == ST_OK) && (dsk_1 != dsk_2) ) {
+				resl = dc_unset_mbr_i(dsk_2);
+			}
+		}
+	} else {
+		resl = dc_unset_mbr_i(dsk_num);
+	}
+
+	return resl;
 }
 
 int dc_update_boot(int dsk_num)
@@ -1018,8 +1055,7 @@ int dc_update_boot(int dsk_num)
 
 
 
-int dc_get_drive_info(
-	  wchar_t *w32_name, drive_inf *info)
+int dc_get_drive_info(wchar_t *w32_name, drive_inf *info)
 {
 	PARTITION_INFORMATION_EX ptix;
 	PARTITION_INFORMATION    pti;
@@ -1092,7 +1128,7 @@ int dc_get_drive_info(
 
 				if ( (info->dsk_num = ext->NumberOfDiskExtents) == 1 ) {
 					info->dsk_type = DSK_DYN_SIMPLE;
-				} else {
+				} else {					
 					info->dsk_type = DSK_DYN_SPANNED;
 				}
 			} else {
