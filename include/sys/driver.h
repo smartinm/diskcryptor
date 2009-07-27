@@ -150,6 +150,7 @@ typedef struct _dc_conf {
  extern u32            dc_no_usb_mount;
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;
+ extern int            dc_cpu_count; 
 #endif
 
 

@@ -64,8 +64,17 @@ int bios_call(int num, rm_ctx *ctx)
 	return (bd_dat->rmc.efl & FL_CF) == 0;
 }
 
-void bios_jump_boot(u8 disk)
+void bios_jump_boot(u8 disk, int n_mount)
 {
+	if (n_mount != 0) 
+	{
+		/* setup backup data block */
+		autocpy(
+			addof(bd_dat->bd_base, bd_dat->bd_size - 384), bd_dat, f_off(bd_data, ret_32));
+	} else {
+		/* clear boot data block signature */
+		bd_dat->sign1 = 0; bd_dat->sign2 = 0;
+	}
 	d80_swap = disk;
 	bd_dat->rmc.dx  = 0x80;
 	bd_dat->rmc.efl = FL_IF; /* enable interrupts */

@@ -87,23 +87,27 @@ void dc_get_boot_pass()
 	PHYSICAL_ADDRESS addr;
 	u8              *bmem;
 	bd_data         *bdb;
+	int              bd_n;
+
+	DbgMsg("dc_get_boot_pass\n");
 
 	/* scan memory in range 500-640k */
-	addr.QuadPart = 500 * 1024; bdb = NULL;
+	addr.QuadPart = 500 * 1024; bdb = NULL; bd_n = 0;
 	do
 	{
 		if (bmem = MmMapIoSpace(addr, PAGE_SIZE, MmCached))
 		{
 			/* find boot data block */
 			bdb = find_8b(
-				bmem, PAGE_SIZE - sizeof(bd_data), 0x01F53F55, 0x9E4361E4);
+				bmem, PAGE_SIZE - f_off(bd_data, ret_32), 0x01F53F55, 0x9E4361E4);
 
 			if (bdb != NULL) 
 			{
+				DbgMsg("boot data block found at %p\n", bdb);
 				/* restore realmode interrupts */
-				dc_restore_ints(bdb);
+				dc_restore_ints(bdb); bd_n++;
 				/* add password to cache */
-				dc_add_password(&bdb->password);				
+				dc_add_password(&bdb->password);
 				/* zero bootloader body */
 				dc_zero_boot(bdb->bd_base, bdb->bd_size);
 			}
@@ -111,5 +115,5 @@ void dc_get_boot_pass()
 			MmUnmapIoSpace(bmem, PAGE_SIZE);
 		}
 		addr.LowPart += PAGE_SIZE;
-	} while ( (addr.LowPart < (640 * 1024)) && (bdb == NULL) );
+	} while ( (addr.LowPart < (640 * 1024)) && (bd_n < 2) );
 }

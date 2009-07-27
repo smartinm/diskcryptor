@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -281,14 +281,6 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 	
 	do
 	{
-		if (hook->flags & F_REMOVABLE)
-		{
-			/* save media change count */
-			if (io_verify_hook_device(hook) == ST_NO_MEDIA) {
-				resl = ST_NO_MEDIA; break;
-			}
-		}		
-
 		switch (lock_xchg(&hook->sync_init_type, 0))
 		{
 			case S_INIT_ENC:
@@ -424,7 +416,7 @@ static int dc_process_sync_packet(
 				if (ctx->finish == 0)
 				{
 					if ( (resl = dc_dec_update(hook)) == ST_FINISHED) {
-						dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC, 0);
+						dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC);
 						ctx->finish = 1;
 					} else ctx->saved = 0;
 				} else {
@@ -554,7 +546,7 @@ static void dc_sync_op_routine(dev_hook *hook)
 					&packet->sync_event, IO_NO_INCREMENT, FALSE);
 
 				if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {
-					dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC, 0);
+					dc_process_unmount(hook, MF_NOFSCTL | MF_NOSYNC);
 					resl = ST_FINISHED; sctx.finish = 1;
 				}
 			}
@@ -578,6 +570,11 @@ cleanup:;
 		mem_free(buff);
 	}
 
+	/* stop RW thread if needed */
+	if ( !(hook->flags & F_ENABLED) ) {
+		dc_stop_rw_thread(hook);
+	}
+
 	/* prevent leaks */
 	wait_object_infinity(&hook->key_lock);
 
@@ -596,7 +593,6 @@ cleanup:;
 	}
 
 	zeroauto(&hook->tmp_header, sizeof(hook->tmp_header));
-
 	KeReleaseMutex(&hook->key_lock, FALSE);
 
 	/* report init finished if initialization fails */
@@ -743,6 +739,11 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			resl = ST_ERROR; break;
 		}
 
+		/* get device params */
+		if (dc_get_dev_params(hook) != ST_OK) {
+			resl = ST_RW_ERR; break;
+		}
+
 		/* sync device flags with FS filter */
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 
@@ -791,7 +792,11 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		hook->hdr_key        = hdr_key;
 		hook->disk_id        = header->disk_id;
 		hook->flags         |= F_PROTECT_DCSYS;
-		
+
+		/* start syncronous RW helper thread */		
+		if ( (resl = dc_start_rw_thread(hook)) != ST_OK ) {
+			break;
+		}
 		/* copy header to temp buffer */
 		autocpy(&hook->tmp_header, header, sizeof(dc_header));	
 		
@@ -803,6 +808,8 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		} else {
 			hdr_key = NULL;
 		}
+		/* syncronize with RW thread */
+		KeSetEvent(&hook->rw_init_event, IO_NO_INCREMENT, FALSE);
 		/* sync device flags with FS filter */
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 	} while (0);

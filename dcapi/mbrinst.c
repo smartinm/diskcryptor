@@ -741,6 +741,7 @@ int dc_set_mbr_config_i(
 	  int dsk_num, wchar_t *file, ldr_config *conf
 	  )
 {
+	u8          old_mbr[512];
 	HANDLE      hfile;
 	int         size, resl;
 	ldr_config *cnf;	
@@ -749,7 +750,7 @@ int dc_set_mbr_config_i(
 	u64         offs;
 	u32         bytes;
 	dc_disk_p  *dp;
-
+	
 	dp = NULL; hfile = NULL; data = NULL;
 	do
 	{
@@ -806,8 +807,12 @@ int dc_set_mbr_config_i(
 			resl = ST_BLDR_NO_CONF; break;
 		}
 
+		/* save old mbr */
+		autocpy(old_mbr, cnf->save_mbr, sizeof(old_mbr));
 		/* copy new values to config */
 		autocpy(cnf, conf, sizeof(ldr_config));
+		/* restore old mbr */
+		autocpy(cnf->save_mbr, old_mbr, sizeof(old_mbr));
 		/* set unchangeable fields to default */
 		cnf->sign1 = CFG_SIGN1; cnf->sign2 = CFG_SIGN2;
 		cnf->ldr_ver = DC_BOOT_VER;

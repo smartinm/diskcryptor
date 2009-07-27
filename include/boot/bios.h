@@ -124,7 +124,7 @@ typedef struct _bd_data {
 #ifdef BOOT_LDR
  void set_ctx(u16 ax, rm_ctx *ctx);
  int  bios_call(int num, rm_ctx *ctx);
- void bios_jump_boot(u8 disk);
+ void bios_jump_boot(u8 disk, int n_mount);
  void bios_reboot();
  void bios_hook_ints();
 

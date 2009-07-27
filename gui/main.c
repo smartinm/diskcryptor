@@ -1880,8 +1880,7 @@ int _drv_action(
 			wchar_t up_atom[MAX_PATH];
 
 			_snwprintf(
-				up_atom, sizeof_w(up_atom), L"DC_UPD_%d", version
-				);
+				up_atom, sizeof_w(up_atom), L"DC_UPD_%d", version);
 
 			if (GlobalFindAtom(up_atom) != 0)
 			{
@@ -1895,10 +1894,7 @@ int _drv_action(
 				if (((rlt = dc_update_driver()) == ST_OK) &&
 					  ((rlt = _dc_upd_bootloader()) == ST_OK))
 				{
-					GlobalAddAtom(up_atom);
-
-					if ( __msg_q( HWND_DESKTOP, restart_confirm ) )
-					{
+					if ( __msg_q( HWND_DESKTOP, restart_confirm ) ) {
 						_reboot( );					
 					}						
 				}

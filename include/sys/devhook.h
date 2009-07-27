@@ -70,6 +70,13 @@ typedef aligned struct _dev_hook
 	int            sync_init_type;
 	int            sync_init_status; /* sync mode init status */
 
+	/* hook RW helper thread fields */
+	KEVENT         rw_init_event;
+	KEVENT         rw_work_event;
+	HANDLE         rw_thread;
+	LIST_ENTRY     rw_queue_head;
+	KSPIN_LOCK     rw_queue_lock;
+	
 	/* fields for synchronous requests processing */
 	LIST_ENTRY     sync_req_queue;
 	LIST_ENTRY     sync_irp_queue;

@@ -21,6 +21,8 @@
 
 #include <ntifs.h>
 #include <ntdddisk.h>
+#include <ntddcdrm.h>
+#include <ntddscsi.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include "defines.h"
@@ -91,7 +93,7 @@ HANDLE io_open_device(wchar_t *dev_name)
 	return handle;
 }
 
-int io_verify_hook_device(dev_hook *hook)
+static int dc_verify_device(dev_hook *hook)
 {
 	NTSTATUS status;
 	u32      chg_count;
@@ -110,6 +112,112 @@ int io_verify_hook_device(dev_hook *hook)
 		return ST_NO_MEDIA;
 	}
 }
+
+static u32 dc_get_device_mtl(dev_hook *hook)
+{
+	STORAGE_ADAPTER_DESCRIPTOR sd;
+	STORAGE_PROPERTY_QUERY     sq;
+	IO_SCSI_CAPABILITIES       sc;
+	NTSTATUS                   status;
+	u32                        max_chunk = 0;
+
+	sq.PropertyId = StorageAdapterProperty;
+	sq.QueryType  = PropertyStandardQuery;
+	
+	status = io_device_control(
+		hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd));
+
+	if (NT_SUCCESS(status) != FALSE) {
+		max_chunk = min(sd.MaximumTransferLength, sd.MaximumPhysicalPages * PAGE_SIZE);
+	}
+
+	if (max_chunk == 0)
+	{
+		status = io_device_control(
+			hook, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &sc, sizeof(sc));
+
+		if (NT_SUCCESS(status) != FALSE) {
+			max_chunk = min(sc.MaximumTransferLength, sc.MaximumPhysicalPages * PAGE_SIZE);
+		}
+	}
+	if (max_chunk < 1024) {
+		max_chunk = 32768; /* safe value */
+	}
+	return max_chunk;
+}
+
+int dc_get_dev_params(dev_hook *hook)
+{
+	PARTITION_INFORMATION    pti;
+	PARTITION_INFORMATION_EX ptix;
+	DISK_GEOMETRY_EX         dgx;
+	DISK_GEOMETRY            dg;
+	NTSTATUS                 status;
+	u64                      d_size;
+
+	if (hook->pnp_state != Started) {
+		return ST_RW_ERR;
+	}
+	if (hook->flags & F_CDROM)
+	{
+		status = io_device_control(
+			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
+
+		if (NT_SUCCESS(status) == FALSE) {
+			return ST_RW_ERR;
+		}
+
+		status = io_device_control(
+			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX, NULL, 0, &dgx, sizeof(dgx));
+
+		if (NT_SUCCESS(status) == FALSE) 
+		{
+			d_size = d64(dg.Cylinders.QuadPart) * d64(dg.TracksPerCylinder) * 
+				     d64(dg.SectorsPerTrack) * d64(dg.BytesPerSector);
+		} else {
+			d_size = dgx.DiskSize.QuadPart;
+		}
+	} else
+	{
+		status = io_device_control(
+			hook, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
+
+		if (NT_SUCCESS(status) == FALSE) {
+			return ST_RW_ERR;
+		}
+
+		status = io_device_control(
+			hook, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix));
+
+		if (NT_SUCCESS(status) == FALSE) 
+		{
+			status = io_device_control(
+				hook, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti));
+
+			if (NT_SUCCESS(status) == FALSE) {
+				return ST_RW_ERR;
+			}
+			d_size = pti.PartitionLength.QuadPart;
+		} else {
+			d_size = ptix.PartitionLength.QuadPart;
+		}
+	}
+
+	if (hook->flags & F_REMOVABLE) 
+	{
+		if (dc_verify_device(hook) == ST_NO_MEDIA) {
+			return ST_NO_MEDIA;
+		}
+	}
+
+	hook->dsk_size   = d_size;
+	hook->bps        = dg.BytesPerSector;
+	hook->chg_last_v = hook->chg_count;
+	hook->max_chunk  = dc_get_device_mtl(hook);
+	
+	return ST_OK;
+}
+
 
 NTSTATUS 
   io_device_rw_block(
@@ -157,46 +265,23 @@ NTSTATUS
 	return status;
 }
 
+
+
 int dc_device_rw(
 	  dev_hook *hook, u32 function, void *buff, u32 size, u64 offset
 	  )
 {
-	STORAGE_ADAPTER_DESCRIPTOR sd;
-	STORAGE_PROPERTY_QUERY     sq;
-	u32                        blen;
-	int                        resl;
-	NTSTATUS                   status;
-	u32                        max_trans;
+	NTSTATUS status;
+	u32      blen;
+	int      resl;	
 
-	if (hook->pnp_state != Started) {
-		return STATUS_INVALID_DEVICE_STATE;
-	}
-
-	if (hook->max_chunk == 0) 
-	{
-		/* get MaximumTransferLength */
-		sq.PropertyId = StorageAdapterProperty;
-		sq.QueryType  = PropertyStandardQuery;
-
-		status = io_device_control(
-			hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd));
-
-		if (NT_SUCCESS(status) != FALSE) {
-			hook->max_chunk = sd.MaximumTransferLength;
-			max_trans       = hook->max_chunk;			
-		} else {
-			max_trans = 32768;
-		}
-	} else {
-		max_trans = hook->max_chunk;
-	}
-
+	if ( (hook->pnp_state != Started) || (hook->max_chunk == 0) ) {
+		return ST_RW_ERR;
+	}	
 	for (resl = ST_OK; size != 0;)
 	{
-		blen = min(size, max_trans);
-
-		status = io_device_rw_block(
-			hook->orig_dev, function, buff, blen, offset, 0);
+		blen   = min(size, hook->max_chunk);
+		status = io_device_rw_block(hook->orig_dev, function, buff, blen, offset, 0);
 
 		if (NT_SUCCESS(status) == FALSE)
 		{
@@ -209,7 +294,7 @@ int dc_device_rw(
 					resl = ST_NO_MEDIA; break;
 				}
 
-				if ( (resl = io_verify_hook_device(hook)) != ST_OK ) {
+				if ( (resl = dc_verify_device(hook)) != ST_OK ) {
 					break;
 				}
 				
@@ -223,11 +308,9 @@ int dc_device_rw(
 				resl = ST_RW_ERR; break;
 			}
 		}
-
 		buff  = p8(buff) + blen; 
 		size -= blen; offset += blen;
 	}
-
 	return resl;
 }
 
@@ -476,40 +559,4 @@ void dc_delay(u32 msecs)
 
 	time.QuadPart = d64(msecs) * -10000;	
 	KeDelayExecutionThread(KernelMode, FALSE, &time);
-}
-
-void *dc_map_mdl_with_retry(PMDL mdl)
-{
-	void *mem;
-	u32   timeout;
-
-	timeout = DC_MEM_RETRY_TIMEOUT;
-	do
-	{
-		if (mem = MmGetSystemAddressForMdlSafe(mdl, HighPagePriority)) {
-			break;
-		}
-
-		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
-	} while (timeout != 0);
-
-	return mem;
-}
-
-PMDL dc_allocate_mdl_with_retry(void *data, u32 size)
-{
-	PMDL mdl;
-	u32  timeout;
-
-	timeout = DC_MEM_RETRY_TIMEOUT;
-	do
-	{
-		if (mdl = IoAllocateMdl(data, size, FALSE, FALSE, NULL)) {
-			break;
-		}
-
-		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
-	} while (timeout != 0);
-
-	return mdl;
 }

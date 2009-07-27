@@ -1,4 +1,11 @@
-
+[28.07.2009] - 0.8
+  + Added support for buggy XP configurations on Eee PC notebook.
+  + Added support for Windows Embedded custom builds.
+  + Improved compatibility with some server motherboards.
+  + Improved compatibility with AHCI mode in Intel chipsets.
+  + Improved compatibility with Windows 7.
+  + And some minor improvements.
+ 
 [31.05.2009] - 0.7
   + Added CD encryption feature.
   + Added 'load boot disk MBR' option to invalid password actions in bootloader.

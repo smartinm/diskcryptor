@@ -438,19 +438,6 @@ NTSTATUS
 	return dc_complete_irp(irp, status, bytes);
 }
 
-static void dc_verify_ioctl_complete(
-			  dev_hook *hook, PIRP irp, int resl
-			  )
-{
-	hook->dsk_size      = 0;
-	hook->use_size      = 0;
-	hook->mnt_probed    = 0;
-	hook->mnt_probe_cnt = 0;
-
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
-}
-
 static
 NTSTATUS
   dc_ioctl_complete(
@@ -514,14 +501,9 @@ NTSTATUS
 			*chg_c += hook->chg_mount;
 		}
 
-		if ( (change != 0) && (hook->dsk_size != 0) )
-		{
+		if ( (change != 0) && (hook->dsk_size != 0) ) {
 			DbgMsg("media removed\n");
-
-			dc_process_unmount_async(
-				hook, dc_verify_ioctl_complete, irp);
-
-			return STATUS_MORE_PROCESSING_REQUIRED;
+			dc_unmount_async(hook);
 		}	
 	}
 

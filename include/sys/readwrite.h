@@ -9,6 +9,10 @@ NTSTATUS
 NTSTATUS dc_read_write_irp(dev_hook *hook, PIRP irp);
 
 void dc_sync_irp_io(dev_hook *hook, PIRP irp);
+int  dc_start_rw_thread(dev_hook *hook);
+void dc_stop_rw_thread(dev_hook *hook);
+void dc_init_rw();
+void dc_free_rw();
 
 
 #endif

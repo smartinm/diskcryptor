@@ -131,7 +131,7 @@ int dc_save_conf(dc_conf_data *conf)
 static int rmv_from_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 {
 	wchar_t  buf1[MAX_PATH];
-	wchar_t *p;	
+	wchar_t *p;
 	u32      cb, len;
 	int      succs = 0;
 
@@ -143,7 +143,7 @@ static int rmv_from_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 			break;
 		}
 
-		for (; *p; p = addof(p, len + sizeof(wchar_t)))
+		while (*p != 0)
 		{
 			len = (u32)(wcslen(p) * sizeof(wchar_t));
 
@@ -152,16 +152,17 @@ static int rmv_from_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 				memmove(p, p8(p) + len + sizeof(wchar_t), cb - (p - buf1) - len);
 				cb -= len + sizeof(wchar_t);
 
-				/* delete key if it clear */
 				if ( (cb == 0) || (buf1[0] == 0) ) {
-					succs = RegDeleteValue(h_key, v_name) == 0;
-				} else 
-				{
-					succs = RegSetValueEx(
-						h_key, v_name, 0, REG_MULTI_SZ, p8(buf1), cb) == 0;
-				}
-				break;
+					cb = 0; break;
+				}				
+			} else {
+				p = addof(p, len + sizeof(wchar_t));
 			}
+		}
+		if (cb != 0) {
+			succs = RegSetValueEx(h_key, v_name, 0, REG_MULTI_SZ, p8(buf1), cb) == 0;
+		} else {
+			succs = RegDeleteValue(h_key, v_name) == 0;
 		}
 	} while (0);
 
@@ -170,15 +171,26 @@ static int rmv_from_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 
 static int set_to_val(HKEY h_key, wchar_t *v_name, wchar_t *name)
 {
-	wchar_t buf[MAX_PATH];
-	u32     len, cb;
+	wchar_t  buf[MAX_PATH];
+	u32      len, cb;
+	wchar_t *p;
 	
 	len = (u32)((wcslen(name) + 1) * sizeof(wchar_t));
-	cb = sizeof(buf);
+	cb  = sizeof(buf); p = buf;
 
 	if (RegQueryValueEx(h_key, v_name, NULL, NULL, p8(buf), &cb) != 0) {
 		buf[0] = 0; cb = sizeof(wchar_t);
 	}
+
+	while (*p != 0) 
+	{
+		if (wcscmp(p, name) == 0) {
+			p = NULL; break;
+		} else {
+			p = addof(p, (wcslen(p) * sizeof(wchar_t)) + sizeof(wchar_t));
+		}
+	}
+	if (p == NULL) { return 1; }
 
 	memmove(p8(buf) + len, buf, cb);
 	mincpy(buf, name, len);
@@ -300,7 +312,7 @@ int dc_remove_driver()
 		/* remove Volume class filter */
 		succs &= (dc_remove_filter(vol_key, drv_dc) == ST_OK);
 		/* remove CDROM class filter */
-		succs &= (dc_remove_filter(cdr_key, drv_dc) == ST_OK);
+		dc_remove_filter(cdr_key, drv_dc);
 
 		/* delete drivers files */
 		dc_get_driver_path(buf, drv_dc);
@@ -362,27 +374,21 @@ int dc_install_driver()
 		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
 			break;
 		}
-
 		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
 			break;
 		}
-
 		if ( (resl = dc_add_service(drv_dc, SERVICE_KERNEL_DRIVER)) != ST_OK ) {
 			break;
 		}
-
 		if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
 			break;
 		}
-
 		/* add Volume class filter */
 		if ( (resl = dc_add_filter(vol_key, drv_dc, 0)) != ST_OK ) {
 			break;
 		}
 		/* add CDROM class filter */
-		if ( (resl = dc_add_filter(cdr_key, drv_dc, 1)) != ST_OK ) {
-			break;
-		}
+		dc_add_filter(cdr_key, drv_dc, 1);
 		/* setup default config */
 		zeroauto(&conf, sizeof(conf));
 		conf.conf_flags = (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
@@ -422,6 +428,7 @@ int dc_driver_status()
 
 int dc_update_driver()
 {
+	wchar_t      buff[MAX_PATH];
 	dc_conf_data conf;
 	int          resl;
 
@@ -430,15 +437,12 @@ int dc_update_driver()
 		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
 			break;
 		}
-
 		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
 			break;
 		}
-
 		if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
 			break;
 		}
-
 		if (conf.build < 331) 
 		{
 			/* install file system filter driver */
@@ -446,20 +450,22 @@ int dc_update_driver()
 				break;
 			}
 		}
-
-		if (conf.build < 366) 
+		if (conf.build < 366)
 		{
 			/* add CDROM class filter */
-			if ( (resl = dc_add_filter(cdr_key, drv_dc, 1)) != ST_OK ) {
-				break;
-			}
-
+			dc_add_filter(cdr_key, drv_dc, 1);
 			/* set new default flags */
 			conf.conf_flags |= (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
 		}
-
 		resl = dc_save_conf(&conf);
 	} while (0);
 
+	if (resl == ST_OK) 
+	{
+		_snwprintf(
+			buff, sizeof_w(buff), L"DC_UPD_%d", dc_get_version());
+
+		GlobalAddAtom(buff);			
+	}
 	return resl;
 }

@@ -244,17 +244,17 @@ static int dc_mount_parts()
 	return n_mount;
 }
 
-static void boot_from_mbr(hdd_inf *hdd)
+static void boot_from_mbr(hdd_inf *hdd, int n_mount)
 {
 	if ( !(conf.options & OP_EXTERNAL) && (hdd->dos_numb == boot_dsk) ) {
 		autocpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
 	} else {
 		dc_disk_io(hdd, pv(0x7C00), 1, 0, 1);
 	}
-	bios_jump_boot(hdd->dos_numb);
+	bios_jump_boot(hdd->dos_numb, n_mount);
 }
 
-static void boot_from_partition(prt_inf *prt)
+static void boot_from_partition(prt_inf *prt, int n_mount)
 {
 	dc_partition_io(prt, pv(0x7C00), 1, 0, 1);
 
@@ -262,7 +262,7 @@ static void boot_from_partition(prt_inf *prt)
 	if (p16(0x7C00+510)[0] != 0xAA55) {
 		puts("partition unbootable\n");
 	} else {
-		bios_jump_boot(prt->hdd->dos_numb);
+		bios_jump_boot(prt->hdd->dos_numb, n_mount);
 	}
 }
 
@@ -282,7 +282,7 @@ static void dc_password_error(prt_inf *active)
 		if (active == NULL) {
 			puts("active partition not found\n");
 		} else {
-			boot_from_partition(active);
+			boot_from_partition(active, 0);
 		}
 	}
 
@@ -292,7 +292,7 @@ static void dc_password_error(prt_inf *active)
 
 	if (conf.error_type & ET_MBR_BOOT) {
 		autocpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
-		bios_jump_boot(boot_dsk);
+		bios_jump_boot(boot_dsk, 0);
 	}
 }
 
@@ -428,7 +428,7 @@ retry_auth:;
 				  error = "boot disk not found\n";
 				  goto error;
 			  }
-			  boot_from_mbr(hdd);
+			  boot_from_mbr(hdd, n_mount);
 		  }
 	    break;
 		case BT_MBR_FIRST: 
@@ -437,7 +437,7 @@ retry_auth:;
 				  error = "boot disk not found\n";
 				  goto error;
 			  }			 			  
-			  boot_from_mbr(hdd);
+			  boot_from_mbr(hdd, n_mount);
 		  }
 	    break;
 		case BT_ACTIVE:
@@ -446,7 +446,7 @@ retry_auth:;
 				  error = "active partition not found\n";
 				  goto error;
 			  } else {	  
-				  boot_from_partition(active);
+				  boot_from_partition(active, n_mount);
 			  }
 		  }
 	  	break;
@@ -461,7 +461,7 @@ retry_auth:;
 				  entry = entry->flink;
 
 				  if ( (prt->extend == 0) && (prt->mnt_ok != 0) ) {
-					  boot_from_partition(prt);
+					  boot_from_partition(prt, n_mount);
 				  }
 			  }
 
@@ -482,7 +482,7 @@ retry_auth:;
 				  if ( (prt->extend == 0) && (prt->mnt_ok != 0) &&
 					   (prt->disk_id == conf.disk_id) ) 
 				  {
-					  boot_from_partition(prt);
+					  boot_from_partition(prt, n_mount);
 				  }
 			  }
 			  

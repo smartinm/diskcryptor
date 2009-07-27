@@ -150,11 +150,9 @@ void rnd_reseed_now()
 	seed.seed6  = KeQueryInterruptTime();
 	seed.seed10 = KeQueryPerformanceCounter(NULL);
 	seed.seed11 = __rdtsc();
-	seed.seed12 = ExGetPreviousMode();
-	seed.seed13 = IoGetInitialStack();
+	seed.seed12 = ExGetPreviousMode();	
 	seed.seed14 = IoGetTopLevelIrp();
 	seed.seed15 = MmQuerySystemSize();
-	seed.seed16 = PsGetProcessExitTime();
 	seed.seed24 = KeGetCurrentIrql();
 	
 	if (KeGetCurrentIrql() == PASSIVE_LEVEL) {
@@ -162,10 +160,13 @@ void rnd_reseed_now()
 		seed.seed17 = ExUuidCreate(&seed.seed18);
 		seed.seed19 = RtlRandom(&seed.seed8);
 	}
-	
+	if (KeGetCurrentIrql() <= APC_LEVEL) {
+		seed.seed13 = IoGetInitialStack();
+		seed.seed16 = PsGetProcessExitTime();
+		IoGetStackLimits(&seed.seed22, &seed.seed23);
+	}	
 	KeQueryTickCount(&seed.seed21);
-	IoGetStackLimits(&seed.seed22, &seed.seed23);
-
+	
 	rnd_add_buff(&seed, sizeof(seed));
 	
 	/* Prevent leaks */	

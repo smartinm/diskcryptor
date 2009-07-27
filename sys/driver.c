@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -53,6 +53,7 @@ u32            dc_dump_disable;
 u32            dc_no_usb_mount;
 u32            dc_conf_flags; /* config flags readed from registry */
 u32            dc_load_flags; /* other flags setted by driver      */
+int            dc_cpu_count;  /* CPU's count */
 
 typedef NTSTATUS (*dc_dispatch)(dev_hook *hook, PIRP irp);
 
@@ -127,10 +128,8 @@ NTSTATUS
 		if (funct == IRP_MJ_POWER) {
 			PoStartNextPowerIrp(irp);
 		}
-
 		return dc_complete_irp(irp, status, 0);
 	}
-
 	return hookdev_procs[funct](hook, irp);
 }
 
@@ -295,10 +294,11 @@ NTSTATUS
     IN PUNICODE_STRING RegistryPath
 	)
 {
-	NTSTATUS status;
-	ULONG    maj_ver;
-	ULONG    min_ver;
-	int      num;
+	NTSTATUS  status;
+	ULONG     maj_ver;
+	ULONG     min_ver;
+	KAFFINITY cpu_mask;
+	int       num;
 
 	PsGetVersion(&maj_ver, &min_ver, NULL, NULL);
 
@@ -308,7 +308,6 @@ NTSTATUS
 	if ( (maj_ver == 5) && (min_ver == 0) ) {
 		dc_os_type = OS_WIN2K; dc_no_usb_mount = 1;
 	}
-
 	if (maj_ver >= 6) {
 		dc_os_type = OS_VISTA;
 	}	
@@ -324,13 +323,26 @@ NTSTATUS
 		dc_load_flags |= DST_VIA_PADLOCK;
 	}
 #endif
+	/* get number of processors in system */
+	cpu_mask     = KeQueryActiveProcessors();
+	dc_cpu_count = 0;
+
+	for (num = 0; num < sizeof(KAFFINITY) * 8; num++) {
+		dc_cpu_count += bittest(cpu_mask, num);
+	}
+
+	DbgMsg("%d processors detected\n", dc_cpu_count);
 
 	dc_load_config(RegistryPath);
 	dc_init_crypto(dc_conf_flags & CONF_HW_CRYPTO);
-	dc_init_devhook(); dc_init_mount();
-	fastmem_init(); mem_lock_init();
+	dc_init_devhook(); 
+	dc_init_mount();
+	fastmem_init(); 
+	mem_lock_init();
+	dc_init_rw();
 	dc_get_boot_pass();
 	
+	/* setup IRP handlers */
 	for (num = 0; num <= IRP_MJ_MAXIMUM_FUNCTION; num++) {
 		DriverObject->MajorFunction[num] = dc_dispatch_irp;
 	}
@@ -354,8 +366,11 @@ NTSTATUS
 			break;
 		}
 
-		if (dc_init_fast_crypt() != ST_OK) {
-			break;
+		if (dc_cpu_count > 1)
+		{
+			if (dc_init_fast_crypt() != ST_OK) {
+				break;
+			}
 		}
 
 		if (dc_create_control_device() != ST_OK) {
@@ -371,7 +386,8 @@ NTSTATUS
 
 	if (NT_SUCCESS(status) == FALSE) {
 		dc_free_fast_crypt();
-		fastmem_free();		
+		fastmem_free();
+		dc_free_rw();
 	} 
 
 	return status;

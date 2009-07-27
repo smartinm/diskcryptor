@@ -306,6 +306,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\misc_mem.h"
+				>
+			</File>
+			<File
 				RelativePath="..\include\sys\misc_volume.h"
 				>
 			</File>
@@ -431,6 +435,10 @@
 			</File>
 			<File
 				RelativePath=".\misc_irp.c"
+				>
+			</File>
+			<File
+				RelativePath=".\misc_mem.c"
 				>
 			</File>
 			<File

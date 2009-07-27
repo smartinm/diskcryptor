@@ -17,4 +17,6 @@ strtoull (const char *str, char **end, int base);
 void fillchar (const char ch, int n);
 void printf (const char *fmt, ...);
 
+void print_dword(u32 val);
+
 #endif

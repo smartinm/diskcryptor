@@ -1,3 +1,24 @@
+/*
+    *
+    * DiskCryptor - open source partition encryption tool
+    * Copyright (c) 2008-2009
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+    *
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <ntifs.h>
 #include "defines.h"
 #include "devhook.h"
@@ -98,6 +119,11 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 			resl = ST_ERROR; break;
 		}
 
+		/* get device params */
+		if ( (hook->dsk_size == 0) && (dc_get_dev_params(hook) != ST_OK) ) {
+			resl = ST_RW_ERR; break;
+		}
+
 		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
@@ -178,6 +204,11 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 			resl = ST_ERROR; break;
 		}
 
+		/* get device params */
+		if ( (hook->dsk_size == 0) && (dc_get_dev_params(hook) == 0) ) {
+			resl = ST_RW_ERR; break;
+		}
+
 		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
@@ -246,6 +277,11 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		/* verify encryption info */
 		if ( (crypt->cipher_id >= CF_CIPHERS_NUM) || (crypt->wp_mode >= WP_NUM) ) {
 			resl = ST_ERROR; break;
+		}
+
+		/* get device params */
+		if (dc_get_dev_params(hook) != ST_OK) {
+			resl = ST_RW_ERR; break;
 		}
 
 		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
@@ -429,8 +465,7 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 		}
 
 		if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {			
-			dc_process_unmount(hook, MF_NOFSCTL, 0);
-			resl = ST_FINISHED;
+			dc_process_unmount(hook, MF_NOFSCTL); resl = ST_FINISHED;
 		}
 	} while (0);
 

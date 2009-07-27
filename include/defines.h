@@ -78,6 +78,7 @@ typedef void (*callback_ex)(void*,void*);
 #define in_reg(a,base,size)     ( (a >= base) && (a < base+size)  )
 #define is_intersect(start1, size1, start2, size2) ( max(start1, start2) < min(start1 + size1, start2 + size2) )
 #define addof(a,o)              ( pv(p8(a)+o) )
+#define f_off(type,field)        ( d32(&(((type *)0)->field)) )
 
 #define put_b(p,d) { p8(p)[0]  = (u8)(d);  p = pv((p8(p) + 1));  }
 #define put_w(p,d) { p16(p)[0] = (u16)(d); p = pv((p16(p) + 1)); }

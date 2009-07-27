@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -124,7 +124,7 @@ NTSTATUS
 	MmInitializeMdl(dump_mdl, dump_mem, size);
 
 	dump_mdl->MappedSystemVa = dump_mem;
-	dump_mdl->MdlFlags       = MDL_SOURCE_IS_NONPAGED_POOL;
+	dump_mdl->MdlFlags       = MDL_SOURCE_IS_NONPAGED_POOL | MDL_MAPPED_TO_SYSTEM_VA;
 
 	if (dump->pg_init != 0) 
 	{

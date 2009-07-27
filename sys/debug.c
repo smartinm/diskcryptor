@@ -24,6 +24,7 @@
 #include "defines.h"
 #include "debug.h"
 #include "inbv.h"
+#include "misc.h"
 
 #ifdef DBG_COM
 #define   DEFAULT_BAUD_RATE    115200
@@ -106,6 +107,10 @@ void hal_print(char *format, ...)
 	va_end(args);
 
 	InbvDisplayString(dbg_msg);
+
+	if (KeGetCurrentIrql() < DISPATCH_LEVEL) {
+		dc_delay(500);
+	}
 }
 
 #endif /* DBG_HAL_DISPLAY */

@@ -150,7 +150,7 @@ NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 
 				status = dc_forward_irp(hook, irp);
 
-				dc_process_unmount(hook, MF_NOFSCTL, 0);
+				dc_process_unmount(hook, MF_NOFSCTL);
 				dc_remove_hook(hook);
 
 				IoDetachDevice(hook->orig_dev);
@@ -172,7 +172,6 @@ NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 						hook->hook_dev->Characteristics |= FILE_REMOVABLE_MEDIA;
 						hook->flags |= F_REMOVABLE;
 					}
-
 					dc_set_pnp_state(hook, Started);
 				}
 				is_sync = 1;

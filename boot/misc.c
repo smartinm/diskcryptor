@@ -343,3 +343,17 @@ void printf (const char *fmt, ...)
 */
   va_end(args);
 }
+
+void print_dword(u32 val)
+{
+	u8  b;
+	int i;
+
+	for (i = 0; i < 8; i++)
+	{
+		b = (val >> 28) & 0x0F; val <<= 4;
+		if (b < 10) b += '0'; else b += 'A'-10;
+		_putch(b);
+	}
+	_putch('\n');
+}

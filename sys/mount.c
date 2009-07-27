@@ -20,7 +20,6 @@
 */
 
 #include <ntifs.h>
-#include <ntddcdrm.h>
 #include "defines.h"
 #include "devhook.h"
 #include "driver.h"
@@ -36,6 +35,7 @@
 #include "misc_volume.h"
 #include "debug.h"
 #include "fsf_control.h"
+#include "misc_mem.h"
 
 typedef struct _dsk_pass {
 	struct _dsk_pass *next;
@@ -46,8 +46,6 @@ typedef struct _dsk_pass {
 typedef struct _mount_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
 	PIRP             irp;
-	s_callback       on_complete;
-	void            *param;
 	dev_hook        *hook;
 	
 } mount_ctx;
@@ -155,67 +153,6 @@ void dc_init_hdr_key(dc_key *hdr_key, dc_header *header, int cipher, dc_pass *pa
 	zeroauto(dk, sizeof(dk));
 }
 
-static int dc_fill_dev_params(dev_hook *hook)
-{
-	PARTITION_INFORMATION    pti;
-	PARTITION_INFORMATION_EX ptix;
-	DISK_GEOMETRY_EX         dgx;
-	DISK_GEOMETRY            dg;
-	NTSTATUS                 status;
-	u64                      d_size;
-
-	if (hook->flags & F_CDROM)
-	{
-		status = io_device_control(
-			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
-
-		if (NT_SUCCESS(status) == FALSE) {
-			return 0;
-		}
-
-		status = io_device_control(
-			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX, NULL, 0, &dgx, sizeof(dgx));
-
-		if (NT_SUCCESS(status) == FALSE) 
-		{
-			d_size = d64(dg.Cylinders.QuadPart) * d64(dg.TracksPerCylinder) * 
-				     d64(dg.SectorsPerTrack) * d64(dg.BytesPerSector);
-		} else {
-			d_size = dgx.DiskSize.QuadPart;
-		}
-	} else
-	{
-		status = io_device_control(
-			hook, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
-
-		if (NT_SUCCESS(status) == FALSE) {
-			return 0;
-		}
-
-		status = io_device_control(
-			hook, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix));
-
-		if (NT_SUCCESS(status) == FALSE) 
-		{
-			status = io_device_control(
-				hook, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti));
-
-			if (NT_SUCCESS(status) == FALSE) {
-				return 0;
-			}
-			d_size = pti.PartitionLength.QuadPart;
-		} else {
-			d_size = ptix.PartitionLength.QuadPart;
-		}
-	}
-
-	hook->dsk_size = d_size;
-	hook->bps      = dg.BytesPerSector;
-	
-	return d_size != 0;
-}
-
-
 static
 int dc_probe_decrypt(
 	  dev_hook *hook, dc_header *header, dc_key **res_key, dc_pass *password
@@ -236,7 +173,7 @@ int dc_probe_decrypt(
 			break;
 		}
 
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mem_alloc_success(sizeof(dc_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -303,12 +240,11 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		if (hook->flags & F_ENABLED) {
 			resl = ST_ALR_MOUNT; break;
 		}
-
 		if (hook->flags & (F_UNSUPRT | F_DISABLE | F_FORMATTING)) {
 			resl = ST_ERROR; break;
 		}
 
-		if (dc_fill_dev_params(hook) == 0) {
+		if (dc_get_dev_params(hook) != ST_OK) {
 			resl = ST_RW_ERR; break;
 		}
 
@@ -322,7 +258,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 			hook->flags |= F_UNSUPRT; resl = ST_ERROR; break;
 		}
 
-		if ( (hcopy = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (hcopy = mem_alloc_success(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -375,6 +311,11 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 			}
 		}
 
+		/* start syncronous RW helper thread */		
+		if ( (resl = dc_start_rw_thread(hook)) != ST_OK ) {
+			break;
+		}
+
 		if (hcopy->flags & VF_TMP_MODE)
 		{
 			hook->tmp_size      = hcopy->tmp_size;
@@ -400,6 +341,8 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		} else {			
 			hook->flags |= F_ENABLED; resl = ST_OK;
 		}
+		/* syncronize with RW thread */
+		KeSetEvent(&hook->rw_init_event, IO_NO_INCREMENT, FALSE);
 		/* sync device flags with FS filter */
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 
@@ -434,7 +377,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
     UM_NOFSCTL - unmount without reporting to FS
 	UM_FORCE   - force unmounting
 */
-int dc_process_unmount(dev_hook *hook, int opt, int max_io)
+int dc_process_unmount(dev_hook *hook, int opt)
 {
 	IO_STATUS_BLOCK iosb;
 	NTSTATUS        status;
@@ -485,10 +428,9 @@ int dc_process_unmount(dev_hook *hook, int opt, int max_io)
 			hook->flags |= F_DISABLE;
 
 			/* wait for pending IRPs completion */
-			while (hook->remv_lock.Common.IoCount > (max_io + 1)) {
+			while (hook->remv_lock.Common.IoCount > 1) {
 				dc_delay(20);
 			}
-
 			if (hook->flags & F_SYNC) {
 				/* send signal to syncronous mode thread */
 				dc_send_sync_packet(hook->dev_name, S_OP_FINALIZE, 0);
@@ -503,7 +445,8 @@ int dc_process_unmount(dev_hook *hook, int opt, int max_io)
 
 		/* increment mount changes counter */
 		lock_inc(&hook->chg_mount);
-
+		/* stop RW thread if needed */
+		dc_stop_rw_thread(hook);
 		/* sync device flags with FS filter */
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 		/* prevent leaks */
@@ -524,7 +467,6 @@ int dc_process_unmount(dev_hook *hook, int opt, int max_io)
 		}
 		ZwClose(h_dev);
 	}
-
 	KeReleaseMutex(&hook->busy_lock, FALSE);
 	
 	return resl;
@@ -532,13 +474,16 @@ int dc_process_unmount(dev_hook *hook, int opt, int max_io)
 
 static void unmount_thread_proc(mount_ctx *mnt) 
 {
-	int resl;
+	dev_hook *hook = mnt->hook;
+	
+	dc_process_unmount(hook, MF_NOFSCTL);	
 
-	DbgMsg("unmount_thread_proc\n");
+	hook->dsk_size      = 0;
+	hook->use_size      = 0;
+	hook->mnt_probed    = 0;
+	hook->mnt_probe_cnt = 0;
 
-	resl = dc_process_unmount(mnt->hook, MF_NOFSCTL, 1);
-	mnt->on_complete(mnt->hook, mnt->param, resl);
-	dc_deref_hook(mnt->hook);
+	dc_deref_hook(hook);
 	mem_free(mnt);
 
 	PsTerminateSystemThread(STATUS_SUCCESS);
@@ -546,42 +491,29 @@ static void unmount_thread_proc(mount_ctx *mnt)
 
 static void unmount_item_proc(mount_ctx *mnt)
 {
-	int resl;
-
-	DbgMsg("unmount_item_proc\n");
-
-	resl = start_system_thread(unmount_thread_proc, mnt, NULL);
-
-	if (resl != ST_OK) {
-		mnt->on_complete(mnt->hook, mnt->param, resl);
+	if (start_system_thread(unmount_thread_proc, mnt, NULL) != ST_OK) {
 		dc_deref_hook(mnt->hook);
 		mem_free(mnt);
 	}
 }
 
-void dc_process_unmount_async(
-		dev_hook *hook, s_callback on_complete, void *param
-		)
+void dc_unmount_async(dev_hook *hook)
 {
 	mount_ctx *mnt;
 
-	DbgMsg("dc_process_unmount_async\n");
+	DbgMsg("dc_unmount_async at IRQL %d\n", KeGetCurrentIrql());
 
-	if ( (mnt = mem_alloc(sizeof(mount_ctx))) == NULL ) {
-		on_complete(hook, param, ST_NOMEM);
-	} else
+	if (mnt = mem_alloc(sizeof(mount_ctx)))
 	{
-		mnt->on_complete = on_complete;
-		mnt->param       = param;
-		mnt->hook        = hook;
+		mnt->hook = hook; dc_reference_hook(hook);
 
-		dc_reference_hook(hook);
-
-		ExInitializeWorkItem(
-			&mnt->wrk_item, unmount_item_proc, mnt);
-
-		ExQueueWorkItem(
-			&mnt->wrk_item, DelayedWorkQueue);
+		if (KeGetCurrentIrql() != PASSIVE_LEVEL) 
+		{
+			ExInitializeWorkItem(&mnt->wrk_item, unmount_item_proc, mnt);
+			ExQueueWorkItem(&mnt->wrk_item, DelayedWorkQueue);
+		} else {
+			unmount_item_proc(mnt);
+		}
 	}
 }
 
@@ -596,7 +528,7 @@ int dc_unmount_device(wchar_t *dev_name, int force)
 	if (hook = dc_find_hook(dev_name)) 
 	{
 		if (IS_UNMOUNTABLE(hook)) {
-			resl = dc_process_unmount(hook, force, 0);
+			resl = dc_process_unmount(hook, force);
 		} else {
 			resl = ST_UNMOUNTABLE;
 		}
@@ -674,7 +606,7 @@ NTSTATUS dc_probe_mount(dev_hook *hook, PIRP irp)
 {
 	mount_ctx *mnt;
 
-	if ( (mnt = mem_alloc(sizeof(mount_ctx))) == NULL ) {
+	if ( (mnt = mem_alloc_success(sizeof(mount_ctx))) == NULL ) {
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
 

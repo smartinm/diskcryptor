@@ -223,6 +223,8 @@ use16
  ; setup temporary PM stack
  mov	eax, ecx
  add	eax, [bdb.bd_size]
+ ; reserve 384 bytes for backup data block
+ sub	eax, 384
  mov	[bdb.esp_32], eax
  ; inverse real mode block signature in runtime
  ; to prevent finding it in false location

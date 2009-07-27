@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2009
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -31,23 +31,24 @@
 #include "driver.h"
 #include "fast_crypt.h"
 #include "debug.h"
+#include "misc_mem.h"
 
-typedef struct _isc_ctx {
-	WORK_QUEUE_ITEM  wrk_item;
-	PDEVICE_OBJECT   dev_obj;
-	dev_hook        *hook;
-	PIRP             irp;
+typedef struct _sync_q_ctx {
+	LIST_ENTRY entry;
+	int        is_sync;
+	PIRP       io_irp;
 	
-} isc_ctx;
+} sync_q_ctx;
 
-typedef aligned struct _io_packet
-{
-	PVOID     old_buf;
-	PMDL      old_mdl;	
-	dev_hook *hook;
-	CHAR      data[];
+typedef aligned struct _io_packet {
+	void      *old_buf;
+	PMDL       old_mdl;	
+	dev_hook  *hook;
+	aligned u8 data[];
 	
 } io_packet;
+
+static NPAGED_LOOKASIDE_LIST sync_rw_mem;
 
 static
 NTSTATUS 
@@ -172,7 +173,7 @@ void dc_sync_irp_io(dev_hook *hook, PIRP irp)
 	NTSTATUS           status;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	buff   = dc_map_mdl_with_retry(irp->MdlAddress);
+	buff   = mm_map_mdl_success(irp->MdlAddress);
 
 	if (buff == NULL) {
 		dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
@@ -239,9 +240,9 @@ NTSTATUS
 
 	if (length != 0)
 	{
-		if (buff = dc_map_mdl_with_retry(irp->MdlAddress)) 
+		if (buff = mm_map_mdl_success(irp->MdlAddress)) 
 		{
-			if (length >= F_OP_THRESOLD)
+			if ( (length >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
 			{
 				succs = dc_parallelized_crypt(
 					F_OP_DECRYPT, &hook->dsk_key, 
@@ -342,9 +343,9 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 			status = STATUS_ACCESS_DENIED; break;
 		}
 
-		data = dc_map_mdl_with_retry(irp->MdlAddress);
+		data = mm_map_mdl_success(irp->MdlAddress);
 		iopk = fast_alloc(length + sizeof(io_packet));
-		nmdl = dc_allocate_mdl_with_retry(iopk->data, length);
+		nmdl = mm_allocate_mdl_success(iopk->data, length);
 
 		if ( (data == NULL) || (iopk == NULL) || (nmdl == NULL) ) {
 			status = STATUS_INSUFFICIENT_RESOURCES; break;
@@ -368,7 +369,7 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 		IoSetCompletionRoutine(
 			irp, dc_write_complete,	iopk, TRUE, TRUE, TRUE);
 
-		if (length >= F_OP_THRESOLD) 
+		if ( (length >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
 		{
 			IoMarkIrpPending(irp);
 
@@ -385,8 +386,7 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 			}
 		} else
 		{
-			dc_cipher_encrypt(
-				data, iopk->data, length, offset, &hook->dsk_key);
+			dc_cipher_encrypt(data, iopk->data, length, offset, &hook->dsk_key);
 
 			status = IoCallDriver(hook->orig_dev, irp);
 			succs  = 1;
@@ -395,13 +395,8 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 
 	if (succs == 0) 
 	{
-		if (nmdl != NULL) {
-			IoFreeMdl(nmdl);
-		}
-
-		if (iopk != NULL) {
-			fast_free(iopk);
-		}
+		if (nmdl != NULL) { IoFreeMdl(nmdl); }
+		if (iopk != NULL) { fast_free(iopk); }
 
 		IoSetCompletionRoutine(
 			irp, NULL, NULL, FALSE, FALSE, FALSE);
@@ -412,18 +407,78 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 	return status;
 }
 
-static void dc_intersection_rw(isc_ctx *ictx)
+static void dc_sync_rw_thread(dev_hook *hook)
 {
-	dc_sync_irp_io(ictx->hook, ictx->irp);
-	fast_free(ictx);
+	PLIST_ENTRY entry;
+	sync_q_ctx *q_ctx;
+	PIRP        irp;
+	
+	/* initialization wait */
+	wait_object_infinity(&hook->rw_init_event);
+	
+	DbgMsg("sync_rw_thread initialized\n");
+
+	/* irp processing loop */
+	do
+	{
+		wait_object_infinity(&hook->rw_work_event);
+		do
+		{
+			if (entry = ExInterlockedRemoveHeadList(&hook->rw_queue_head, &hook->rw_queue_lock))
+			{
+				q_ctx = CONTAINING_RECORD(entry, sync_q_ctx, entry);
+				irp   = q_ctx->io_irp;
+
+				if (q_ctx->is_sync == 0) 
+				{
+					if (IoGetCurrentIrpStackLocation(irp)->MajorFunction == IRP_MJ_READ) {
+						dc_read_irp(hook, irp);
+					} else {
+						dc_write_irp(hook, irp);
+					}
+				} else {
+					dc_sync_irp_io(hook, irp);
+				}
+				ExFreeToNPagedLookasideList(&sync_rw_mem, q_ctx);
+			}
+		} while (entry != NULL);
+	} while (hook->flags & F_ENABLED);
+
+	DbgMsg("sync_rw_thread terminated\n");
+
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+
+int dc_start_rw_thread(dev_hook *hook)
+{
+	if (hook->rw_thread != NULL) {
+		return ST_ERROR;
+	}
+	/* initialize */
+	KeInitializeEvent(&hook->rw_init_event, NotificationEvent, FALSE);
+	KeInitializeEvent(&hook->rw_work_event, SynchronizationEvent, FALSE);
+	InitializeListHead(&hook->rw_queue_head);
+	KeInitializeSpinLock(&hook->rw_queue_lock);
+	/* start syncronous RW helper thread */
+	return start_system_thread(dc_sync_rw_thread, hook, &hook->rw_thread);
+}
+
+void dc_stop_rw_thread(dev_hook *hook)
+{
+	if (hook->rw_thread != NULL) {
+		KeSetEvent(&hook->rw_work_event, IO_NO_INCREMENT, FALSE);
+		ZwWaitForSingleObject(hook->rw_thread, FALSE, NULL);
+		ZwClose(hook->rw_thread); hook->rw_thread = NULL;
+	}
 }
 
 NTSTATUS dc_read_write_irp(dev_hook *hook, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
-	isc_ctx           *ictx;
-	ULONGLONG          offset;
-	ULONG              length;
+    sync_q_ctx        *q_ctx;
+	u64                offset;
+	u32                length;
+	int                is_sync;
 
 	/* reseed RNG on first 1000 I/O operations for collect initial entropy */
 	if (lock_inc(&dc_io_count) < 1000) {
@@ -473,30 +528,40 @@ NTSTATUS dc_read_write_irp(dev_hook *hook, PIRP irp)
 		return dc_release_irp(hook, irp, STATUS_INVALID_PARAMETER);		
 	}
 
-	if ( (offset >= DC_AREA_SIZE) || (hook->flags & F_NO_REDIRECT) )
+	is_sync = (offset < DC_AREA_SIZE) && !(hook->flags & F_NO_REDIRECT);
+
+	if ( (is_sync == 0) && (dc_cpu_count > 1) )
 	{
 		if (irp_sp->MajorFunction == IRP_MJ_READ) {
 			return dc_read_irp(hook, irp);
 		} else {
 			return dc_write_irp(hook, irp);
 		}
-	} 
-
-	if ( (ictx = fast_alloc(sizeof(sizeof(isc_ctx)))) == NULL ) {
-		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
-
-	ictx->dev_obj = hook->hook_dev;
-	ictx->irp     = irp;
-	ictx->hook    = hook;
+	if ( (q_ctx = ExAllocateFromNPagedLookasideList(&sync_rw_mem)) == NULL ) {
+		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
+	} 
+	q_ctx->io_irp  = irp;
+	q_ctx->is_sync = is_sync;
 
 	IoMarkIrpPending(irp);
 
-	ExInitializeWorkItem(
-		&ictx->wrk_item, dc_intersection_rw, ictx);
+	ExInterlockedInsertTailList(
+		&hook->rw_queue_head, &q_ctx->entry, &hook->rw_queue_lock);
 
-	ExQueueWorkItem(
-		&ictx->wrk_item, DelayedWorkQueue);
-
+	KeSetEvent(
+		&hook->rw_work_event, IO_DISK_INCREMENT, FALSE);
+	
 	return STATUS_PENDING;
+}
+
+void dc_init_rw()
+{
+	ExInitializeNPagedLookasideList(
+		&sync_rw_mem, mm_alloc_success, NULL, 0, sizeof(sync_q_ctx), '5_cd', 0);
+}
+
+void dc_free_rw()
+{
+	ExDeleteNPagedLookasideList(&sync_rw_mem);
 }

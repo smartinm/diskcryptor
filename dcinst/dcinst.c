@@ -46,8 +46,10 @@ int WINAPI wWinMain(
 	}
 
 	/* open DC driver device */
+	dc_open_device();
+	/* get DC sriver status */
 	d_st = dc_driver_status();
-	resl = ST_ERROR;	
+	resl = ST_ERROR;
 
 	do
 	{
