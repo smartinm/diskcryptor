@@ -6,9 +6,8 @@
     * 
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,7 @@
 #include "defines.h"
 #include "cd_enc.h"
 #include "drv_ioctl.h"
-#include "crypto.h"
+#include "xts_fast.h"
 #include "pkcs5.h"
 #include "crc32.h"
 #include "drvinst.h"
@@ -34,7 +33,7 @@ static int alg_ok;
 
 static 
 int do_cd_encrypt(
-	  HANDLE h_src, HANDLE h_dst, u64 iso_sz, dc_key *v_key, cd_callback callback, void *param
+	  HANDLE h_src, HANDLE h_dst, u64 iso_sz, xts_key *v_key, cd_callback callback, void *param
 	  )
 {
 	void *buff;
@@ -60,10 +59,8 @@ int do_cd_encrypt(
 
 			if (ReadFile(h_src, buff, block, &bytes, NULL) == 0) {
 				resl = ST_IO_ERROR; break;
-			}
-
-			dc_cipher_encrypt(
-				buff, buff, w_len, offset, v_key);			
+			}			
+			xts_encrypt(buff, buff, w_len, offset, v_key);			
 
 			if (WriteFile(h_dst, buff, w_len, &bytes, NULL) == 0) {
 				resl = ST_IO_ERROR; break;
@@ -92,8 +89,8 @@ int dc_encrypt_cd(
 	dc_conf_data conf;
 	HANDLE       h_src = NULL;
 	HANDLE       h_dst = NULL;
-	dc_key      *v_key = NULL;
-	dc_key      *h_key = NULL;
+	xts_key     *v_key = NULL;
+	xts_key     *h_key = NULL;
 	dc_header    head;
 	int          resl;
 	u64          iso_sz;
@@ -104,9 +101,9 @@ int dc_encrypt_cd(
 	if (alg_ok == 0) 
 	{
 		if (dc_load_conf(&conf) == ST_OK) {
-			dc_init_crypto(conf.conf_flags & CONF_HW_CRYPTO);
+			xts_init(conf.conf_flags & CONF_HW_CRYPTO);
 		} else {
-			dc_init_crypto(0);
+			xts_init(0);
 		}
 		alg_ok = 1;
 	}
@@ -138,18 +135,18 @@ int dc_encrypt_cd(
 			resl = ST_IO_ERROR; break;
 		}
 
-		v_key = VirtualAlloc(NULL, sizeof(dc_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		h_key = VirtualAlloc(NULL, sizeof(dc_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		v_key = VirtualAlloc(NULL, sizeof(xts_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		h_key = VirtualAlloc(NULL, sizeof(xts_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 		
 		if ( (v_key == NULL) || (h_key == NULL) ) {
 			resl = ST_NOMEM; break;
 		}
 
 		/* lock keys in memory */
-		if ( (resl = dc_lock_memory(v_key, sizeof(dc_key))) != ST_OK ) {
+		if ( (resl = dc_lock_memory(v_key, sizeof(xts_key))) != ST_OK ) {
 			break;
 		}
-		if ( (resl = dc_lock_memory(h_key, sizeof(dc_key))) != ST_OK ) {
+		if ( (resl = dc_lock_memory(h_key, sizeof(xts_key))) != ST_OK ) {
 			break;
 		}
 
@@ -169,18 +166,17 @@ int dc_encrypt_cd(
 		head.hdr_crc  = crc32(pv(&head.version), DC_CRC_AREA_SIZE);
 
 		/* initialize volume key */
-		dc_cipher_init(v_key, cipher, head.key_1);
+		xts_set_key(head.key_1, cipher, v_key);
 
 		/* initialize header key */
 		sha512_pkcs5_2(
 			1000, pass->pass, 
 			pass->size, salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
 
-		dc_cipher_init(h_key, cipher, dk);
+		xts_set_key(dk, cipher, h_key);
 
 		/* encrypt volume header */
-		dc_cipher_encrypt(
-			pv(&head), pv(&head), sizeof(dc_header), 0, h_key);
+		xts_encrypt(pv(&head), pv(&head), sizeof(dc_header), 0, h_key);
 
 		/* save salt */
 		autocpy(head.salt, salt, PKCS5_SALT_SIZE);
@@ -200,13 +196,13 @@ int dc_encrypt_cd(
 	dc_unlock_memory(&head);
 
 	if (v_key != NULL) {
-		zeroauto(v_key, sizeof(dc_key));
+		zeroauto(v_key, sizeof(xts_key));
 		dc_unlock_memory(v_key);
 		VirtualFree(v_key, 0, MEM_RELEASE);
 	}
 
 	if (h_key != NULL) {
-		zeroauto(h_key, sizeof(dc_key));
+		zeroauto(h_key, sizeof(xts_key));
 		dc_unlock_memory(h_key);
 		VirtualFree(h_key, 0, MEM_RELEASE);
 	}

@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,7 +29,7 @@
 #include "dump_hook.h"
 #include "enc_dec.h"
 #include "debug.h"
-
+#include "pnp_irp.h"
 
 static
 NTSTATUS dc_pnp_usage_irp(dev_hook *hook, PIRP irp)
@@ -205,10 +204,7 @@ NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 }
 
 
-NTSTATUS
-  dc_add_device(
-     PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT dev_obj
-	 )
+NTSTATUS dc_add_device(PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT dev_obj)
 {
 	PDEVICE_OBJECT hi_dev;
 	PDEVICE_OBJECT hook_dev = NULL;
@@ -280,7 +276,7 @@ NTSTATUS
 
 		DbgMsg("dc_add_device %ws\n", dname);
 
-		wcscpy(hook->dev_name, dname);
+		autocpy(hook->dev_name, dname, sizeof(dname));
 		dc_insert_hook(hook); 
 
 		hook_dev->Flags &= ~DO_DEVICE_INITIALIZING; succs = 1;
@@ -289,6 +285,5 @@ NTSTATUS
 	if ( (succs == 0) && (hook_dev != NULL) ) {
 		IoDeleteDevice(hook_dev);
 	}
-
 	return STATUS_SUCCESS;
 }

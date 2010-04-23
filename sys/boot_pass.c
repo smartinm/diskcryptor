@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -39,7 +38,6 @@ static void *find_8b(u8 *data, int size, u32 s1, u32 s2)
 			break;
 		}
 	}
-
 	return find;
 }
 
@@ -76,8 +74,7 @@ static void dc_restore_ints(bd_data *bdb)
 		if (bdb->old_int13 != 0) {
 			p32(mem)[0x13] = bdb->old_int13;
 			p32(mem)[0x15] = bdb->old_int15;
-		}	
-		
+		}		
 		MmUnmapIoSpace(mem, 0x1000);
 	}
 }
@@ -99,7 +96,7 @@ void dc_get_boot_pass()
 		{
 			/* find boot data block */
 			bdb = find_8b(
-				bmem, PAGE_SIZE - f_off(bd_data, ret_32), 0x01F53F55, 0x9E4361E4);
+				bmem, PAGE_SIZE - offsetof(bd_data, ret_32), 0x01F53F55, 0x9E4361E4);
 
 			if (bdb != NULL) 
 			{
@@ -108,10 +105,13 @@ void dc_get_boot_pass()
 				dc_restore_ints(bdb); bd_n++;
 				/* add password to cache */
 				dc_add_password(&bdb->password);
+				/* save bootloader size */
+				dc_boot_kbs = bdb->bd_size / 1024;
+				/* set bootloader load flag */
+				dc_load_flags |= DST_BOOTLOADER;
 				/* zero bootloader body */
 				dc_zero_boot(bdb->bd_base, bdb->bd_size);
 			}
-
 			MmUnmapIoSpace(bmem, PAGE_SIZE);
 		}
 		addr.LowPart += PAGE_SIZE;

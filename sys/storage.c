@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,6 +25,7 @@
 #include "misc.h"
 #include "debug.h"
 #include "storage.h"
+#include "misc_mem.h"
 
 #pragma pack (push, 1)
 
@@ -154,13 +154,11 @@ static int get_fs_info(HANDLE h_device, fs_info *info)
 
 		if ( (info->fs == FS_FAT) || (info->fs == FS_EXFAT) ) 
 		{
-			if ( (data = mem_alloc(info->bps)) == NULL ) {
+			if ( (data = mm_alloc(info->bps, 0)) == NULL ) {
 				resl = ST_ERROR; break;
 			}
-
 			status = ZwReadFile(
-				h_device, NULL, NULL, NULL, 
-				&iosb, data, info->bps, pv(&offset), NULL);
+				h_device, NULL, NULL, NULL, &iosb, data, info->bps, pv(&offset), NULL);
 
 			if (NT_SUCCESS(status) == FALSE) {				
 				resl = ST_ERROR; break;
@@ -183,9 +181,8 @@ static int get_fs_info(HANDLE h_device, fs_info *info)
 	} while (0);
 
 	if (data != NULL) {
-		mem_free(data);
+		mm_free(data);
 	}
-
 	return resl;
 }
 
@@ -214,10 +211,9 @@ u64 dc_make_continuous_file(
 			break;
 		}
 
-		if ( (data = mem_alloc(sizeof(*data))) == NULL ) {
+		if ( (data = mm_alloc(sizeof(*data), 0)) == NULL ) {
 			break;
 		}
-
 		/* find 8 free continuous clusters */
 		lcn.StartingLcn.QuadPart = 32; cluster = 0;
 		do
@@ -282,9 +278,8 @@ u64 dc_make_continuous_file(
 	} while (0);
 
 	if (data != NULL) {
-		mem_free(data);
+		mm_free(data);
 	}
-
 	return res;
 }
 
@@ -348,21 +343,15 @@ int dc_create_storage(dev_hook *hook, u64 *storage)
 		if ( (h_device = io_open_device(hook->dev_name)) == NULL ) {
 			resl = ST_ACCESS_DENIED; break;
 		}
-
 		if (get_fs_info(h_device, &info) != ST_OK) {
 			resl = ST_ERROR; break;
 		}
-
 		if (info.fs == FS_UNK) {
 			resl = ST_CLUS_USED; break;
 		}
-
-		if ( (buff = mem_alloc(DC_AREA_SIZE)) == NULL ) {
+		if ( (buff = mm_alloc(DC_AREA_SIZE, MEM_ZEROED)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		zeroauto(buff, DC_AREA_SIZE);
-
 		/* delete old storage first */
 		dc_delete_storage(hook);
 
@@ -445,17 +434,9 @@ int dc_create_storage(dev_hook *hook, u64 *storage)
 		storage[0] = offset; resl = ST_OK;
 	} while (0);
 
-	if (h_file != NULL) {
-		ZwClose(h_file);
-	}
-
-	if (h_device != NULL) {
-		ZwClose(h_device);
-	}
-
-	if (buff != NULL) {
-		mem_free(buff);
-	}
+	if (h_file != NULL)   { ZwClose(h_file); }
+	if (h_device != NULL) { ZwClose(h_device); }
+	if (buff != NULL)     { mm_free(buff); }
 
 	return resl;
 }

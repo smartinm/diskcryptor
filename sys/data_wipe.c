@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -25,6 +24,8 @@
 #include "devhook.h"
 #include "data_wipe.h"
 #include "misc.h"
+#include "fast_crypt.h"
+#include "misc_mem.h"
 
 static wipe_mode dod_mode = { /* US DoD 5220.22-M (8-306. / E, C and E) */
 	7, 
@@ -97,65 +98,55 @@ static wipe_mode *wipe_modes[] = {
 };
 
 
-int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method)
+int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher)
 {
-	int resl;
+	char key[32];
+	int  resl;
 
 	do
 	{
-		ctx->buff = NULL;
-		ctx->rand = NULL;
+		zeroauto(ctx, sizeof(wipe_ctx));
 		
 		if (method > sizeof(wipe_modes) / sizeof(wipe_mode)) {
 			resl = ST_INV_WIPE_MODE; break;
 		}
-
 		ctx->mode = wipe_modes[method];
 		resl      = ST_NOMEM;
 
 		if (ctx->mode != NULL) 
 		{
-			if ( (ctx->buff = mem_alloc(max_size)) == NULL ) {
+			if ( (ctx->buff = mm_alloc(max_size, MEM_SECURE)) == NULL ) {
 				break;
 			}
-			if ( (ctx->rand = rnd_fast_init()) == NULL ) {
+			if ( (ctx->key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 				break;
 			}
+			/* generate random key */
+			rnd_get_bytes(key, sizeof(key));
+			xts_set_key(key, cipher, ctx->key);
 		}
-
 		ctx->hook = hook;
 		ctx->size = max_size;
 		resl      = ST_OK;
 	} while (0);
 
-	if (resl != ST_OK) 
-	{
-		if (ctx->buff != NULL) {
-			mem_free(ctx->buff);
-		}
-		if (ctx->rand != NULL) {
-			rnd_fast_free(ctx->rand);
-		}
-	}
+	/* prevent leaks */
+	zeroauto(key, sizeof(key));
 
+	if (resl != ST_OK) {
+		if (ctx->buff != NULL) { mm_free(ctx->buff); }
+		if (ctx->key != NULL)  { mm_free(ctx->key); }
+	}
 	return resl;
 }
 
 void dc_wipe_free(wipe_ctx *ctx)
 {
-	if (ctx->buff != NULL) 
-	{
-		/* prevent leaks */
-		zeromem(ctx->buff, ctx->size);
-		mem_free(ctx->buff);
-	}
+	/* prevent leaks */
+	if (ctx->buff != NULL) { mm_free(ctx->buff); }
+	if (ctx->key != NULL)  { mm_free(ctx->key); }
 
-	if (ctx->rand != NULL) {
-		rnd_fast_free(ctx->rand);
-	}
-
-	ctx->buff = NULL;
-	ctx->rand = NULL;
+	ctx->buff = NULL; ctx->key = NULL;
 }
 
 int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
@@ -170,11 +161,9 @@ int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
 		if (size > ctx->size) {
 			resl = ST_INV_DATA_SIZE; break;
 		}
-
 		if (mode == NULL) {
 			resl = ST_OK; break;
 		}
-
 		for (i = 0; i < mode->passes; i++) 
 		{			
 			if (mode->pass[i].type == P_PAT) 
@@ -182,14 +171,13 @@ int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
 				for (j = 0; j < size; j++) {
 					buff[j] = mode->pass[i].patt[j % 3];
 				}
-			} else {
-				rnd_fast_rand(ctx->rand, buff, size);
+			} else 
+			{
+				zerofast(buff, size);
+				dc_fast_encrypt(buff, buff, size, ctx->offs, ctx->key);
+				ctx->offs += size;
 			}
-
-			resl = dc_device_rw(
-				ctx->hook, IRP_MJ_WRITE, buff, size, offset);
-
-			if (resl != ST_OK) {
+			if ( (resl = dc_device_rw(ctx->hook, IRP_MJ_WRITE, buff, size, offset)) != ST_OK ) {
 				break;
 			}
 		}

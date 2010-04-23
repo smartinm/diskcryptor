@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,7 +23,6 @@
 #include "devhook.h"
 #include "driver.h"
 #include "misc.h"
-#include "crypto.h"
 #include "pkcs5.h"
 #include "crc32.h"
 #include "enc_dec.h"
@@ -36,6 +34,7 @@
 #include "debug.h"
 #include "fsf_control.h"
 #include "misc_mem.h"
+#include "crypto_head.h"
 
 typedef struct _dsk_pass {
 	struct _dsk_pass *next;
@@ -70,7 +69,7 @@ void dc_add_password(dc_pass *pass)
 			}
 		}
 
-		if ( (d_pass == NULL) && (d_pass = mem_alloc(sizeof(dsk_pass))) )
+		if ( (d_pass == NULL) && (d_pass = mm_alloc(sizeof(dsk_pass), MEM_SECURE)) )
 		{
 			autocpy(&d_pass->pass, pass, sizeof(dc_pass));
 
@@ -101,11 +100,10 @@ void dc_clean_pass_cache()
 
 		zeroauto(c_pass, sizeof(dsk_pass));
 
-		if (loirql != 0) {
-			mem_free(c_pass);
+		if (loirql != 0) { 
+			mm_free(c_pass); 
 		}
 	}
-
 	f_pass = NULL;
 
 	if (loirql != 0) {
@@ -126,20 +124,20 @@ void dc_clean_keys()
 			hook = next;
 			next = dc_next_hook(hook);
 
-			zeroauto(&hook->dsk_key,    sizeof(dc_key));
+			zeroauto(&hook->dsk_key,    sizeof(xts_key));
 			zeroauto(&hook->tmp_header, sizeof(dc_header));
 			
 			if (hook->hdr_key != NULL) {
-				zeroauto(hook->hdr_key, sizeof(dc_key));
+				zeroauto(hook->hdr_key, sizeof(xts_key));
 			}
 			if (hook->tmp_key != NULL) {
-				zeroauto(hook->tmp_key, sizeof(dc_key));
+				zeroauto(hook->tmp_key, sizeof(xts_key));
 			}
 		} while (next != NULL);
 	} 
 }
 
-void dc_init_hdr_key(dc_key *hdr_key, dc_header *header, int cipher, dc_pass *password)
+void dc_init_hdr_key(xts_key *hdr_key, dc_header *header, int cipher, dc_pass *password)
 {
 	u8 dk[DISKKEY_SIZE];
 	
@@ -147,7 +145,7 @@ void dc_init_hdr_key(dc_key *hdr_key, dc_header *header, int cipher, dc_pass *pa
 		1000, password->pass, password->size, 
 		header->salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
 
-	dc_cipher_init(hdr_key, cipher, dk);
+	xts_set_key(dk, cipher, hdr_key);
 
 	/* prevent leaks */
 	zeroauto(dk, sizeof(dk));
@@ -155,10 +153,10 @@ void dc_init_hdr_key(dc_key *hdr_key, dc_header *header, int cipher, dc_pass *pa
 
 static
 int dc_probe_decrypt(
-	  dev_hook *hook, dc_header *header, dc_key **res_key, dc_pass *password
+	  dev_hook *hook, dc_header *header, xts_key **res_key, dc_pass *password
 	  )
 {
-	dc_key   *hdr_key;
+	xts_key  *hdr_key;
 	dsk_pass *d_pass;	
 	int       resl, succs;
 
@@ -172,8 +170,7 @@ int dc_probe_decrypt(
 		if (resl != ST_OK) {
 			break;
 		}
-
-		if ( (hdr_key = mem_alloc_success(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE | MEM_SUCCESS)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -203,20 +200,16 @@ int dc_probe_decrypt(
 			KeLeaveCriticalRegion();
 		} while (0);
 
-		if (succs != 0) 
-		{
+		if (succs != 0) {
 			*res_key = hdr_key; hdr_key = NULL; resl = ST_OK; 
 		} else {
 			resl = ST_PASS_ERR;
 		}
 	} while (0);
 
-	/* prevent leaks */
 	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
+		mm_free(hdr_key);
 	}
-
 	return resl;
 }
 
@@ -224,7 +217,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 {
 	dc_header *hcopy = NULL;
 	dev_hook  *hook  = NULL;
-	dc_key    *hdr_key = NULL;
+	xts_key   *hdr_key = NULL;
 	int        resl;
 	
 	DbgMsg("dc_mount_device %ws\n", dev_name);
@@ -258,7 +251,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 			hook->flags |= F_UNSUPRT; resl = ST_ERROR; break;
 		}
 
-		if ( (hcopy = mem_alloc_success(sizeof(dc_header))) == NULL ) {
+		if ( (hcopy = mm_alloc(sizeof(dc_header), MEM_SECURE | MEM_SUCCESS)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -282,8 +275,7 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		DbgMsg("hdr_key %x\n", hdr_key);
 
 		/* initialize volume key */
-		dc_cipher_init(
-			&hook->dsk_key, hcopy->alg_1, hcopy->key_1);
+		xts_set_key(hcopy->key_1, hcopy->alg_1, &hook->dsk_key);
 
 		DbgMsg("device mounted\n");
 
@@ -352,22 +344,13 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		}
 	} while (0);
 
-	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (hcopy != NULL) {
-		zeroauto(hcopy, sizeof(dc_header));
-		mem_free(hcopy);
-	}
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (hcopy != NULL)   { mm_free(hcopy); }
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
-	}	
-
+	}
 	return resl;
 }
 
@@ -450,7 +433,7 @@ int dc_process_unmount(dev_hook *hook, int opt)
 		/* sync device flags with FS filter */
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 		/* prevent leaks */
-		zeroauto(&hook->dsk_key, sizeof(dc_key));
+		zeroauto(&hook->dsk_key, sizeof(xts_key));
 
 		if ( !(opt & MF_NOSYNC) ) {
 			/* enable IRP processing */
@@ -484,8 +467,7 @@ static void unmount_thread_proc(mount_ctx *mnt)
 	hook->mnt_probe_cnt = 0;
 
 	dc_deref_hook(hook);
-	mem_free(mnt);
-
+	mm_free(mnt);
 	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
@@ -493,7 +475,7 @@ static void unmount_item_proc(mount_ctx *mnt)
 {
 	if (start_system_thread(unmount_thread_proc, mnt, NULL) != ST_OK) {
 		dc_deref_hook(mnt->hook);
-		mem_free(mnt);
+		mm_free(mnt);
 	}
 }
 
@@ -503,7 +485,7 @@ void dc_unmount_async(dev_hook *hook)
 
 	DbgMsg("dc_unmount_async at IRQL %d\n", KeGetCurrentIrql());
 
-	if (mnt = mem_alloc(sizeof(mount_ctx)))
+	if (mnt = mm_alloc(sizeof(mount_ctx), 0))
 	{
 		mnt->hook = hook; dc_reference_hook(hook);
 
@@ -598,18 +580,16 @@ static void mount_item_proc(mount_ctx *mnt)
 	} else {
 		dc_forward_irp(hook, mnt->irp);
 	}
-
-	mem_free(mnt);
+	mm_free(mnt);
 }
 
 NTSTATUS dc_probe_mount(dev_hook *hook, PIRP irp)
 {
 	mount_ctx *mnt;
 
-	if ( (mnt = mem_alloc_success(sizeof(mount_ctx))) == NULL ) {
+	if ( (mnt = mm_alloc(sizeof(mount_ctx), MEM_SUCCESS)) == NULL ) {
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
-
 	IoMarkIrpPending(irp);
 
 	mnt->irp  = irp;

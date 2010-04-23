@@ -1,7 +1,8 @@
 #ifndef _CD_ENC_H_
 #define _CD_ENC_H_
 
-#include "crypto/crypto.h"
+#include "xts_fast.h"
+#include "volume.h"
 #include "dcapi.h"
 
 typedef int (cd_callback)(u64 iso_sz, u64 enc_sz, void *param);

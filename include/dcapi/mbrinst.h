@@ -2,7 +2,6 @@
 #define _MBRINST_
 
 #include "dcapi.h"
-#include "..\boot\hdd.h"
 #include "..\boot\boot.h"
 
 typedef struct _drive_inf {
@@ -24,30 +23,25 @@ typedef struct _drive_inf {
 #define DSK_DYN_SIMPLE  1
 #define DSK_DYN_SPANNED 2
 
-int dc_api dc_set_boot(wchar_t *root, int format);
-int dc_api dc_make_iso(wchar_t *file);
-int dc_api dc_make_pxe(wchar_t *file);
-int dc_api dc_set_mbr(int dsk_num, int begin);
+int dc_api dc_set_boot(wchar_t *root, int format, int small_boot);
+int dc_api dc_make_iso(wchar_t *file, int small_boot);
+int dc_api dc_make_pxe(wchar_t *file, int small_boot);
+int dc_api dc_set_mbr(int dsk_num, int begin, int small_boot);
 int dc_api dc_unset_mbr(int dsk_num);
 int dc_api dc_update_boot(int dsk_num);
 
 int dc_api dc_get_boot_disk(int *dsk_1, int *dsk_2);
 
 int dc_api dc_get_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  );
+	  int dsk_num, wchar_t *file, ldr_config *conf);
 
 int dc_api dc_set_mbr_config(
-	  int dsk_num, wchar_t *file, ldr_config *conf
-	  );
+	  int dsk_num, wchar_t *file, ldr_config *conf);
 
 int dc_api dc_mbr_config_by_partition(
-      wchar_t *root, int set_conf, ldr_config *conf
-	  );
+      wchar_t *root, int set_conf, ldr_config *conf);
 
-int dc_api dc_get_drive_info(
-	  wchar_t *w32_name, drive_inf *info
-	  );
+int dc_api dc_get_drive_info(wchar_t *w32_name, drive_inf *info);
 
 u64 dc_api dc_dsk_get_size(int dsk_num, int precision);
 

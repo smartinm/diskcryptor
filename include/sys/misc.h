@@ -30,17 +30,9 @@ int start_system_thread(
 
 int dc_set_default_security(HANDLE h_object);
 
-int dc_resolve_link(
-	  wchar_t *sym_link, wchar_t *target, u16 length
-	  );
-
-int dc_get_mount_point(
-      dev_hook *hook, wchar_t *buffer, u16 length
-	  );
-
-void dc_query_object_name(
-	   void *object, wchar_t *buffer, u16 length
-	   );
+int  dc_resolve_link(wchar_t *sym_link, wchar_t *target, u16 length);
+int  dc_get_mount_point(dev_hook *hook, wchar_t *buffer, u16 length);
+void dc_query_object_name(void *object, wchar_t *buffer, u16 length);
 
 u32  intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2);
 void dc_delay(u32 msecs);

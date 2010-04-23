@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,6 +29,7 @@
 #include "mem_lock.h"
 #include "debug.h"
 #include "dump_hook.h"
+#include "misc_mem.h"
 
 typedef struct _pw_irp_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
@@ -174,7 +174,7 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 static void dc_power_irp_worker(pw_irp_ctx *pwc)
 {
 	dc_process_power_irp(pwc->hook, pwc->irp);
-	mem_free(pwc);
+	mm_free(pwc);
 }
 
 NTSTATUS dc_power_irp(dev_hook *hook, PIRP irp)
@@ -185,7 +185,7 @@ NTSTATUS dc_power_irp(dev_hook *hook, PIRP irp)
 		return dc_process_power_irp(hook, irp);
 	}
 
-	if ( (pwc = mem_alloc(sizeof(pw_irp_ctx))) == NULL )
+	if ( (pwc = mm_alloc(sizeof(pw_irp_ctx), 0)) == NULL )
 	{
 		PoStartNextPowerIrp(irp);		
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);

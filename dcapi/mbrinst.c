@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -28,8 +27,10 @@
 #include "misc.h"
 #include "ntdll.h"
 #include "iso_fs.h"
+#include "drv_ioctl.h"
 
-#define NEW_SIGN      0x20B60251
+#define OLD_SIGN      0x20B60251
+#define NEW_SIGN      0x10EB9090
 #define DC_ISO_SIZE   1835008
 #define BOOT_MAX_SIZE (2048 * 1024)
 #define K64_SIZE      (64 * 1024)
@@ -91,7 +92,7 @@ u64 dc_dsk_get_size(int dsk_num, int precision)
 }
 
 static
-ldr_config *dc_find_conf(char *data, int size)
+ldr_config *dc_find_conf(char *data, u32 size)
 {
 	ldr_config *cnf;
 	ldr_config *conf = NULL;
@@ -108,7 +109,7 @@ ldr_config *dc_find_conf(char *data, int size)
 	return conf;
 }
 
-int dc_make_iso(wchar_t *file)
+int dc_make_iso(wchar_t *file, int small_boot)
 {
 	u8   *isobuf = NULL;
 	int   bootsz, ldrsz;
@@ -123,25 +124,25 @@ int dc_make_iso(wchar_t *file)
 		struct iso_validation_entry   *ve;
 		struct iso_initial_entry      *ie;
 		
-		if ( (isobuf = malloc(DC_ISO_SIZE)) == NULL ) {
+		if ( (isobuf = calloc(1, DC_ISO_SIZE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		if ( (boot = dc_extract_rsrc(&bootsz, IDR_MBR)) == NULL ) {
 			resl = ST_ERROR; break;
 		}
-			
-		if ( (loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR)) == NULL ) {
+		if (small_boot != 0) {
+			loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR_SMALL);
+		} else {
+			loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR);
+		}
+		if (loader == NULL) {
 			resl = ST_ERROR; break;
 		}
-
 		/*
 		  for more information please read 
 		    http://users.pandora.be/it3.consultants.bvba/handouts/ISO9960.html
 			http://www.phoenix.com/NR/rdonlyres/98D3219C-9CC9-4DF5-B496-A286D893E36A/0/specscdrom.pdf
 		*/
-
-		zeroauto(isobuf, DC_ISO_SIZE);
 		pd = addof(isobuf, 0x8000);
 		bd = addof(isobuf, 0x8800);
 		td = addof(isobuf, 0x9000);
@@ -151,9 +152,9 @@ int dc_make_iso(wchar_t *file)
 		ie = addof(isobuf, 0xC820);
 		/* primary volume descriptor */
 		pd->type[0] = ISO_VD_PRIMARY;
-		strcpy(pd->id, ISO_STANDARD_ID);
+		mincpy(pd->id, ISO_STANDARD_ID, sizeof(ISO_STANDARD_ID));
 		pd->version[0] = 1;
-		strcpy(pd->volume_id, "DiskCryptor boot disk           ");
+		mincpy(pd->volume_id, "DiskCryptor boot disk           ", 32);
 		p32(pd->volume_space_size)[0] = DC_ISO_SIZE / ISOFS_BLOCK_SIZE;
 		p32(pd->volume_space_size)[1] = BE32(DC_ISO_SIZE / ISOFS_BLOCK_SIZE);
 		p32(pd->volume_set_size)[0] = 0x01000001;
@@ -166,13 +167,13 @@ int dc_make_iso(wchar_t *file)
 		pd->root_directory_record[2] = 0x18;
 		/* boot record volume descriptor */
 		bd->type[0] = ISO_VD_BOOT;
-		strcpy(bd->id, ISO_STANDARD_ID);
+		mincpy(bd->id, ISO_STANDARD_ID, sizeof(ISO_STANDARD_ID));
 		bd->version[0] = 1;
-		strcpy(bd->system_id, "EL TORITO SPECIFICATION");
+		mincpy(bd->system_id, "EL TORITO SPECIFICATION", 23);
 		bd->volume_id[31] = 0x19;
 		/* volume descriptor set terminator */
 		td->type[0] = ISO_VD_END;
-		strcpy(td->id, ISO_STANDARD_ID);
+		mincpy(td->id, ISO_STANDARD_ID, sizeof(ISO_STANDARD_ID));
 		td->version[0] = 1;
 		/* iso path table */
 		pt->name_len[0] = 1;
@@ -222,7 +223,7 @@ int dc_make_iso(wchar_t *file)
 	return resl;
 }
 
-int dc_make_pxe(wchar_t *file)
+int dc_make_pxe(wchar_t *file, int small_boot)
 {
 	u8   *isobuf = NULL;
 	int   ldrsz, resl;
@@ -230,7 +231,12 @@ int dc_make_pxe(wchar_t *file)
 	
 	do
 	{
-		if ( (loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR)) == NULL ) {
+		if (small_boot != 0) {
+			loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR_SMALL);
+		} else {
+			loader = dc_extract_rsrc(&ldrsz, IDR_DCLDR);
+		}
+		if (loader == NULL) {
 			resl = ST_ERROR; break;
 		}
 		/* write image to file */
@@ -240,7 +246,6 @@ int dc_make_pxe(wchar_t *file)
 	if (isobuf != NULL) {
 		free(isobuf);
 	}
-
 	return resl;
 }
 
@@ -251,8 +256,7 @@ int dc_get_boot_disk(int *dsk_1, int *dsk_2)
 	int       resl;
 
 	resl = dc_get_drive_info(
-		L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info
-		);
+		L"\\\\.\\GLOBALROOT\\ArcName\\multi(0)disk(0)rdisk(0)partition(1)", &info);
 
 	if ( (resl != ST_OK) || (info.dsk_num > 2) ) {
 		resl = ST_NF_BOOT_DEV;
@@ -266,12 +270,11 @@ int dc_get_boot_disk(int *dsk_1, int *dsk_2)
 			*dsk_2 = info.disks[0].number;
 		}
 	}
-
 	return resl;
 }
 
 static int dc_format_media_and_set_boot(
-			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg
+			 HANDLE h_device, wchar_t *root, int dsk_num, DISK_GEOMETRY *dg, int small_boot
 			 )
 {
 	u8                        buff[sizeof(DRIVE_LAYOUT_INFORMATION) + 
@@ -344,22 +347,18 @@ static int dc_format_media_and_set_boot(
 		if ( (resl = dc_format_fs(root, L"FAT32")) != ST_OK ) {
 			break;
 		}		
-		resl = dc_set_mbr(dsk_num, 1);		
+		resl = dc_set_mbr(dsk_num, 1, small_boot);
 	} while(0);
 
-	if (locked != 0) 
-	{
-		DeviceIoControl(
-			h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
+	if ( (locked != 0) && (h_device != NULL) ) {
+		DeviceIoControl(h_device, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0, &bytes, NULL);
 	}
-
 	if (h_device != NULL) {
 		CloseHandle(h_device);
 	}
 	if (mbr_sec != NULL) {
 		free(mbr_sec);
 	}
-
 	return resl;
 }
 
@@ -393,7 +392,7 @@ static int dc_is_mbr_present(int dsk_num)
 	return resl;
 }
 
-int dc_set_boot(wchar_t *root, int format)
+int dc_set_boot(wchar_t *root, int format, int small_boot)
 {
 	wchar_t               disk[MAX_PATH];
 	HANDLE                hdisk   = NULL;
@@ -448,15 +447,15 @@ int dc_set_boot(wchar_t *root, int format)
 				resl = ST_FORMAT_NEEDED; break;
 			}
 
-			if ( (resl = dc_set_mbr(d_num.DeviceNumber, 1)) == ST_NF_SPACE )
+			if ( (resl = dc_set_mbr(d_num.DeviceNumber, 1, small_boot)) == ST_NF_SPACE )
 			{
-				if ( (resl = dc_set_mbr(d_num.DeviceNumber, 0)) == ST_NF_SPACE ) {
+				if ( (resl = dc_set_mbr(d_num.DeviceNumber, 0, small_boot)) == ST_NF_SPACE ) {
 					resl = ST_FORMAT_NEEDED;
 				}
 			}
 		} else
 		{
-			resl  = dc_format_media_and_set_boot(hdisk, disk, d_num.DeviceNumber, &dg);
+			resl  = dc_format_media_and_set_boot(hdisk, disk, d_num.DeviceNumber, &dg, small_boot);
 			hdisk = NULL;
 		}	
 	} while (0);
@@ -467,7 +466,7 @@ int dc_set_boot(wchar_t *root, int format)
 	return resl;
 }
 
-static int dc_set_mbr_i(int dsk_num, int begin)
+static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 {
 	dc_mbr      mbr;
 	dc_mbr      old_mbr;
@@ -499,7 +498,12 @@ static int dc_set_mbr_i(int dsk_num, int begin)
 			resl = ST_ERROR; break;
 		}
 
-		if ( (data = dc_extract_rsrc(&size, IDR_DCLDR)) == NULL ) {			
+		if (small_boot != 0) {
+			data = dc_extract_rsrc(&size, IDR_DCLDR_SMALL);
+		} else {
+			data = dc_extract_rsrc(&size, IDR_DCLDR);
+		}
+		if (data == NULL) {
 			resl = ST_ERROR; break;
 		}
 
@@ -532,7 +536,7 @@ static int dc_set_mbr_i(int dsk_num, int begin)
 			resl = ST_MBR_ERR; break;
 		}
 
-		if (old_mbr.sign == NEW_SIGN) {			
+		if ( (old_mbr.sign == NEW_SIGN) || (old_mbr.sign == OLD_SIGN) ) {			
 			resl = ST_BLDR_INSTALLED; break;
 		}
 
@@ -562,8 +566,11 @@ static int dc_set_mbr_i(int dsk_num, int begin)
 			if (max_end > ldr_off) {
 				resl = ST_NF_SPACE; break;
 			}
-		}		
-
+		}
+		/* set OP_SMALL_BOOT if needed */
+		if (small_boot != 0) {
+			conf->options |= OP_SMALL_BOOT;
+		}
 		/* save old MBR */
 		autocpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
 
@@ -591,11 +598,20 @@ static int dc_set_mbr_i(int dsk_num, int begin)
 	return resl;
 }
 
-int dc_set_mbr(int dsk_num, int begin)
+int dc_set_mbr(int dsk_num, int begin, int small_boot)
 {
-	int dsk_1, dsk_2;
-	int resl;
+	dc_conf conf;
+	int     dsk_1, dsk_2;
+	int     resl;
 
+	if (small_boot == -1)
+	{
+		if (dc_get_conf_flags(&conf) == ST_OK) {
+			small_boot = (conf.load_flags & DST_SMALL_MEM) != 0;
+		} else {
+			small_boot = 0;
+		}
+	}
 	/* if dsk_num == -1 then find boot disk */
 	if (dsk_num == -1) 
 	{
@@ -603,16 +619,15 @@ int dc_set_mbr(int dsk_num, int begin)
 
 		if (resl == ST_OK)
 		{
-			resl = dc_set_mbr_i(dsk_1, begin);
+			resl = dc_set_mbr_i(dsk_1, begin, small_boot);
 
 			if ( (resl == ST_OK) && (dsk_1 != dsk_2) ) {
-				resl = dc_set_mbr_i(dsk_2, begin);
+				resl = dc_set_mbr_i(dsk_2, begin, small_boot);
 			}
 		}
 	} else {
-		resl = dc_set_mbr_i(dsk_num, begin);
+		resl = dc_set_mbr_i(dsk_num, begin, small_boot);
 	}
-
 	return resl;
 }
 
@@ -631,7 +646,7 @@ int get_ldr_body_ptr(dc_disk_p *dp, dc_mbr *mbr, u64 *start, int *size)
 			resl = ST_MBR_ERR; break;
 		}
 
-		if (mbr->sign != NEW_SIGN) {
+		if ( (mbr->sign != NEW_SIGN) && (mbr->sign != OLD_SIGN) ) {
 			resl = ST_BLDR_NOTINST; break;
 		}
 
@@ -687,7 +702,7 @@ int dc_get_mbr_config(
 		} else 
 		{
 			if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
-				break;
+				resl = ST_ACCESS_DENIED; break;
 			}
 			/* get bootloader body offset */
 			if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {
@@ -718,20 +733,13 @@ int dc_get_mbr_config(
 		if ( (cnf = dc_find_conf(data, size)) == NULL ) {
 			resl = ST_BLDR_NO_CONF; break;
 		}
-
 		autocpy(conf, cnf, sizeof(ldr_config));		
 		resl = ST_OK;
 	} while (0);
 
-	if (data != NULL) {
-		free(data);
-	}
-	if (hfile != NULL) {
-		CloseHandle(hfile);
-	}
-	if (dp != NULL) {
-		dc_disk_close(dp);
-	}
+	if (data != NULL)  { free(data); }
+	if (hfile != NULL) { CloseHandle(hfile); }
+	if (dp != NULL)    { dc_disk_close(dp); }
 
 	return resl;
 }
@@ -775,7 +783,7 @@ int dc_set_mbr_config_i(
 		} else 
 		{
 			if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
-				break;
+				resl = ST_ACCESS_DENIED; break;
 			}
 			/* get bootloader body offset */
 			if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {
@@ -836,17 +844,9 @@ int dc_set_mbr_config_i(
 		resl = ST_OK;
 	} while (0);
 
-	if (data != NULL) {
-		free(data);
-	}
-
-	if (hfile != NULL) {
-		CloseHandle(hfile);
-	}
-
-	if (dp != NULL) {
-		dc_disk_close(dp);
-	}
+	if (data != NULL)  { free(data); }
+	if (hfile != NULL) { CloseHandle(hfile); }
+	if (dp != NULL)    { dc_disk_close(dp); }
 
 	return resl;
 }
@@ -954,28 +954,23 @@ static int dc_unset_mbr_i(int dsk_num)
 	do
 	{
 		if ( (dp = dc_disk_open(dsk_num, 0)) == NULL ) {
-			break;
+			resl = ST_ACCESS_DENIED; break;
 		}
-
 		/* get bootloader body offset */
 		if ( (resl = get_ldr_body_ptr(dp, &mbr, &offs, &size)) != ST_OK ) {			
 			break;
 		}
-
 		/* uninstall new bootloader */
 		if ( (data = malloc(size)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* read bootloader body */
 		if ( (resl = dc_disk_read(dp, data, size, offs)) != ST_OK ) {				
 			break;
 		}
-
 		if ( (conf = dc_find_conf(data, size)) == NULL ) {				
 			resl = ST_BLDR_NO_CONF; break;
 		}
-
 		/* copy saved old MBR */
 		autocpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
 
@@ -988,18 +983,12 @@ static int dc_unset_mbr_i(int dsk_num)
 		for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
 			dc_disk_write(dp, &mbr, sizeof(mbr), offs);
 		}
-
 		/* write new MBR */
 		resl = dc_disk_write(dp, &old_mbr, sizeof(old_mbr), 0);
 	} while (0);
 
-	if (data != NULL) {
-		free(data);
-	}
-
-	if (dp != NULL) {
-		dc_disk_close(dp);
-	}
+	if (data != NULL) { free(data); }
+	if (dp != NULL)   { dc_disk_close(dp); }
 
 	return resl;
 
@@ -1045,13 +1034,12 @@ int dc_update_boot(int dsk_num)
 			break;
 		}
 
-		if ( (resl = dc_set_mbr(dsk_num, 0)) != ST_OK )
+		if ( (resl = dc_set_mbr(dsk_num, 0, conf.options & OP_SMALL_BOOT)) != ST_OK )
 		{
-			if ( (resl = dc_set_mbr(dsk_num, 1)) != ST_OK ) {
+			if ( (resl = dc_set_mbr(dsk_num, 1, conf.options & OP_SMALL_BOOT)) != ST_OK ) {
 				break;
 			}
 		}
-
 		resl = dc_set_mbr_config(dsk_num, NULL, &conf);
 	} while (0);
 

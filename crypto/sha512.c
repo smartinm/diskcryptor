@@ -12,10 +12,8 @@
 #include "defines.h"
 #include "sha512.h"
 
-#ifndef NO_SHA512
-
 /* the K array */
-static calign const u64 K[80] = {
+static const u64 K[80] = {
 	0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
 	0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
 	0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
@@ -41,25 +39,25 @@ static calign const u64 K[80] = {
 /* Various logical functions */
 #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
 #define Maj(x,y,z)      (((x | y) & z) | (x & y)) 
-#define S(x, n)         ROR64(x, n)
-#define R(x, n)         (((x)&(0xFFFFFFFFFFFFFFFF))>>((u64)n))
+#define S(x, n)         (ROR64(x, n))
+#define R(x, n)         (d64(x) >> d64(n))
 #define Sigma0(x)       (S(x, 28) ^ S(x, 34) ^ S(x, 39))
 #define Sigma1(x)       (S(x, 14) ^ S(x, 18) ^ S(x, 41))
 #define Gamma0(x)       (S(x, 1) ^ S(x, 8) ^ R(x, 7))
 #define Gamma1(x)       (S(x, 19) ^ S(x, 61) ^ R(x, 6))
 
 /* compress 1024-bits */
-static void sha512_compress(sha512_ctx *ctx, unsigned char *buf)
+static void sha512_compress(sha512_ctx *ctx, const unsigned char *buf)
 {
     u64 S[8], W[80], t0, t1;
     int i;
 
     /* copy state into S */
-	autocpy(S, ctx->hash, sizeof(S));
+	memcpy(S, ctx->hash, sizeof(S));
 	
     /* copy the state into 1024-bits into W[0..15] */
     for (i = 0; i < 16; i++) {
-		W[i] = GETU64(buf + (8*i));
+		W[i] = BE64(p64(buf)[i]);
     }
 
     /* fill W[16..79] */
@@ -68,20 +66,6 @@ static void sha512_compress(sha512_ctx *ctx, unsigned char *buf)
     }
 
     /* Compress */
-#ifdef SMALL_CODE
-    for (i = 0; i < 80; i++) {
-        t0 = S[7] + Sigma1(S[4]) + Ch(S[4], S[5], S[6]) + K[i] + W[i];
-        t1 = Sigma0(S[0]) + Maj(S[0], S[1], S[2]);
-        S[7] = S[6];
-        S[6] = S[5];
-        S[5] = S[4];
-        S[4] = S[3] + t0;
-        S[3] = S[2];
-        S[2] = S[1];
-        S[1] = S[0];
-        S[0] = t0 + t1;
-    }
-#else
 #define RND(a,b,c,d,e,f,g,h,i)                    \
      t0 = h + Sigma1(e) + Ch(e, f, g) + K[i] + W[i];   \
      t1 = Sigma0(a) + Maj(a, b, c);                  \
@@ -98,18 +82,10 @@ static void sha512_compress(sha512_ctx *ctx, unsigned char *buf)
          RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],i+6);
          RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],i+7);
      }
-#endif     
-
-#ifndef SMALL_CODE
 	 ctx->hash[0] += S[0]; ctx->hash[1] += S[1]; 
 	 ctx->hash[2] += S[2]; ctx->hash[3] += S[3]; 
 	 ctx->hash[4] += S[4]; ctx->hash[5] += S[5];
 	 ctx->hash[6] += S[6]; ctx->hash[7] += S[7];
-#else 
-	 for (i = 0; i < 8; i++) { 
-		 ctx->hash[i] += S[i]; 
-	 }
-#endif
 
 	/* prevent leaks */
 	zeroauto(&S, sizeof(S));
@@ -137,24 +113,10 @@ void sha512_init(sha512_ctx *ctx)
 /*
    Process a block of memory though the hash
 */
-void sha512_hash(sha512_ctx *ctx, unsigned char *in, size_t inlen) 
+void sha512_hash(sha512_ctx *ctx, const unsigned char *in, size_t inlen) 
 {          
-#ifndef SMALL_CODE
     size_t n;
-#endif
     
-#ifdef SMALL_CODE
-	while (inlen--)
-	{
-		ctx->buf[ctx->curlen++] = *in++;
-
-		if (ctx->curlen == SHA512_BLOCK_SIZE) {
-			sha512_compress(ctx, ctx->buf);
-			ctx->length += 8 * 128;                                     
-			ctx->curlen = 0;
-		}
-	}
-#else
     while (inlen > 0) 
 	{
 		if (ctx->curlen == 0 && inlen >= SHA512_BLOCK_SIZE) 
@@ -180,7 +142,6 @@ void sha512_hash(sha512_ctx *ctx, unsigned char *in, size_t inlen)
            }                                                                                
        }                                                                                    
     }
-#endif
 } 
 /**
    Terminate the hash to get the digest
@@ -201,10 +162,9 @@ void sha512_done(sha512_ctx *ctx, unsigned char *out)
      */
     if (ctx->curlen > 112) 
 	{
-        while (ctx->curlen < 128) {
+		while (ctx->curlen < SHA512_BLOCK_SIZE) {
             ctx->buf[ctx->curlen++] = 0;
         }
-
         sha512_compress(ctx, ctx->buf);
         ctx->curlen = 0;
     }
@@ -218,13 +178,11 @@ void sha512_done(sha512_ctx *ctx, unsigned char *out)
     }
 
     /* store length */
-    PUTU64(ctx->buf+120, ctx->length);
+	p64(ctx->buf)[15] = BE64(ctx->length);
     sha512_compress(ctx, ctx->buf);
 
     /* copy output */
     for (i = 0; i < 8; i++) {
-        PUTU64(out+(8*i), ctx->hash[i]);
+		p64(out)[i] = BE64(ctx->hash[i]);
     }
 }
-
-#endif /* NO_SHA512 */

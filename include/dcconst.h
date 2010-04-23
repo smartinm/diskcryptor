@@ -99,7 +99,13 @@
 #define CONF_AUTOMOUNT_BOOT   0x100
 
 /* driver status flags */
-#define DST_VIA_PADLOCK 0x01
-#define DST_HW_CRYPTO   DST_VIA_PADLOCK
+#define DST_VIA_PADLOCK 0x01 /* VIA Padlock instructions available */
+#define DST_INTEL_NI    0x02 /* AES_NI instructions available */
+#define DST_HW_CRYPTO   (DST_VIA_PADLOCK | DST_INTEL_NI)
+#define DST_BOOTLOADER  0x04 /* system started via DC bootloader */
+#define DST_SMALL_MEM   0x08 /* BIOS base memory too small for DC bootloader */
+
+/* bootloader */
+#define DC_BOOTHOOK_SIZE 30 /* bootloader resident memory needed */
 
 #endif

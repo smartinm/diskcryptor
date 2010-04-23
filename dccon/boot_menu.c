@@ -1,14 +1,13 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2008 
+	* Copyright (c) 2008
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -515,7 +514,9 @@ int boot_menu(int argc, wchar_t *argv[])
 {
 	ldr_config conf;
 	int        resl;
+	int        is_small;
 
+	is_small = is_param(L"-small");
 	do
 	{
 		if ( (argc == 3) && (wcscmp(argv[2], L"-enum") == 0) )
@@ -560,7 +561,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			resl = ST_OK; break;
 		}
 
-		if ( (argc == 4) && (wcscmp(argv[2], L"-setmbr") == 0) )
+		if ( (argc >= 4) && (wcscmp(argv[2], L"-setmbr") == 0) )
 		{
 			int d_num;
 			
@@ -568,7 +569,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				resl = ST_OK; break;
 			}			
 
-			if ( (resl = dc_set_boot_interactive(d_num)) == ST_OK) {
+			if ( (resl = dc_set_boot_interactive(d_num, is_small)) == ST_OK) {
 				wprintf(L"Bootloader successfully installed to %s\n", argv[3]);
 			}
 			break; 
@@ -602,9 +603,9 @@ int boot_menu(int argc, wchar_t *argv[])
 			break;
 		}	
 
-		if ( (argc == 4) && (wcscmp(argv[2], L"-setpar") == 0) )
+		if ( (argc >= 4) && (wcscmp(argv[2], L"-setpar") == 0) )
 		{
-			if ( (resl = dc_set_boot(argv[3], 0)) == ST_FORMAT_NEEDED )
+			if ( (resl = dc_set_boot(argv[3], 0, is_small)) == ST_FORMAT_NEEDED )
 			{
 				wprintf(
 				   L"Removable media not correctly formatted\n"
@@ -612,7 +613,7 @@ int boot_menu(int argc, wchar_t *argv[])
 				   );
 
 				if (tolower(_getch()) == 'y') {
-					resl = dc_set_boot(argv[3], 1);
+					resl = dc_set_boot(argv[3], 1, is_small);
 				} else {
 					resl = ST_OK; break;
 				}
@@ -630,8 +631,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			conf.boot_type = BT_AP_PASSWORD;
 
 			boot_conf_menu(
-				&conf, L"Please set bootloader options:"
-				);
+				&conf, L"Please set bootloader options:");
 
 			if ( (resl = dc_mbr_config_by_partition(argv[3], 1, &conf)) == ST_OK ) {
 				wprintf(L"Bootloader successfully installed\n");
@@ -639,9 +639,9 @@ int boot_menu(int argc, wchar_t *argv[])
 			break;
 		}
 
-		if ( (argc == 4) && (wcscmp(argv[2], L"-makeiso") == 0) )
+		if ( (argc >= 4) && (wcscmp(argv[2], L"-makeiso") == 0) )
 		{
-			if ( (resl = dc_make_iso(argv[3])) != ST_OK ) {
+			if ( (resl = dc_make_iso(argv[3], is_small)) != ST_OK ) {
 				break;
 			}
 
@@ -653,8 +653,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			conf.boot_type = BT_MBR_FIRST;
 
 			boot_conf_menu(
-				&conf, L"Please set bootloader options:"
-				);
+				&conf, L"Please set bootloader options:");
 
 			if ( (resl = dc_set_mbr_config(0, argv[3], &conf)) == ST_OK ) {
 				wprintf(L"Bootloader .iso image successfully created\n", argv[3]);
@@ -662,9 +661,9 @@ int boot_menu(int argc, wchar_t *argv[])
 			break;
 		}
 
-		if ( (argc == 4) && (wcscmp(argv[2], L"-makepxe") == 0) )
+		if ( (argc >= 4) && (wcscmp(argv[2], L"-makepxe") == 0) )
 		{
-			if ( (resl = dc_make_pxe(argv[3])) != ST_OK ) {
+			if ( (resl = dc_make_pxe(argv[3], is_small)) != ST_OK ) {
 				break;
 			}
 
@@ -676,8 +675,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			conf.boot_type = BT_MBR_FIRST;
 
 			boot_conf_menu(
-				&conf, L"Please set bootloader options:"
-				);
+				&conf, L"Please set bootloader options:");
 
 			if ( (resl = dc_set_mbr_config(0, argv[3], &conf)) == ST_OK ) {
 				wprintf(L"Bootloader PXE image successfully created\n", argv[3]);
@@ -717,8 +715,7 @@ int boot_menu(int argc, wchar_t *argv[])
 			}
 
 			boot_conf_menu(
-				&conf, L"Please change bootloader options:"
-				);
+				&conf, L"Please change bootloader options:");
 
 			if (ispar != 0) {
 				resl = dc_mbr_config_by_partition(argv[3], 1, &conf);
@@ -731,8 +728,6 @@ int boot_menu(int argc, wchar_t *argv[])
 			}
 			break;
 		}
-
-		
 	} while (0);
 
 	return resl;

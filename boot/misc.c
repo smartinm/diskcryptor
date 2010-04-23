@@ -1,14 +1,13 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2008 
+    * Copyright (c) 2008-2009 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -22,6 +21,7 @@
 #include <stdarg.h>
 #include "boot.h"
 #include "bios.h"
+#include "boot_vtab.h"
 
 #define bcd2int(bcd) (((bcd & 0xf0) >> 4) * 10 + (bcd & 0x0f))
 
@@ -31,8 +31,8 @@ u32 get_rtc_time()
 	u32    hrs, mins;
 	u32    sec;
 
-	set_ctx(0x0200, &ctx);
-	bios_call(0x1A, &ctx);
+	btab->p_set_ctx(0x0200, &ctx);
+	btab->p_bios_call(0x1A, &ctx);
 	hrs  = bcd2int(ctx.ch);
 	mins = bcd2int(ctx.cl);
 	sec  = bcd2int(ctx.dh);
@@ -47,16 +47,15 @@ void _putch(char ch)
 	if (ch == '\n') {
 		_putch('\r');
 	}
-
-	set_ctx(0x0E00 | ch, &ctx);	
-	bios_call(0x10, &ctx);
+	btab->p_set_ctx(0x0E00 | ch, &ctx);	
+	btab->p_bios_call(0x10, &ctx);
 }
 
 int _kbhit() 
 {
 	rm_ctx ctx;
-	set_ctx(0x0100, &ctx);	
-	bios_call(0x16, &ctx);
+	btab->p_set_ctx(0x0100, &ctx);	
+	btab->p_bios_call(0x16, &ctx);
 	return (ctx.efl & FL_ZF) == 0;
 }
 
@@ -69,8 +68,8 @@ char _getch()
 	*/
 	do { } while (_kbhit() == 0);
 	/* read character from keyboard */
-	set_ctx(0, &ctx);	
-	bios_call(0x16, &ctx);
+	btab->p_set_ctx(0, &ctx);	
+	btab->p_bios_call(0x16, &ctx);
 	return ctx.al;
 }
 

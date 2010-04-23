@@ -24,89 +24,45 @@ typedef long    s32;
 typedef short   s16;
 typedef char    s8;
 
-#define d8(x)  ((u8)(x))
-#define d16(x) ((u16)(x))
-#define d32(x) ((u32)(x))
-#define d64(x) ((u64)(x))
+#define d8(_x)  ((u8)(_x))
+#define d16(_x) ((u16)(_x))
+#define d32(_x) ((u32)(_x))
+#define d64(_x) ((u64)(_x))
+#define dSZ(_x) ((size_t)(_x))
 
 typedef void (*callback)(void*);
 typedef void (*callback_ex)(void*,void*);
 
-#pragma pack (push, 1)
-
- typedef struct {
-	 u64 a, b;
- } be128;
-
- #pragma pack (pop)
-
-#define MAX_PATH 260
 #define BE16(x) _byteswap_ushort(x)
 #define BE32(x) _byteswap_ulong(x)
 #define BE64(x) _byteswap_uint64(x)
 
-#define le32_to_cpu(x) (x)
-#define cpu_to_le32(x) (x)
+#define ROR64(x,y)     (_rotr64((x),(y)))
+#define ROL64(x,y)     (_rotl64((x),(y)))
+#define ROL32(x,y)     (_rotl((x), (y)))
+#define ROR32(x,y)     (_rotr((x), (y)))
+#define bsf(x,y)       (_BitScanForward((x),(y)))
+#define bsr(x,y)       (_BitScanReverse((x),(y)))
 
-#if _MSC_VER >= 1400
- #define GETU32(pt)     (_byteswap_ulong(*(u32*)(pt)))
- #define PUTU32(ct, st) (*(u32*)(ct) = _byteswap_ulong(st))
- #define GETU64(pt)     (_byteswap_uint64(*(u64*)(pt)))
- #define PUTU64(ct, st) (*(u64*)(ct) = _byteswap_uint64(st))
- #define ROR64(x,y)     (_rotr64((x),(y)))
- #define ROL64(x,y)     (_rotl64((x),(y)))
- #define ROL32(x,y)     (_rotl((x), (y)))
- #define ROR32(x,y)     (_rotr((x), (y)))
- #define bsf(x,y)       (_BitScanForward((x),(y)))
- #define bsr(x,y)       (_BitScanReverse((x),(y)))
-#else 
- #define GETU32(pt) (((u32)(pt)[0] << 24) ^ ((u32)(pt)[1] << 16) ^ ((u32)(pt)[2] <<  8) ^ ((u32)(pt)[3]))
- #define PUTU32(ct, st) { (ct)[0] = (u8)((st) >> 24); (ct)[1] = (u8)((st) >> 16); (ct)[2] = (u8)((st) >>  8); (ct)[3] = (u8)(st); }
-#endif
+#define align16  __declspec(align(16))
+#define naked    __declspec(naked)
 
-#define stdcall  __stdcall
-#define fastcall __fastcall
-#define aligned  __declspec(align(32))
-
-#define p8(x)  ((u8*)(x))
-#define p16(x) ((u16*)(x))
-#define p32(x) ((u32*)(x))
-#define p64(x) ((u64*)(x))
-#define pv(x)  ((void*)(x))
-#define ppv(x) ((void**)(x)) 
+#define p8(_x)   ((u8*)(_x))
+#define p16(_x)  ((u16*)(_x))
+#define p32(_x)  ((u32*)(_x))
+#define p64(_x)  ((u64*)(_x))
+#define pv(_x)   ((void*)(_x))
+#define ppv(_x)  ((void**)(_x)) 
 
 #define in_reg(a,base,size)     ( (a >= base) && (a < base+size)  )
 #define is_intersect(start1, size1, start2, size2) ( max(start1, start2) < min(start1 + size1, start2 + size2) )
 #define addof(a,o)              ( pv(p8(a)+o) )
-#define f_off(type,field)        ( d32(&(((type *)0)->field)) )
-
-#define put_b(p,d) { p8(p)[0]  = (u8)(d);  p = pv((p8(p) + 1));  }
-#define put_w(p,d) { p16(p)[0] = (u16)(d); p = pv((p16(p) + 1)); }
-#define put_d(p,d) { p32(p)[0] = (u32)(d); p = pv((p32(p) + 1)); }
+#define offsetof(type,field)    ( d32(&(((type *)0)->field)) )
 
 #ifdef BOOT_LDR
  #pragma warning(disable:4142)
  typedef unsigned long size_t;
  #pragma warning(default:4142)
-#endif
-
-
-#ifdef _M_X64
-
-#define xor128(d,x,y) { \
-	p64(d)[0] = p64(x)[0] ^ p64(y)[0], \
-	p64(d)[1] = p64(x)[1] ^ p64(y)[1]; \
-   } 
-
-#else
-
-#define xor128(d,x,y) { \
-	p32(d)[0] = p32(x)[0] ^ p32(y)[0], \
-	p32(d)[1] = p32(x)[1] ^ p32(y)[1], \
-	p32(d)[2] = p32(x)[2] ^ p32(y)[2], \
-	p32(d)[3] = p32(x)[3] ^ p32(y)[3]; \
-   } 
-
 #endif
 
 #ifndef max
@@ -145,14 +101,6 @@ typedef void (*callback_ex)(void*,void*);
 #define array_num(x) ( sizeof(x) / sizeof((x)[0]) )  /* return number of elements in array */
 
 #define zeromem(m,s) memset(m, 0, s)
-
-#ifdef IS_DRIVER
- #define mem_alloc(x) ExAllocatePoolWithTag(NonPagedPoolCacheAligned, (x), '1_cd')
- #define mem_free(x)  ExFreePool(x)
-#else 
- #define mem_alloc(x) malloc(x)
- #define mem_free(x)  free(x)
-#endif
 
 /* size optimized intrinsics */
 #define mincpy(a,b,c) __movsb(pv(a), pv(b), (size_t)(c))
@@ -193,9 +141,10 @@ typedef void (*callback_ex)(void*,void*);
 	{ __stosb(pv(m), 0, (size_t)(s)); } }
 #endif
 
-#define lock_inc(x)    ( _InterlockedIncrement(x) )
-#define lock_dec(x)    ( _InterlockedDecrement(x) )
-#define lock_xchg(p,v) ( _InterlockedExchange((p),(v)) )
+#define lock_inc(_x)          ( _InterlockedIncrement(_x) )
+#define lock_dec(_x)          ( _InterlockedDecrement(_x) )
+#define lock_xchg(_p, _v)     ( _InterlockedExchange(_p, _v) )
+#define lock_xchg_add(_p, _v) ( _InterlockedExchangeAdd(_p, _v) )
 
 #pragma warning(disable:4995)
 #pragma intrinsic(memcpy,memset,memcmp)

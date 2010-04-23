@@ -7,9 +7,8 @@
 	*
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -73,7 +72,7 @@ static size_t code_bytes(char *str, int pos, char *buf)
    int  k = 0;
    char p = 0;
 
-   buf[0] = '\0';   
+   buf[0] = 0;   
    
    if (pos <= 0) { return 0; }
 
@@ -98,7 +97,7 @@ static size_t code_bytes(char *str, int pos, char *buf)
 
 	   if (p == 2)
 	   {
-		   if (buf[k] != '\0' && ! isprint(buf[k])) {
+		   if (buf[k] <= 0 || !isprint(buf[k])) {
 			   j = 0; break; 
 		   }
 

@@ -6,9 +6,8 @@
     * partial copyright Juergen Schmied and Jon Griffiths
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,6 +23,7 @@
 #include <ntddscsi.h>
 #include <stdio.h>
 #include <math.h>
+
 #include "misc.h"
 #include "drv_ioctl.h"
 
@@ -66,7 +66,7 @@ static struct {
     { 1000*TB, 1048576.0,    1.0,    0, 'T' }, /* 1000 TB */
     { 10*PB,   10737418.24,  100.00, 2, 'P' }, /* 10 PB */
     { 100*PB,  107374182.4,  10.00,  1, 'P' }, /* 100 PB */
-    { 1000*PB, 1073741824.0, 1.00,   0, 'P' } /* 1000 PB */
+    { 1000*PB, 1073741824.0, 1.00,   0, 'P' }  /* 1000 PB */
 };
 
 typedef BOOL (WINAPI *ISWOW64PROCESS)(HANDLE, PBOOL);

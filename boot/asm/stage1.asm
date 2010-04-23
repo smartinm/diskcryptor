@@ -1,13 +1,12 @@
 ;
 ;   *
 ;   * DiskCryptor - open source partition encryption tool
-;   * Copyright (c) 2008
+;   * Copyright (c) 2008-2009
 ;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
 ;   *
 ;   This program is free software: you can redistribute it and/or modify
-;   it under the terms of the GNU General Public License as published by
-;   the Free Software Foundation, either version 3 of the License, or
-;   (at your option) any later version.
+;   it under the terms of the GNU General Public License version 3 as
+;   published by the Free Software Foundation.
 ;
 ;   This program is distributed in the hope that it will be useful,
 ;   but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,7 +20,6 @@ org 0
 
 include 'win32a.inc'
 include 'macro.inc'
-include 'pe.inc'
 include 'struct.inc'
 
 use16
@@ -50,12 +48,11 @@ next:
  pop	bp
  add	bp, 0 - $ + 1
  ; bp - code base
- ; get embedded PE image address
+ ; get embedded boot_hook image address
  lea	bx, [bp+bd_block+boot_data]
- ; get size of image
- add	bx, word [bx+IMAGE_DOS_HEADER.e_lfanew]
- mov	ebx, [bx+IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage]
- ; align PE size to 1k
+ ; get virtual size of boot_hook image
+ mov	ebx, [bx+boot_mod.virt_size]
+ ; align virtual size to 1k
  add	ebx, (1024-1)
  and	ebx, not (1024-1)
  ; add boot data size and 2kb for stack
@@ -84,100 +81,64 @@ next:
  push	pm_enable
  retf
 
-
 pm_loader: ; protected mode loader
 use32
- lea	ebp, [ecx + (bd_kbs * 1024)]
+ lea	ebx, [ecx + (bd_kbs * 1024)]
  ; get embedded PE image address
  call	next2
 next2:
- pop	esi
- add	esi, bd_block + boot_data - next2
+ pop	ebp
+ add	ebp, bd_block + boot_data - next2
+ mov	edx, ebp
+ add	edx, [ebp+boot_mod.raw_size]
  ; ecx - boot data block
- ; esi - PE image
- ; ebp - new image base
- push	ecx
- mov	edx, [esi+IMAGE_DOS_HEADER.e_lfanew]
- add	edx, esi
- mov	ecx, [edx+IMAGE_NT_HEADERS.OptionalHeader.SizeOfImage]
- ; zero memory before map sections
- mov	edi, ebp
- xor	eax, eax
- rep stosb
- ; copy image headers
- push	esi ; [esp] - orig image base
- mov	ecx, [edx+IMAGE_NT_HEADERS.OptionalHeader.SizeOfHeaders]
- mov	edi, ebp
- rep movsb
- ; copy sections
- movzx	ebx, [edx+IMAGE_NT_HEADERS.FileHeader.NumberOfSections]
- movzx	ecx, [edx+IMAGE_NT_HEADERS.FileHeader.SizeOfOptionalHeader]
- add	edx, ecx
- add	edx, IMAGE_NT_HEADERS.OptionalHeader ; edx - first IMAGE_SECTION_HEADER
-@@:
- mov	esi, [edx+IMAGE_SECTION_HEADER.PointerToRawData]
- mov	edi, [edx+IMAGE_SECTION_HEADER.VirtualAddress]
- mov	ecx, [edx+IMAGE_SECTION_HEADER.SizeOfRawData]
- add	esi, [esp]
- add	edi, ebp
- ; copy section
- push	esi
- push	ecx
- rep movsb
- pop	ecx
- pop	edi
- ; zero old section data to prevent embedded password leak
- xor	eax, eax
- rep stosb
- add	edx, sizeof.IMAGE_SECTION_HEADER
- dec	ebx
- jnz	@B
- pop	ecx ; original PE image does not needed later
- ; get new nt headers
- mov	edi, ebp
- add	edi, [ebp+IMAGE_DOS_HEADER.e_lfanew]  ; edi - IMAGE_NT_HEADERS
- ; process image relocations
- mov	edx, [edi+IMAGE_NT_HEADERS.OptionalHeader.RelocDirectory.VirtualAddress]
- test	edx, edx
- jz	rel_done
- add	edx, ebp ; edx - PIMAGE_BASE_RELOCATION
-rel_loop: 
- cmp	[edx+IMAGE_BASE_RELOCATION.SizeOfBlock], 0
- jz	rel_done
- ; get the IMAGE_FIXUP_ENTRY
- lea	esi, [edx+sizeof.IMAGE_BASE_RELOCATION] ; esi - IMAGE_FIXUP_ENTRY
- ; get number of fixups
- mov	ecx, [edx+IMAGE_BASE_RELOCATION.SizeOfBlock]
- sub	ecx, sizeof.IMAGE_BASE_RELOCATION
- shr	ecx, 1
-fix_loop:
- ; get fixup
- lodsw
- ; check fixup type and fix only IMAGE_REL_BASED_HIGHLOW fixups
- mov	bx, ax
- shr	bx, 12
- cmp	bx, 3
- jnz	rel_nofix
- ; calculate fixup VA
- and	eax, 0FFFh
- add	eax, [edx+IMAGE_BASE_RELOCATION.VirtualAddress]
- add	eax, ebp
- ; fix data on pointer
- mov	ebx, [eax]
- add	ebx, ebp
- sub	ebx, [edi+IMAGE_NT_HEADERS.OptionalHeader.ImageBase]
- mov	[eax], ebx
-rel_nofix:
- loop	fix_loop
- add	edx, [edx+IMAGE_BASE_RELOCATION.SizeOfBlock]
- jmp	rel_loop
-rel_done:
- ; get image entry point
- mov	ebx, [edi+IMAGE_NT_HEADERS.OptionalHeader.AddressOfEntryPoint]
- add	ebx, ebp  ; ebx - entry point
- ; jump to entry point 
- call	ebx
+ ; ebp - boot_hook image
+ ; edx - boot_load image
+ ; ebx - new boot_hook image base
+ call	load_module
+ ; load boot_load module
+ mov	ebp, edx
+ mov	ebx, 8000h
+ call	load_module
  jmp	$
+
+load_module: ; ebp - module, ebx - address, ecx - bd_data
+ pushad
+ ; push EP parameters to stack
+ push	5000h
+ push	ecx
+ ; zero memory
+ mov	ecx, [ebp+boot_mod.virt_size]
+ mov	edi, ebx
+ xor	eax, eax
+ rep stosb
+ ; copy module code
+ mov	esi, ebp
+ mov	edi, ebx
+ mov	ecx, [ebp+boot_mod.raw_size]
+ rep movsb
+ ; process relocs
+ mov	ecx, [ebx+boot_mod.n_rels]
+ lea	esi, [ebx+boot_mod.relocs]
+do_relocs:
+ test	ecx, ecx
+ jz	relocs_done
+ lodsd
+ add	[ebx+eax], ebx
+ dec	ecx
+ jmp	do_relocs
+relocs_done:
+ ; zero original image
+ mov	edi, ebp
+ mov	ecx, [ebp+boot_mod.raw_size]
+ rep stosb
+ ; call EP
+ mov	eax, [ebx+boot_mod.entry_rva]
+ add	eax, ebx
+ call	eax
+ add	esp, 8
+ popad
+ ret
 
 bd_block: ; boot data block
 
@@ -221,11 +182,7 @@ use16
  shl	ecx, 4
  mov	[bdb.bd_base], ecx
  ; setup temporary PM stack
- mov	eax, ecx
- add	eax, [bdb.bd_size]
- ; reserve 384 bytes for backup data block
- sub	eax, 384
- mov	[bdb.esp_32], eax
+ mov	[bdb.esp_32], 20000h
  ; inverse real mode block signature in runtime
  ; to prevent finding it in false location
  not	[bdb.sign1]
@@ -497,10 +454,7 @@ rm_start:
 bd_size = $
 bd_kbs	= (bd_size / 1024) + 1
 
-repeat	512-(($+bd_block) mod 512)
- db 0
-end repeat
-
-
 boot_data:
+
+
 

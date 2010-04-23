@@ -1,12 +1,9 @@
 @echo off
-rmdir sys\objfre_wlh_x86 /S /Q
-rmdir sys\objfre_wlh_amd64 /S /Q
 del   *.ncb /S /Q
 del   *.suo /S /Q /F /A:H
 del   *.user /S /Q
 del   BuildLog.htm /S /Q
 del    dcapi.lib  /S /Q
-del    dcapi.dll.manifest /S /Q
 del    *.exp /S /Q
 del    *.dll /S /Q
 del    *.pdb /S /Q

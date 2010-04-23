@@ -671,9 +671,9 @@
 
 %ifdef ENCRYPTION
 
-    global  aes256_encrypt_gd
+    global  aes256_asm_encrypt
 %ifdef DLL_EXPORT
-    export  aes256_encrypt_gd
+    export  aes256_asm_encrypt
 %endif
 
     section .data align=64
@@ -688,7 +688,7 @@ enc_tab:
     align   16
 
 %ifdef _SEH_
-proc_frame aes256_encrypt_gd
+proc_frame aes256_asm_encrypt
 	alloc_stack	7*8			; 7 to align stack to 16 bytes
 	save_reg	rsi,4*8
 	save_reg	rdi,5*8
@@ -699,7 +699,7 @@ end_prologue
     mov     rdi, rcx        ; input pointer
     mov     [rsp+0*8], rdx  ; output pointer
 %else
-	aes256_encrypt_gd:
+	aes256_asm_encrypt:
 	%ifdef __GNUC__
 		sub     rsp, 4*8        ; gnu/linux binary interface
 		mov     [rsp+0*8], rsi  ; output pointer
@@ -775,9 +775,9 @@ end_prologue
 
 %ifdef DECRYPTION
 
-    global  aes256_decrypt_gd
+    global  aes256_asm_decrypt
 %ifdef DLL_EXPORT
-    export  aes256_decrypt_gd
+    export  aes256_asm_decrypt
 %endif
 
     section .data
@@ -792,7 +792,7 @@ dec_tab:
     align   16
 
 %ifdef _SEH_
-proc_frame aes256_decrypt_gd
+proc_frame aes256_asm_decrypt
 	alloc_stack	7*8			; 7 to align stack to 16 bytes
 	save_reg	rsi,4*8
 	save_reg	rdi,5*8
@@ -803,7 +803,7 @@ end_prologue
     mov     rdi, rcx        ; input pointer
     mov     [rsp+0*8], rdx  ; output pointer
 %else
-	aes256_decrypt_gd:
+	aes256_asm_decrypt:
 	%ifdef __GNUC__
 		sub     rsp, 4*8        ; gnu/linux binary interface
 		mov     [rsp+0*8], rsi  ; output pointer

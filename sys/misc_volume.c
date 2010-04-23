@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,7 +22,6 @@
 #include "defines.h"
 #include "devhook.h"
 #include "misc_volume.h"
-#include "crypto.h"
 #include "pkcs5.h"
 #include "misc.h"
 #include "mount.h"
@@ -31,6 +29,8 @@
 #include "prng.h"
 #include "fast_crypt.h"
 #include "debug.h"
+#include "crypto_head.h"
+#include "misc_mem.h"
 
 static
 int dc_write_header(
@@ -39,20 +39,18 @@ int dc_write_header(
 {
 	u8         salt[PKCS5_SALT_SIZE];
 	dc_header *t_header;
-	dc_key    *hdr_key;
+	xts_key   *hdr_key;
 	int        resl;
 
 	t_header = NULL; hdr_key = NULL;
 	do
 	{
-		if ( (t_header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (t_header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* copy header to new buffer */
 		autocpy(t_header, header, sizeof(dc_header));
 
@@ -72,7 +70,7 @@ int dc_write_header(
 			hdr_key, t_header, hook->crypt.cipher_id, password);
 				
 		/* encrypt header with new key */
-		dc_cipher_encrypt(
+		xts_encrypt(
 			pv(t_header), pv(t_header), sizeof(dc_header), 0, hdr_key);
 
 		/* restore original salt */
@@ -84,17 +82,10 @@ int dc_write_header(
 	} while (0);
 
 	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (t_header != NULL) {
-		zeroauto(t_header, sizeof(dc_header));
-		mem_free(t_header);
-	}
-
 	zeroauto(salt, sizeof(salt));
+
+	if (hdr_key != NULL)  { mm_free(hdr_key); }
+	if (t_header != NULL) { mm_free(t_header); }
 
 	return resl;
 }
@@ -102,7 +93,7 @@ int dc_write_header(
 int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 {
 	dc_header *header = NULL;
-	dc_key    *hdr_key = NULL;
+	xts_key   *hdr_key = NULL;
 	dev_hook  *hook    = NULL;
 	int        resl;
 	s8         salt[PKCS5_SALT_SIZE];
@@ -124,11 +115,10 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 			resl = ST_RW_ERR; break;
 		}
 
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -153,7 +143,7 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 			hdr_key, header, header->alg_1, password);
 		
 		/* encrypt header with new key */
-		dc_cipher_encrypt(
+		xts_encrypt(
 			pv(header), pv(header), sizeof(dc_header), 0, hdr_key);
 
 		/* restore original salt */
@@ -170,17 +160,10 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 	}
 
 	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
-
 	zeroauto(salt, sizeof(salt));
+
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }	
 
 	return resl;
 }
@@ -188,7 +171,7 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 {
 	dc_header *header = NULL;
-	dc_key    *hdr_key = NULL;
+	xts_key   *hdr_key = NULL;
 	dev_hook  *hook = NULL;
 	int        resl;
 
@@ -208,18 +191,15 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 		if ( (hook->dsk_size == 0) && (dc_get_dev_params(hook) == 0) ) {
 			resl = ST_RW_ERR; break;
 		}
-
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* copy header from input */
 		autocpy(header, in, sizeof(dc_header));
 
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* decrypt header */
 		if (dc_decrypt_header(hdr_key, header, password) == 0) {
 			resl = ST_PASS_ERR; break;
@@ -233,17 +213,8 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
-	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }
 
 	return resl;
 }
@@ -252,12 +223,13 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 {
 	IO_STATUS_BLOCK iosb;
 	NTSTATUS        status;
-	dc_header      *header = NULL;
-	dev_hook       *hook   = NULL;
-	HANDLE          h_dev  = NULL;
-	u8             *buff   = NULL;
-	rnd_ctx        *r_ctx  = NULL;	
-	int             w_init = 0;
+	dc_header      *header  = NULL;
+	dev_hook       *hook    = NULL;
+	xts_key        *tmp_key = NULL;
+	HANDLE          h_dev   = NULL;
+	u8             *buff    = NULL;
+	int             w_init  = 0;
+	u8              key_buf[32];
 	int             resl;
 
 	DbgMsg("dc_format_start\n");
@@ -284,13 +256,15 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			resl = ST_RW_ERR; break;
 		}
 
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (buff = mem_alloc(ENC_BLOCK_SIZE)) == NULL ) {
+		if ( (buff = mm_alloc(ENC_BLOCK_SIZE, 0)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
+		if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+			resl = ST_NOMEM; break;
+		}		
 
 		/* temporary disable automounting */
 		hook->flags |= F_NO_AUTO_MOUNT;
@@ -314,19 +288,19 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 
 		/* init data wiping */
 		resl = dc_wipe_init(
-			&hook->wp_ctx, hook, ENC_BLOCK_SIZE, crypt->wp_mode);
+			&hook->wp_ctx, hook, ENC_BLOCK_SIZE, crypt->wp_mode, crypt->cipher_id);
 
 		if (resl == ST_OK) {
 			w_init = 1;			
 		} else break;
 
-		/* init random context */
-		if ( (r_ctx = rnd_fast_init()) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-
 		/* wipe first sectors */
 		dc_wipe_process(&hook->wp_ctx, 0, DC_AREA_SIZE);
+
+		/* create random temporary key */
+		rnd_get_bytes(key_buf, sizeof(key_buf));
+
+		xts_set_key(key_buf, crypt->cipher_id, tmp_key);
 
 		/* create volume header */
 		zeroauto(header, sizeof(dc_header));
@@ -345,44 +319,35 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		if ( (resl = dc_write_header(hook, header, password)) != ST_OK ) {
 			break;
 		}
-
 		/* mount device */
 		if ( (resl = dc_mount_device(dev_name, password, 0)) != ST_OK ) {
 			break;
-		}
-		
+		}		
 		/* set hook fields */
 		hook->flags    |= F_FORMATTING;
 		hook->tmp_size  = DC_AREA_SIZE;
 		hook->tmp_buff  = buff;
-		hook->fmt_rnd   = r_ctx;
+		hook->tmp_key   = tmp_key;
 	} while (0);
 
 	if ( (resl != ST_OK) )
 	{
-		if (r_ctx != NULL) {
-			rnd_fast_free(r_ctx);
-		}
-
 		if (w_init != 0) {
 			dc_wipe_free(&hook->wp_ctx);
 		}
-
-		if (buff != NULL) {
-			mem_free(buff);
-		}
+		if (buff != NULL)    { mm_free(buff); }
+		if (tmp_key != NULL) { mm_free(tmp_key); }
 	}
-
-	/* prevent leaks */
 	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
+		mm_free(header);
 	}
-
-	if (hook != NULL) {
+	if (hook != NULL) { 
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
+	/* prevent leaks */
+	zeroauto(key_buf, sizeof(key_buf));
+	
 
 	if (h_dev != NULL)
 	{
@@ -437,12 +402,12 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 			dc_wipe_free(&hook->wp_ctx);
 
 			resl = dc_wipe_init(
-				&hook->wp_ctx, hook, ENC_BLOCK_SIZE, wp_mode);
+				&hook->wp_ctx, hook, ENC_BLOCK_SIZE, wp_mode, hook->crypt.cipher_id);
 
 			if (resl == ST_OK) {
 				hook->crypt.wp_mode = d8(wp_mode);
 			} else {
-				dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE);
+				dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE, 0);
 				hook->crypt.wp_mode = WP_NONE;
 			}
 		}
@@ -450,20 +415,17 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 		/* wipe sectors */
 		dc_wipe_process(&hook->wp_ctx, offs, size);
 
-		/* fill buffer from fast PRNG */
-		rnd_fast_rand(hook->fmt_rnd, buff, size);
+		/* zero buffer */
+		zerofast(buff, size);
+		/* encrypt buffer with temporary key */
+		dc_fast_encrypt(buff, buff, size, offs, hook->tmp_key);
 
-		/* encrypt buffer with volume key */
-		dc_fast_encrypt(
-			buff, buff, size, offs, &hook->dsk_key);
-
-		resl = dc_device_rw(
-			hook, IRP_MJ_WRITE, buff, size, offs);
+		/* write pseudo-random data to device */
+		resl = dc_device_rw(hook, IRP_MJ_WRITE, buff, size, offs);
 
 		if ( (resl == ST_OK) || (resl == ST_RW_ERR) ) {
 			hook->tmp_size += size;
 		}
-
 		if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {			
 			dc_process_unmount(hook, MF_NOFSCTL); resl = ST_FINISHED;
 		}
@@ -500,9 +462,9 @@ int dc_format_done(wchar_t *dev_name)
 		hook->tmp_size = 0;
 		hook->flags   &= ~F_FORMATTING;		
 		/* free resources */
-		rnd_fast_free(hook->fmt_rnd);
 		dc_wipe_free(&hook->wp_ctx);
-		mem_free(hook->tmp_buff);
+		mm_free(hook->tmp_buff);
+		mm_free(hook->tmp_key);
 		resl = ST_OK;
 	} while (0);
 
@@ -510,7 +472,6 @@ int dc_format_done(wchar_t *dev_name)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }
 
@@ -518,7 +479,7 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 {
 	dc_header *header;
 	dev_hook  *hook    = NULL;
-	dc_key    *hdr_key = NULL;
+	xts_key   *hdr_key = NULL;
 	int        wp_init = 0;
 	int        resl;
 	wipe_ctx   wipe;	
@@ -540,11 +501,10 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 			resl = ST_ERROR; break;
 		}
 
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -562,7 +522,8 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 		}
 
 		/* init data wipe */
-		resl = dc_wipe_init(&wipe, hook, DC_AREA_SIZE, WP_GUTMANN);
+		resl = dc_wipe_init(
+			&wipe, hook, DC_AREA_SIZE, WP_GUTMANN, hook->crypt.cipher_id);
 
 		if (resl == ST_OK) {
 			wp_init = 1;
@@ -577,22 +538,12 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 	if (wp_init != 0) {
 		dc_wipe_free(&wipe);
 	}
-
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
-	}
-
-	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
+	}	
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }
 	
 	return resl;
 }

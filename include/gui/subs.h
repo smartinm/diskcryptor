@@ -1,19 +1,20 @@
 #ifndef _SUBS_
 #define _SUBS_
 
-#include "uicode.h"
-#include "main.h"
+#define LOG_FILE_NAME L"dcrypt.log"
 
-#define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); }
+#define set_flag(var,flag,value) if ((value) == 0) { (var) &= ~(flag); } else { (var) |= (flag); } 	
 
-#define __msg_w( hwnd, display ) ( MessageBox( \
-	hwnd, display, L"Warning", MB_YESNO | MB_ICONWARNING) == IDYES )
+#define __msg_w( hwnd, display ) ( \
+		MessageBox( hwnd, display, L"Warning", MB_YESNO | MB_ICONWARNING) == IDYES \
+	)
 
 int __msg_i( HWND hwnd, wchar_t *format, ... );
 int __msg_q( HWND hwnd, wchar_t *format, ... );
 
-#define __msg_e( hwnd, display ) ( MessageBox( \
-	hwnd, display, L"Error", MB_OK | MB_ICONERROR) )
+#define __msg_e( hwnd, display ) ( \
+		MessageBox( hwnd, display, L"Error", MB_OK | MB_ICONERROR) \
+	)
 
 void __error_s(
 		HWND hwnd,
@@ -40,12 +41,32 @@ void *_extract_rsrc(
 		int *size
 	);
 
-void _set_trailing_slash( wchar_t *path );
-wchar_t *_extract_name( wchar_t *s_path );
+void _set_trailing_slash( 
+		wchar_t *path 
+	);
+
+wchar_t *_extract_name(
+		wchar_t *s_path 
+	);
 
 void _reboot( );
 
-int _bitcount( DWORD n );
-BOOL _array_include( int arr[ ], int find );
+int _bitcount( 
+		DWORD n 
+	);
+
+BOOL _array_include( 
+		int arr[ ], 
+		int find 
+	);
+
+int _ext_disk_num(
+		HWND hwnd
+	);
+
+void _log(
+		wchar_t *pws_message,
+		...
+	);
 
 #endif

@@ -1,14 +1,13 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2009 
+    * Copyright (c) 2007-2010 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -21,163 +20,124 @@
 
 #include <ntifs.h>
 #include "defines.h"
-#include "driver.h"
 #include "misc.h"
-#include "crypto.h"
+#include "xts_fast.h"
 #include "fast_crypt.h"
-#include "pkcs5.h"
-#include "crc32.h"
-#include "debug.h"
-#include "misc_mem.h"
 
-typedef struct _wt_item {
-	LIST_ENTRY       entry;
-	int              operation;
-	struct _wt_item *main;
-	u32              blocks;
-	callback_ex      on_complete;
-	void            *param1;
-	void            *param2;
+#ifdef _M_X64
+ #define MAX_CPU_COUNT 64
+#else
+ #define MAX_CPU_COUNT 32
+#endif
 
-	dc_key  *key;
-	u8      *src_buf;
-	u8      *dst_buf;
-	u64      offset;
-	size_t   length;
+typedef struct _req_part {
+	SLIST_ENTRY       entry;
+	struct _req_item *item;
+	u32               offset;
+	u32               length;
 
-} wt_item;
+} req_part;
 
-typedef struct _wt_data {
-	KEVENT     io_msg_event;
-	LIST_ENTRY io_list_head;
-	KSPIN_LOCK io_spin_lock;
-	HANDLE     h_thread;
-	u32        io_count;
+typedef struct _req_item {
+	int         is_encrypt;
+	u32         length;
+	const char *in;
+	char       *out;
+	u64         offset;
+	callback_ex on_complete;
+	void       *param1;
+	void       *param2;
+	xts_key    *key;
+	req_part    parts[MAX_CPU_COUNT];
 
-} wt_data;
+} req_item;
+
 
 static NPAGED_LOOKASIDE_LIST pool_req_mem;
-static wt_data              *pool_data;
-static wt_data              *pool_free;
 static int                   pool_enabled;
+static KEVENT                pool_signal_event;
+static SLIST_HEADER          pool_head;
+static KSPIN_LOCK            pool_lock;
+static HANDLE                pool_threads[MAX_CPU_COUNT];
 
-static void dc_worker_thread(wt_data *w_data)
+static void dc_worker_thread(void *param)
 {
-	PLIST_ENTRY entry;
-	wt_item    *c_req, *m_req;
+	SLIST_ENTRY *entry;
+	req_part    *part;
+	req_item    *item;
+	const char  *in;
+	char        *out;
+	u64          offset;
+	u32          length;
 
 	do
 	{
-		wait_object_infinity(&w_data->io_msg_event);
-
-		do
+		KeWaitForSingleObject(&pool_signal_event, Executive, KernelMode, FALSE, NULL);
+		KeClearEvent(&pool_signal_event);
+		
+		while (entry = ExInterlockedPopEntrySList(&pool_head, &pool_lock))
 		{
-			if (entry = ExInterlockedRemoveHeadList(&w_data->io_list_head, &w_data->io_spin_lock))
-			{
-				c_req = CONTAINING_RECORD(entry, wt_item, entry);
-				m_req = c_req->main;
+			part = CONTAINING_RECORD(entry, req_part, entry);
+			item = part->item;
 
-				if (m_req->operation == F_OP_ENCRYPT)
-				{
-					dc_cipher_encrypt(
-						c_req->src_buf, c_req->dst_buf, c_req->length, c_req->offset, c_req->key);
-				} else 
-				{
-					dc_cipher_decrypt(
-						c_req->src_buf, c_req->dst_buf, c_req->length, c_req->offset, c_req->key);
-				}
+			in     = item->in + part->offset;
+			out    = item->out + part->offset;
+			offset = item->offset + part->offset;
+			length = part->length;
 
-				if (lock_dec(&m_req->blocks) == 0) {
-					m_req->on_complete(m_req->param1, m_req->param2);
-					ExFreeToNPagedLookasideList(&pool_req_mem, m_req);
-				}
-
-				/* free work item */
-				if (c_req != m_req) {
-					ExFreeToNPagedLookasideList(&pool_req_mem, c_req);
-				}
-
-				lock_dec(&w_data->io_count);
+			if (item->is_encrypt != 0) {
+				xts_encrypt(in, out, length, offset, item->key);
+			} else {
+				xts_decrypt(in, out, length, offset, item->key);
 			}
-		} while (entry != NULL);
+			if (lock_xchg_add(&item->length, 0-length) == length)			
+			{
+				item->on_complete(item->param1, item->param2);
+				ExFreeToNPagedLookasideList(&pool_req_mem, item);
+			}
+		}	
 	} while (pool_enabled != 0);
 
 	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
-static void dc_send_work_item(wt_item *req)
-{
-	wt_data *thread;
-	int      i;
-
-	thread = &pool_data[0];
-
-	for (i = 1; i < dc_cpu_count; i++)
-	{
-		if (pool_data[i].io_count < thread->io_count ) {
-			thread = &pool_data[i];
-		}
-	}
-
-	lock_inc(&thread->io_count);
-
-	ExInterlockedInsertTailList (
-		&thread->io_list_head, &req->entry, &thread->io_spin_lock);
-
-	KeSetEvent(
-		&thread->io_msg_event, IO_DISK_INCREMENT, FALSE);
-}
-
 int dc_parallelized_crypt(
-	  int  op_type, dc_key *key,
-	  u8  *io_src, u8 *io_dst, size_t io_size, u64 io_offs,
-	  callback_ex on_complete, void *param1, void *param2
-	  )
+	   int   is_encrypt, xts_key *key, callback_ex on_complete, void *param1, void *param2,
+	   const unsigned char *in, unsigned char *out, u32 len, u64 offset)
 {
-	wt_item *req, *main_req;
-	size_t   mb_size, cb_size;
-	size_t   x_off;
-	u32      m_cpu;
-	
-	mb_size = _align(io_size / dc_cpu_count, F_MIN_REQ);
-	m_cpu   = d32((io_size / mb_size) + ((io_size % mb_size) != 0));
-	x_off   = 0;
-		
-goto begin;
+	req_item *item;
+	req_part *part;
+	u32       part_sz;
+	u32       part_of;
+
+	if ( (item = ExAllocateFromNPagedLookasideList(&pool_req_mem)) == NULL) {
+		return 0;
+	}
+	item->is_encrypt = is_encrypt;
+	item->length = len;
+	item->in  = in;
+	item->out = out;
+	item->offset      = offset;
+	item->on_complete = on_complete;
+	item->param1 = param1;
+	item->param2 = param2;
+	item->key    = key;
+
+	part_sz = _align(len / dc_cpu_count, F_MIN_REQ);
+	part_of = 0; part = &item->parts[0];
 	do
 	{
-		x_off += cb_size, io_size -= cb_size;
-		
-		if (io_size == 0) {
-			break;
-		}
-begin:;		
-		cb_size = min(mb_size, io_size);		
-		
-		if ( (req = ExAllocateFromNPagedLookasideList(&pool_req_mem)) == NULL) {
-			return 0;
-		}
+		part_sz      = min(part_sz, len);
+		part->item   = item;
+		part->offset = part_of;
+		part->length = part_sz;
 
-		if (x_off == 0) 
-		{
-			main_req         = req;
-			req->operation   = op_type;
-			req->blocks      = m_cpu;
-			req->on_complete = on_complete;
-			req->param1      = param1;
-			req->param2      = param2;
-		}
+		ExInterlockedPushEntrySList(&pool_head, &part->entry, &pool_lock);
 
-		req->main    = main_req;			
-		req->key     = key;
-		req->src_buf = io_src + x_off;
-		req->dst_buf = io_dst + x_off;
-		req->offset  = io_offs + x_off;
-		req->length  = cb_size;
+		part_of += part_sz; len -= part_sz; part++;
+	} while (len != 0);
 
-		dc_send_work_item(req);
-	} while (1);
-
+	KeSetEvent(&pool_signal_event, IO_NO_INCREMENT, FALSE);
 	return 1;
 }
 
@@ -187,34 +147,28 @@ static void dc_fast_op_complete(PKEVENT sync_event, void *param)
 }
 
 void dc_fast_crypt_op(
-	   int op, u8 *in, u8 *out, size_t len, u64 offset, dc_key *key
-	   )
+		int   is_encrypt, xts_key *key,
+		const unsigned char *in, unsigned char *out, u32 len, u64 offset)
 {
 	KEVENT sync_event;
 	int    succs;
 
 	if ( (len >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
 	{
-		KeInitializeEvent(
-			&sync_event, NotificationEvent, FALSE);
+		KeInitializeEvent(&sync_event, NotificationEvent, FALSE);
 
 		succs = dc_parallelized_crypt(
-			op, key, in, out, len, offset, dc_fast_op_complete, &sync_event, NULL
-			);
-
+			is_encrypt, key, dc_fast_op_complete, &sync_event, NULL, in, out, len, offset);
+		
 		if (succs != 0) {
-			wait_object_infinity(&sync_event);		
-		} else {
-			goto docrypt;
+			KeWaitForSingleObject(&sync_event, Executive, KernelMode, FALSE, NULL);
+			return;
 		}
-	} else 
-	{
-docrypt:;
-		if (op == F_OP_ENCRYPT) {
-			dc_cipher_encrypt(in, out, len, offset, key);
-		} else {
-			dc_cipher_decrypt(in, out, len, offset, key);
-		}
+	}
+	if (is_encrypt != 0) {
+		xts_encrypt(in, out, len, offset, key);
+	} else {
+		xts_decrypt(in, out, len, offset, key);
 	}
 }
 
@@ -226,53 +180,42 @@ void dc_free_fast_crypt()
 	if (lock_xchg(&pool_enabled, 0) == 0) {
 		return;
 	}
-
 	/* stop all threads */
-	for (i = 0; i < dc_cpu_count; i++) 
+	for (i = 0; i < MAX_CPU_COUNT; i++)
 	{
-		if (pool_data[i].h_thread != NULL) {
-			KeSetEvent(&pool_data[i].io_msg_event, IO_NO_INCREMENT, FALSE);
-			ZwWaitForSingleObject(pool_data[i].h_thread, FALSE, NULL);
-			ZwClose(pool_data[i].h_thread);
+		if (pool_threads[i] != NULL) {
+			KeSetEvent(&pool_signal_event, IO_NO_INCREMENT, FALSE);
+			ZwWaitForSingleObject(pool_threads[i], FALSE, NULL);
+			ZwClose(pool_threads[i]);
 		}
 	}
-
 	/* free memory */
+	zeroauto(&pool_threads, sizeof(pool_threads));
 	ExDeleteNPagedLookasideList(&pool_req_mem);
-	mem_free(pool_data);
 }
 
 int dc_init_fast_crypt()
 {
-	int resl, i;
-	
-	/* allocate memory */
-	if ( (pool_data = mem_alloc(sizeof(wt_data) * dc_cpu_count)) == NULL ) {
-		return ST_NOMEM;
+	int i;
+
+	/* enable thread pool */
+	if (lock_xchg(&pool_enabled, 1) != 0) {
+		return ST_OK;
 	}
-	zeromem(pool_data, sizeof(wt_data) * dc_cpu_count);
-
+	/* initialize resources */
 	ExInitializeNPagedLookasideList(
-		&pool_req_mem, mm_alloc_success, NULL, 0, sizeof(wt_item), '3_cd', 0);
+		&pool_req_mem, NULL, NULL, 0, sizeof(req_item), '3_cd', 0);
 
-	pool_enabled = 1;
+	KeInitializeEvent(&pool_signal_event, NotificationEvent, FALSE);	
+	ExInitializeSListHead(&pool_head);
+	KeInitializeSpinLock(&pool_lock);	
 
 	/* start worker threads */
 	for (i = 0; i < dc_cpu_count; i++)
 	{
-		InitializeListHead(&pool_data[i].io_list_head);
-		KeInitializeSpinLock(&pool_data[i].io_spin_lock);
-
-		KeInitializeEvent(
-			&pool_data[i].io_msg_event, SynchronizationEvent, FALSE);
-
-		resl = start_system_thread(
-			dc_worker_thread, &pool_data[i], &pool_data[i].h_thread);
-
-		if (resl != ST_OK) {
-			dc_free_fast_crypt(); break;
+		if (start_system_thread(dc_worker_thread, NULL, &pool_threads[i]) != ST_OK) {
+			dc_free_fast_crypt(); return ST_ERR_THREAD;
 		}
 	}
-
-	return resl;
+	return ST_OK;
 }

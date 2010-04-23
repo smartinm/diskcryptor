@@ -2,7 +2,7 @@
 Signature= "$Windows NT$"
 
 [PEBuilder]
-Name="DiskCryptor 0.8"
+Name="DiskCryptor 0.9"
 Enable=1
 
 [WinntDirectories]
@@ -27,7 +27,7 @@ nu2menu.xml, dcrypt.xml
 0x2, "ControlSet001\Services\dcrypt","ImagePath","System32\drivers\dcrypt.sys"
 0x4, "ControlSet001\Services\dcrypt","Start", 0x00000000
 0x4, "ControlSet001\Services\dcrypt","Type", 0x00000001
-0x4, "ControlSet001\Services\dcrypt\config","Flags", 0x00000002
+0x4, "ControlSet001\Services\dcrypt\config","Flags", 0x00000082
 0x3, "ControlSet001\Services\dcrypt\config","Hotkeys", 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 0x4, "ControlSet001\Services\dcrypt\config","sysBuild", 0x00000000
 0x1, "ControlSet001\Services\dc_fsf","group","System Bus Extender"

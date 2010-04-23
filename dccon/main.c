@@ -1,14 +1,13 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2008 
+	* Copyright (c) 2008-2010 
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -33,8 +32,6 @@
 #include "dcapi/keyfiles.h"
 #include "dcapi/cd_enc.h"
 #include "boot/boot.h"
-#include "crypto/crypto.h"
-#include "crypto/pkcs5.h"
 #include "console.h"
 
 typedef struct _bench_item {
@@ -124,14 +121,18 @@ static void print_usage()
 		L"      -dst    destination file\n"
 		L"      -params encryption parameters (similar to -encrypt)\n"
 		L"   -boot [action]\n"
-		L"      -enum                      enumerate all HDDs\n"
-		L"      -setmbr   [hdd]            setup bootloader to HDD master boot record\n"
-		L"      -delmbr   [hdd]            delete bootloader from HDD master boot record\n"
-		L"      -updmbr   [hdd]            update bootloader on HDD master boot record\n"
-		L"      -setpar   [partition root] setup bootloader to bootable partition (Floppy, USB-Stick, etc)\n"
-	    L"      -makeiso  [file]           make .iso bootloader image\n"
-		L"      -makepxe  [file]           make bootloader image for PXE network booting\n"
-		L"      -config   [hdd/file]       change bootloader configuration\n");
+		L"      -enum                            enumerate all HDDs\n"
+		L"      -setmbr   [hdd] [opt]            setup bootloader to HDD master boot record\n"
+		L"         -small                        use small bootloader, only with AES\n"
+		L"      -delmbr   [hdd]                  delete bootloader from HDD master boot record\n"
+		L"      -updmbr   [hdd]                  update bootloader on HDD master boot record\n"
+		L"      -setpar   [partition root] [opt] setup bootloader to bootable partition (Floppy, USB-Stick, etc)\n"
+		L"         -small                        use small bootloader, only with AES\n"
+	    L"      -makeiso  [file] [opt]           make .iso bootloader image\n"
+		L"         -small                        use small bootloader, only with AES\n"
+		L"      -makepxe  [file] [opt]           make bootloader image for PXE network booting\n"
+		L"         -small                        use small bootloader, only with AES\n"
+		L"      -config   [hdd/file]             change bootloader configuration\n");
 }
 
 static void make_dev_status(vol_inf *inf, wchar_t *status)
@@ -518,12 +519,12 @@ static int dc_cd_callback(u64 iso_sz, u64 enc_sz, void *param)
 	return ST_OK;
 }
 
-int dc_set_boot_interactive(int d_num)
+int dc_set_boot_interactive(int d_num, int small_boot)
 {
 	ldr_config conf;
 	int        resl;
 
-	if ( (resl = dc_set_mbr(d_num, 0)) == ST_NF_SPACE )
+	if ( (resl = dc_set_mbr(d_num, 0, small_boot)) == ST_NF_SPACE )
 	{
 		wprintf(
 			L"Not enough space after partitions to install bootloader.\n"
@@ -531,7 +532,7 @@ int dc_set_boot_interactive(int d_num)
 
 		if (tolower(_getch()) == 'y') 
 		{
-			if ( ((resl = dc_set_mbr(d_num, 1)) == ST_OK) && 
+			if ( ((resl = dc_set_mbr(d_num, 1, small_boot)) == ST_OK) && 
 				 (dc_get_mbr_config(d_num, NULL, &conf) == ST_OK) )
 			{
 				conf.boot_type = BT_ACTIVE;
@@ -1021,7 +1022,6 @@ int wmain(int argc, wchar_t *argv[])
 				if (crypt.wp_mode == WP_NONE) {
 					crypt.wp_mode = inf->status.crypt.wp_mode;
 				}
-
 				resl = dc_encrypt_loop(inf, crypt.wp_mode);
 				break;
 			}
@@ -1039,8 +1039,17 @@ int wmain(int argc, wchar_t *argv[])
 			if ( (inf->status.flags & F_SYSTEM) || (wcscmp(inf->device, boot_dev) == 0) )
 			{
 				ldr_config conf;
+				dc_conf    dcfg;
 				int        dsk_1, dsk_2;
-				
+
+				if ( (crypt.cipher_id != CF_AES) && (dc_get_conf_flags(&dcfg) == ST_OK) && 
+					 (dcfg.load_flags & DST_SMALL_MEM) )
+				{
+					wprintf(
+						L"Your BIOS does not provide enough base memory, "
+						L"you can only use AES to encrypt the boot partition.");
+					resl = ST_OK; break;
+				}				
 				if (dc_get_boot_disk(&dsk_1, &dsk_2) != ST_OK)
 				{
 					wprintf(
@@ -1063,7 +1072,7 @@ int wmain(int argc, wchar_t *argv[])
 
 					if (getchr('1', '2') == '1') 
 					{
-						if ( (resl = dc_set_boot_interactive(-1)) != ST_OK ) {
+						if ( (resl = dc_set_boot_interactive(-1, -1)) != ST_OK ) {
 							break;
 						}
 					}

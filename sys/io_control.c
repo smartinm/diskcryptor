@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -41,9 +40,7 @@
 	(ioctl == IOCTL_CDROM_CHECK_VERIFY) || \
 	(ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
 
-static int dc_ioctl_process(
-			  u32 code, dc_ioctl *data
-			  )
+static int dc_ioctl_process(u32 code, dc_ioctl *data)
 {
 	int resl = ST_ERROR;
 
@@ -120,14 +117,12 @@ static int dc_ioctl_process(
 		break;
 		case DC_CTL_DECRYPT_STEP:
 			{
-				resl = dc_send_sync_packet(
-					data->device, S_OP_DEC_BLOCK, 0);
+				resl = dc_send_sync_packet(data->device, S_OP_DEC_BLOCK, 0);
 			}
 		break; 
 		case DC_CTL_SYNC_STATE:
 			{
-				resl = dc_send_sync_packet(
-					data->device, S_OP_SYNC, 0);
+				resl = dc_send_sync_packet(data->device, S_OP_SYNC, 0);
 			}
 		break;
 		case DC_CTL_RESOLVE:
@@ -151,8 +146,7 @@ static int dc_ioctl_process(
 		break;
 		case DC_FORMAT_STEP:
 			{
-				resl = dc_format_step(
-					data->device, data->crypt.wp_mode);
+				resl = dc_format_step(data->device, data->crypt.wp_mode);
 			}
 		break;
 		case DC_FORMAT_DONE:
@@ -163,36 +157,6 @@ static int dc_ioctl_process(
 	}
 
 	return resl;
-}
-
-static void dc_hw_crypto_changed()
-{
-	dev_hook *hook;
-
-	dc_init_crypto(dc_conf_flags & CONF_HW_CRYPTO);
-
-	if (hook = dc_first_hook())
-	{
-		do
-		{
-			wait_object_infinity(&hook->busy_lock);
-			wait_object_infinity(&hook->key_lock);
-
-			if (hook->flags & F_ENABLED) 
-			{
-				if (hook->hdr_key != NULL) {
-					dc_cipher_reinit(hook->hdr_key);
-				}
-				if (hook->tmp_key != NULL) {
-					dc_cipher_reinit(hook->tmp_key);
-				}
-				dc_cipher_reinit(&hook->dsk_key);
-			}
-
-			KeReleaseMutex(&hook->key_lock, FALSE);
-			KeReleaseMutex(&hook->busy_lock, FALSE);
-		} while (hook = dc_next_hook(hook));
-	}
 }
 
 NTSTATUS
@@ -328,21 +292,17 @@ NTSTATUS
 		case DC_CTL_SET_CONF:
 			{
 				dc_conf *conf = data;
-				u32      hw_c = (dc_conf_flags & CONF_HW_CRYPTO);				
-
+				
 				if (in_len == sizeof(dc_conf))
 				{
 					dc_conf_flags = conf->conf_flags;
 					status        = STATUS_SUCCESS;
 
-					if ( hw_c != (dc_conf_flags & CONF_HW_CRYPTO) ) {
-						dc_hw_crypto_changed();					
-					}
-
 					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 						dc_clean_pass_cache();
 					}
 					dc_fsf_set_conf();
+					xts_init(dc_conf_flags & CONF_HW_CRYPTO);
 				}
 			}
 		break;
@@ -352,8 +312,7 @@ NTSTATUS
 
 				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
 				{
-					smem->resl = dc_lock_mem(
-						smem->data, smem->size, irp_sp->FileObject);
+					smem->resl = dc_lock_mem(smem->data, smem->size, irp_sp->FileObject);
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_lock_ctl);
@@ -366,8 +325,7 @@ NTSTATUS
 
 				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
 				{
-					smem->resl = dc_unlock_mem(
-						smem->data, irp_sp->FileObject);
+					smem->resl = dc_unlock_mem(smem->data, irp_sp->FileObject);
 
 					status = STATUS_SUCCESS;
 					bytes  = sizeof(dc_lock_ctl);
@@ -434,7 +392,6 @@ NTSTATUS
 			}
 		break;
 	}
-
 	return dc_complete_irp(irp, status, bytes);
 }
 
@@ -459,7 +416,6 @@ NTSTATUS
 	if (irp->PendingReturned) {
 		IoMarkIrpPending(irp);
 	}
-
 	if ( NT_SUCCESS(status) && (hook->flags & F_ENABLED) )
 	{
 		switch (ioctl)
@@ -490,7 +446,6 @@ NTSTATUS
 			break;
 		}
 	}
-
 	if ( (hook->flags & F_REMOVABLE) && (IS_VERIFY_IOCTL(ioctl) != 0) )
 	{
 		chg_c  = pv(irp->AssociatedIrp.SystemBuffer);
@@ -506,7 +461,6 @@ NTSTATUS
 			dc_unmount_async(hook);
 		}	
 	}
-
 	IoReleaseRemoveLock(&hook->remv_lock, irp);
 
 	return STATUS_SUCCESS;

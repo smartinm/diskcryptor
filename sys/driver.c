@@ -1,14 +1,13 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2009 
+    * Copyright (c) 2007-2010 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,13 +23,10 @@
 #include <stdio.h>
 #include "defines.h"
 #include "pkcs5.h"
-#include "tests.h"
-#include "crypto.h"
 #include "crc32.h"
 #include "driver.h"
 #include "prng.h"
 #include "misc.h"
-#include "fastmem.h"
 #include "dump_hook.h"
 #include "misc_irp.h"
 #include "devhook.h"
@@ -44,6 +40,9 @@
 #include "fast_crypt.h"
 #include "debug.h"
 #include "fsf_control.h"
+#include "xts_aes_ni.h"
+#include "aes_padlock.h"
+#include "misc_mem.h"
 
 PDRIVER_OBJECT dc_driver;
 PDEVICE_OBJECT dc_device;
@@ -51,8 +50,9 @@ u32            dc_os_type;
 u32            dc_io_count;
 u32            dc_dump_disable;
 u32            dc_no_usb_mount;
-u32            dc_conf_flags; /* config flags readed from registry */
-u32            dc_load_flags; /* other flags setted by driver      */
+u32            dc_conf_flags; /* config flags readed from registry  */
+u32            dc_load_flags; /* other flags setted by driver       */
+u32            dc_boot_kbs;   /* bootloader base memory size in kbs */
 int            dc_cpu_count;  /* CPU's count */
 
 typedef NTSTATUS (*dc_dispatch)(dev_hook *hook, PIRP irp);
@@ -287,6 +287,25 @@ static int dc_create_control_device()
 	return resl;
 }
 
+static void dc_check_base_mem()
+{
+	PHYSICAL_ADDRESS addr;
+	unsigned char   *mem;
+	
+	/* map first physical memory page */
+	addr.HighPart = 0; addr.LowPart = 0;
+
+	if (mem = MmMapIoSpace(addr, PAGE_SIZE, MmCached)) 
+	{
+		DbgMsg("base_mem: %d kb\n", p16(mem + 0x0413)[0]);
+		DbgMsg("boot_mem: %d kb\n", dc_boot_kbs);
+
+		if (p16(mem + 0x0413)[0] + dc_boot_kbs < 512 + DC_BOOTHOOK_SIZE) {
+			dc_load_flags |= DST_SMALL_MEM;
+		}
+		MmUnmapIoSpace(mem, PAGE_SIZE);
+	}
+}
 
 NTSTATUS 
   DriverEntry(
@@ -304,6 +323,7 @@ NTSTATUS
 
 	dc_os_type = OS_UNK; 
 	status     = STATUS_DRIVER_INTERNAL_ERROR;
+	dc_driver  = DriverObject;
 
 	if ( (maj_ver == 5) && (min_ver == 0) ) {
 		dc_os_type = OS_WIN2K; dc_no_usb_mount = 1;
@@ -311,18 +331,19 @@ NTSTATUS
 	if (maj_ver >= 6) {
 		dc_os_type = OS_VISTA;
 	}	
-
-	dc_driver = DriverObject;
 #ifdef DBG_MSG
 	dc_dbg_init();
 #endif
 	DbgMsg("dcrypt.sys started\n");
 
-#ifdef AES_ASM_VIA
-	if (aes256_ace_available() != 0) {
+	if (aes256_padlock_available() != 0) {
 		dc_load_flags |= DST_VIA_PADLOCK;
 	}
-#endif
+	if (xts_aes_ni_available() != 0) {
+		dc_load_flags |= DST_INTEL_NI;
+	}
+	DbgMsg("dc_load_flags is %08x\n", dc_load_flags);
+
 	/* get number of processors in system */
 	cpu_mask     = KeQueryActiveProcessors();
 	dc_cpu_count = 0;
@@ -334,13 +355,14 @@ NTSTATUS
 	DbgMsg("%d processors detected\n", dc_cpu_count);
 
 	dc_load_config(RegistryPath);
-	dc_init_crypto(dc_conf_flags & CONF_HW_CRYPTO);
+	xts_init(dc_conf_flags & CONF_HW_CRYPTO);
 	dc_init_devhook(); 
 	dc_init_mount();
-	fastmem_init(); 
+	mm_init(); 
 	mem_lock_init();
 	dc_init_rw();
 	dc_get_boot_pass();
+	dc_check_base_mem();
 	
 	/* setup IRP handlers */
 	for (num = 0; num <= IRP_MJ_MAXIMUM_FUNCTION; num++) {
@@ -350,12 +372,6 @@ NTSTATUS
 
 	do
 	{
-#ifdef CRYPT_TESTS
-		/* test crypto primitives */
-		if (crypto_self_test() == 0) {
-			break;
-		}
-#endif
 		/* init random number generator */
 		if (rnd_init_prng() != ST_OK) {
 			break;
@@ -386,10 +402,9 @@ NTSTATUS
 
 	if (NT_SUCCESS(status) == FALSE) {
 		dc_free_fast_crypt();
-		fastmem_free();
+		mm_uninit();
 		dc_free_rw();
-	} 
-
+	}
 	return status;
 }
 

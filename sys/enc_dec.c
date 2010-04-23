@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -32,12 +31,13 @@
 #include "enc_dec.h"
 #include "data_wipe.h"
 #include "misc_irp.h"
-#include "fastmem.h"
 #include "fast_crypt.h"
 #include "misc_volume.h"
 #include "debug.h"
 #include "storage.h"
 #include "fsf_control.h"
+#include "crypto_head.h"
+#include "misc_mem.h"
 
 typedef struct _sync_struct {
 	KEVENT sync_event;
@@ -225,10 +225,11 @@ static void dc_save_enc_state(dev_hook *hook, int finish)
 		
 	DbgMsg("dc_save_enc_state\n");
 
-	if ( (header = fast_alloc(sizeof(dc_header))) == NULL ) {
+	header = mm_alloc(sizeof(dc_header), MEM_FAST | MEM_SUCCESS | MEM_SECURE);
+
+	if (header == NULL) {
 		return;
 	}
-
 	/* copy volume header */
 	autocpy(header, &hook->tmp_header, sizeof(dc_header));
 
@@ -256,26 +257,23 @@ static void dc_save_enc_state(dev_hook *hook, int finish)
 	header->hdr_crc = crc32(pv(&header->version), DC_CRC_AREA_SIZE);
 
 	/* encrypt volume header */
-	dc_cipher_encrypt(
-		pv(header), pv(header), sizeof(dc_header), 0, hook->hdr_key);
+	xts_encrypt(pv(header), pv(header), sizeof(dc_header), 0, hook->hdr_key);
 
 	/* save original salt */
 	autocpy(header->salt, hook->tmp_header.salt, PKCS5_SALT_SIZE);
 	
 	/* write volume header */
-	dc_device_rw(
-		hook, IRP_MJ_WRITE, header, sizeof(dc_header), 0);
+	dc_device_rw(hook, IRP_MJ_WRITE, header, sizeof(dc_header), 0);
 
-	/* prevent leaks */
-	zeroauto(header, sizeof(dc_header));
-	fast_free(header);
+	/* free memory */
+	mm_free(header);
 }
 
 
 static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 {
 	NTSTATUS status;
-	dc_key  *tmp_key;
+	xts_key *tmp_key;
 	u8      *buff = hook->tmp_buff;
 	int      resl;
 	
@@ -318,17 +316,13 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 				{
 					DbgMsg("S_INIT_RE_ENC\n");
 
-					if ( (tmp_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+					if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 						resl = ST_NOMEM; break;
 					}
-
 					/* swap keys */
-					autocpy(tmp_key, &hook->dsk_key, sizeof(dc_key));
-					autocpy(&hook->dsk_key, hook->tmp_key, sizeof(dc_key));
-					autocpy(hook->tmp_key, tmp_key, sizeof(dc_key));
-					/* re-initialize keys */
-					dc_cipher_reinit(hook->tmp_key);
-					dc_cipher_reinit(&hook->dsk_key);
+					autocpy(tmp_key, &hook->dsk_key, sizeof(xts_key));
+					autocpy(&hook->dsk_key, hook->tmp_key, sizeof(xts_key));
+					autocpy(hook->tmp_key, tmp_key, sizeof(xts_key));
 
 					/* set re-encryption flag */
 					hook->flags |= F_REENCRYPT;
@@ -337,23 +331,21 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 					/* save initial state */
 					dc_save_enc_state(hook, 0);
 					
-					/* prevent leaks */
-					zeroauto(tmp_key, sizeof(dc_key));
-					mem_free(tmp_key); resl = ST_OK;
+					mm_free(tmp_key); 
+					resl = ST_OK;
 				}
 			break;
 			case S_CONTINUE_RE_ENC:
 				{
 					DbgMsg("S_CONTINUE_RE_ENC\n");
 
-					if ( (tmp_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+					if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 						resl = ST_NOMEM; break;
 					}
 
 					/* initialize secondary volume key */
-					dc_cipher_init(
-						(hook->tmp_key = tmp_key), 
-						hook->tmp_header.alg_2, hook->tmp_header.key_2);					
+					xts_set_key(hook->tmp_header.key_2, hook->tmp_header.alg_2, tmp_key);
+					hook->tmp_key = tmp_key;
 
 					/* set re-encryption flag */
 					hook->flags |= F_REENCRYPT; resl = ST_OK;
@@ -382,14 +374,14 @@ static int dc_process_sync_packet(
 						dc_wipe_free(&hook->wp_ctx);
 
 						resl = dc_wipe_init(
-							&hook->wp_ctx, hook, ENC_BLOCK_SIZE, new_wp);
+							&hook->wp_ctx, hook, ENC_BLOCK_SIZE, new_wp, hook->crypt.cipher_id);
 
 						if (resl == ST_OK) 
 						{
 							hook->crypt.wp_mode = d8(new_wp);
 							dc_save_enc_state(hook, 0);
 						} else {
-							dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE);
+							dc_wipe_init(&hook->wp_ctx, hook, ENC_BLOCK_SIZE, WP_NONE, 0);
 						}
 					}
 
@@ -475,12 +467,12 @@ static void dc_sync_op_routine(dev_hook *hook)
 	del_storage = 0;
 
 	/* allocate resources */
-	if (buff = mem_alloc(ENC_BLOCK_SIZE))
+	if (buff = mm_alloc(ENC_BLOCK_SIZE, 0))
 	{
 		hook->tmp_buff = buff;
 
 		resl = dc_wipe_init(
-			&hook->wp_ctx, hook, ENC_BLOCK_SIZE, hook->crypt.wp_mode);
+			&hook->wp_ctx, hook, ENC_BLOCK_SIZE, hook->crypt.wp_mode, hook->crypt.cipher_id);
 
 		if (resl == ST_OK) 
 		{
@@ -532,6 +524,9 @@ static void dc_sync_op_routine(dev_hook *hook)
 				/* process packet */
 				resl = dc_process_sync_packet(hook, packet, &sctx);
 
+				/* prevent system power state changes */
+				PoSetSystemState(ES_SYSTEM_REQUIRED);
+
 				/* disable synchronous irp processing */
 				if (resl == ST_FINISHED) {
 					del_storage  = !(hook->flags & F_ENABLED) && 
@@ -565,33 +560,22 @@ cleanup:;
 	if (sctx.winit != 0) {
 		dc_wipe_free(&hook->wp_ctx);
 	}
-
 	if (buff != NULL) {
-		mem_free(buff);
+		mm_free(buff);
 	}
-
 	/* stop RW thread if needed */
 	if ( !(hook->flags & F_ENABLED) ) {
 		dc_stop_rw_thread(hook);
 	}
-
 	/* prevent leaks */
 	wait_object_infinity(&hook->key_lock);
 
-	if (hook->hdr_key != NULL) 
-	{
-		zeroauto(hook->hdr_key, sizeof(dc_key));
-		mem_free(hook->hdr_key);
-		hook->hdr_key = NULL;
+	if (hook->hdr_key != NULL) {
+		mm_free(hook->hdr_key); hook->hdr_key = NULL;
 	}
-
-	if (hook->tmp_key != NULL)
-	{
-		zeroauto(hook->tmp_key, sizeof(dc_key));
-		mem_free(hook->tmp_key);
-		hook->tmp_key = NULL;
+	if (hook->tmp_key != NULL) {
+		mm_free(hook->tmp_key); hook->tmp_key = NULL;
 	}
-
 	zeroauto(&hook->tmp_header, sizeof(hook->tmp_header));
 	KeReleaseMutex(&hook->key_lock, FALSE);
 
@@ -663,7 +647,7 @@ int dc_send_sync_packet(wchar_t *dev_name, u32 type, void *param)
 			resl = ST_CANCEL; break;
 		}
 
-		if ( (packet = mem_alloc(sizeof(sync_packet))) == NULL ) {
+		if ( (packet = mm_alloc(sizeof(sync_packet), 0)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -684,7 +668,7 @@ int dc_send_sync_packet(wchar_t *dev_name, u32 type, void *param)
 		wait_object_infinity(&packet->sync_event);
 
 		resl = packet->status; mutex = 1;
-		mem_free(packet);		
+		mm_free(packet);
 	} while (0);
 
 	if (hook != NULL) 
@@ -694,7 +678,6 @@ int dc_send_sync_packet(wchar_t *dev_name, u32 type, void *param)
 		}
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }
 
@@ -715,7 +698,7 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 {
 	dc_header *header;
 	dev_hook  *hook;
-	dc_key    *hdr_key;
+	xts_key   *hdr_key;
 	int        resl;
 	u64        storage;
 				
@@ -753,17 +736,13 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 		DbgMsg("storage created\n");
 
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE | MEM_ZEROED)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* create volume header */
-		zeroauto(header, sizeof(dc_header));
-
 		rnd_get_bytes(pv(header->salt),     PKCS5_SALT_SIZE);
 		rnd_get_bytes(pv(&header->disk_id), sizeof(u32));
 		rnd_get_bytes(pv(header->key_1),    DISKKEY_SIZE);
@@ -776,9 +755,8 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		header->use_size = hook->dsk_size;
 
 		/* initialize volume key */
-		dc_cipher_init(
-			&hook->dsk_key, crypt->cipher_id, header->key_1);
-
+		xts_set_key(header->key_1, crypt->cipher_id, &hook->dsk_key);
+		
 		/* initialize header key */
 		dc_init_hdr_key(
 			hdr_key, header, crypt->cipher_id, password);
@@ -814,22 +792,13 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		dc_fsf_set_flags(hook->dev_name, hook->flags);
 	} while (0);
 
-	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }
 
@@ -838,8 +807,8 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 	dc_header *header = NULL;
 	crypt_info o_crypt;
 	dev_hook  *hook;
-	dc_key    *hdr_key = NULL;
-	dc_key    *dsk_key = NULL;
+	xts_key   *hdr_key = NULL;
+	xts_key   *dsk_key = NULL;
 	int        resl;
 
 	DbgMsg("dc_reencrypt_start\n");
@@ -864,16 +833,14 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 
 		/* allocate new volume key */
-		if ( (dsk_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (dsk_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
 		/* allocate new header key */
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -906,8 +873,7 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			hdr_key, header, header->alg_1, password);
 
 		/* initialize new volume key */
-		dc_cipher_init(
-			dsk_key, header->alg_1, header->key_1);
+		xts_set_key(header->key_1, header->alg_1, dsk_key);
 
 		/* save old encryption info */
 		o_crypt = hook->crypt;
@@ -934,27 +900,14 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 	} while (0);
 
-	/* prevent leaks */
-	if (dsk_key != NULL) {
-		zeroauto(dsk_key, sizeof(dc_key));
-		mem_free(dsk_key);
-	}
-
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
+	if (dsk_key != NULL) { mm_free(dsk_key); }
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }
 
@@ -962,7 +915,7 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 {
 	dc_header *header = NULL;
 	dev_hook  *hook;
-	dc_key    *hdr_key = NULL;
+	xts_key   *hdr_key = NULL;
 	int        resl;
 				
 	DbgMsg("dc_decrypt_start\n");
@@ -980,12 +933,10 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 		{
 			resl = ST_ERROR; break;
 		}
-
-		if ( (header = mem_alloc(sizeof(dc_header))) == NULL ) {
+		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		if ( (hdr_key = mem_alloc(sizeof(dc_key))) == NULL ) {
+		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -1021,21 +972,12 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 		}
 	} while (0);
 
-	/* prevent leaks */
-	if (hdr_key != NULL) {
-		zeroauto(hdr_key, sizeof(dc_key));
-		mem_free(hdr_key);
-	}
-
-	if (header != NULL) {
-		zeroauto(header, sizeof(dc_header));
-		mem_free(header);
-	}
+	if (hdr_key != NULL) { mm_free(hdr_key); }
+	if (header != NULL)  { mm_free(header); }
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }

@@ -5,7 +5,7 @@
 #include <ntddstor.h>
 #include <ntddvol.h>
 #include "defines.h"
-#include "crypto.h"
+#include "xts_fast.h"
 #include "driver.h"
 #include "data_wipe.h"
 
@@ -19,7 +19,7 @@ typedef enum _dc_pnp_state {
 } dc_pnp_state;
 
 
-typedef aligned struct _dev_hook
+typedef align16 struct _dev_hook
 {
 	u32            ext_type;    /* device extention type */
 	PDEVICE_OBJECT orig_dev;
@@ -30,7 +30,7 @@ typedef aligned struct _dev_hook
 
 	wchar_t        dev_name[MAX_DEVICE + 1];
 
-	calign dc_key  dsk_key;
+	xts_key        dsk_key;
 
 	u32            flags;        /* device flags */
 	u32            mnt_flags;    /* mount flags  */
@@ -50,11 +50,10 @@ typedef aligned struct _dev_hook
 
 	crypt_info     crypt;
 	wipe_ctx       wp_ctx;
-	rnd_ctx       *fmt_rnd;
 
 	u8            *tmp_buff;
-	dc_key        *hdr_key;
-	dc_key        *tmp_key;
+	xts_key       *hdr_key;
+	xts_key       *tmp_key;
 	dc_header      tmp_header;
 
 	u64            dsk_size; /* full device size */

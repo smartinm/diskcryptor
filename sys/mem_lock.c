@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,6 +22,7 @@
 #include "defines.h"
 #include "driver.h"
 #include "mem_lock.h"
+#include "misc_mem.h"
 
 typedef struct _lock_mem {
 	LIST_ENTRY entry;
@@ -49,16 +49,12 @@ int dc_lock_mem(void *mem, u32 size, void *f_obj)
 	k_map = NULL; locked = 0;
 	do
 	{
-		if ( (s_mem = mem_alloc(sizeof(lock_mem))) == NULL ) {
+		if ( (s_mem = mm_alloc(sizeof(lock_mem), MEM_SUCCESS)) == NULL ) {
 			break;
 		}
-
-		mdl = IoAllocateMdl(mem, size, FALSE, FALSE, NULL);
-
-		if (mdl == NULL) {
+		if ( (mdl = IoAllocateMdl(mem, size, FALSE, FALSE, NULL)) == NULL ) {
 			break;
-		}
-		
+		}		
 		__try 
 		{
 			MmProbeAndLockPages(mdl, UserMode, IoModifyAccess);
@@ -88,18 +84,11 @@ int dc_lock_mem(void *mem, u32 size, void *f_obj)
 
 	if (k_map == NULL)
 	{
-		if (mdl != NULL) 
-		{
-			if (locked != 0) {
-				MmUnlockPages(mdl);
-			}
-
+		if (mdl != NULL) {
+			if (locked != 0) { MmUnlockPages(mdl); }
 			IoFreeMdl(mdl);
 		}
-
-		if (s_mem != NULL) {
-			mem_free(s_mem);
-		}
+		if (s_mem != NULL) { mm_free(s_mem); }
 
 		return ST_NOMEM;
 	} else {
@@ -147,7 +136,7 @@ int dc_unlock_mem(void *mem, void *f_obj)
 		/* free MDL */
 		IoFreeMdl(s_mem->mdl);
 		/* free descriptor */
-		mem_free(s_mem);
+		mm_free(s_mem);
 		
 		return ST_OK;
 	} else {
@@ -188,7 +177,7 @@ void dc_clean_locked_mem(void *f_obj)
 				/* free MDL */
 				IoFreeMdl(s_mem->mdl);
 				/* free descriptor */
-				mem_free(s_mem);
+				mm_free(s_mem);
 			}
 		}
 	}

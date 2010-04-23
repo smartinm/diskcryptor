@@ -54,24 +54,20 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				UseUnicodeResponseFiles="false"
 				Optimization="3"
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto"
 				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				StringPooling="true"
-				ExceptionHandling="0"
 				BufferSecurityCheck="false"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 				CallingConvention="2"
-				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -86,23 +82,18 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
 				OutputFile="$(OutDir)\dcrypt.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
 				GenerateManifest="false"
-				GenerateDebugInformation="false"
 				SubSystem="3"
 				Driver="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="1"
 				EntryPointSymbol="DriverEntry"
 				BaseAddress="0x00010000"
 				RandomizedBaseAddress="0"
 				DataExecutionPrevention="0"
-				Profile="false"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -159,24 +150,20 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				UseUnicodeResponseFiles="false"
 				Optimization="3"
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\include\crypto"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto"
 				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
 				IgnoreStandardIncludePath="true"
 				StringPooling="true"
-				ExceptionHandling="0"
 				BufferSecurityCheck="false"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 				CallingConvention="2"
-				CompileAs="1"
 				DisableSpecificWarnings="4103"
 			/>
 			<Tool
@@ -192,13 +179,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				UseUnicodeResponseFiles="false"
 				AdditionalOptions="ntoskrnl.lib hal.lib"
 				OutputFile="$(OutDir)\dcrypt.sys"
 				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
 				GenerateManifest="false"
-				IgnoreAllDefaultLibraries="true"
 				SubSystem="3"
 				Driver="1"
 				OptimizeReferences="2"
@@ -214,8 +198,6 @@
 			/>
 			<Tool
 				Name="VCManifestTool"
-				OutputManifestFile="$(IntDir)\$(TargetFileName).embed.manifest"
-				EmbedManifest="false"
 			/>
 			<Tool
 				Name="VCXDCMakeTool"
@@ -247,6 +229,10 @@
 			</File>
 			<File
 				RelativePath="..\include\sys\boot_pass.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\sys\crypto_head.h"
 				>
 			</File>
 			<File
@@ -282,10 +268,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\fastmem.h"
-				>
-			</File>
-			<File
 				RelativePath="..\include\sys\fsf_control.h"
 				>
 			</File>
@@ -306,7 +288,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\misc_mem.h"
+				RelativePath="..\include\sys\misc_mem.h"
 				>
 			</File>
 			<File
@@ -337,39 +319,43 @@
 				Name="crypto"
 				>
 				<File
-					RelativePath="..\include\crypto\aes.h"
+					RelativePath="..\crypto\aes_asm.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\aes_tab.h"
+					RelativePath="..\crypto\aes_key.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\crc32.h"
+					RelativePath="..\crypto\aes_padlock.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\crypto.h"
+					RelativePath="..\crypto\crc32.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\pkcs5.h"
+					RelativePath="..\crypto\pkcs5.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\serpent.h"
+					RelativePath="..\crypto\serpent.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\sha512.h"
+					RelativePath="..\crypto\sha512.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\tests.h"
+					RelativePath="..\crypto\twofish.h"
 					>
 				</File>
 				<File
-					RelativePath="..\include\crypto\twofish.h"
+					RelativePath="..\crypto\xts_aes_ni.h"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\xts_fast.h"
 					>
 				</File>
 			</Filter>
@@ -383,6 +369,10 @@
 			</File>
 			<File
 				RelativePath=".\boot_pass.c"
+				>
+			</File>
+			<File
+				RelativePath=".\crypto_head.c"
 				>
 			</File>
 			<File
@@ -411,10 +401,6 @@
 			</File>
 			<File
 				RelativePath=".\fast_crypt.c"
-				>
-			</File>
-			<File
-				RelativePath=".\fastmem.c"
 				>
 			</File>
 			<File
@@ -469,23 +455,11 @@
 				Name="crypto"
 				>
 				<File
-					RelativePath="..\crypto\aes.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\aes_tab.c"
+					RelativePath="..\crypto\aes_key.c"
 					>
 				</File>
 				<File
 					RelativePath="..\crypto\crc32.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\crypto.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\gf128mul.c"
 					>
 				</File>
 				<File
@@ -501,11 +475,11 @@
 					>
 				</File>
 				<File
-					RelativePath="..\crypto\tests.c"
+					RelativePath="..\crypto\twofish.c"
 					>
 				</File>
 				<File
-					RelativePath="..\crypto\twofish.c"
+					RelativePath="..\crypto\xts_fast.c"
 					>
 				</File>
 				<Filter
@@ -513,28 +487,7 @@
 					Filter="asm"
 					>
 					<File
-						RelativePath="..\crypto\i386\aes_x86.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="MASM"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\aes_x86_gd.asm"
+						RelativePath="..\crypto\i386\aes_i386.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -555,7 +508,7 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath="..\crypto\i386\aes_x86_via.asm"
+						RelativePath="..\crypto\i386\aes_padlock_i386.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -576,14 +529,35 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath="..\crypto\i386\twofish-i586.asm"
+						RelativePath="..\crypto\i386\twofish_i386.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
 							>
 							<Tool
 								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\xts_aes_ni_i386.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
 								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
 							/>
 						</FileConfiguration>
@@ -623,7 +597,7 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath="..\crypto\amd64\aes_amd64_via.asm"
+						RelativePath="..\crypto\amd64\aes_padlock_amd64.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -644,7 +618,7 @@
 						</FileConfiguration>
 					</File>
 					<File
-						RelativePath="..\crypto\amd64\twofish-x86_64.asm"
+						RelativePath="..\crypto\amd64\twofish_amd64.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -659,7 +633,28 @@
 							>
 							<Tool
 								Name="VCCustomBuildTool"
-								CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot;&#x0D;&#x0A;"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\amd64\xts_aes_ni_amd64.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
 								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
 							/>
 						</FileConfiguration>

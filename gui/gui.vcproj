@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9,00"
+	Version="9.00"
 	Name="dcrypt"
 	ProjectGUID="{A38C04C7-B172-4897-8471-E3478903035E}"
 	RootNamespace="dcrypt"
@@ -21,11 +21,12 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)\i386"
+			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
 			IntermediateDirectory="$(ProjectDir)"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			CharacterSet="1"
+			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -45,18 +46,14 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
-				StringPooling="true"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="0"
-				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
+				BasicRuntimeChecks="3"
+				RuntimeLibrary="3"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
 			/>
 			<Tool
@@ -73,15 +70,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib ntdll.lib user32.lib"
+				AdditionalOptions="comctl32.lib shlwapi.lib ntdll.lib user32.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
-				GenerateManifest="false"
+				AdditionalLibraryDirectories="..\lib\i386"
+				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				UACExecutionLevel="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
-				RandomizedBaseAddress="2"
-				DataExecutionPrevention="2"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -91,8 +86,6 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				AdditionalManifestFiles="$(InputDir)\dcrypt.manifest"
-				EmbedManifest="false"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
@@ -139,18 +132,14 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
-				StringPooling="true"
-				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
+				RuntimeLibrary="3"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
 			/>
 			<Tool
@@ -167,15 +156,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib kernel32.lib user32.lib advapi32.lib shell32.lib gdi32.lib ntdll.lib comdlg32.lib"
+				AdditionalOptions="comctl32.lib shlwapi.lib kernel32.lib user32.lib advapi32.lib shell32.lib gdi32.lib ntdll.lib comdlg32.lib"
 				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\amd64;&quot;$(SolutionDir)$(ConfigurationName)\amd64&quot;"
+				AdditionalLibraryDirectories="..\lib\amd64"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				UACExecutionLevel="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
 				TargetMachine="17"
 			/>
 			<Tool
@@ -185,7 +172,6 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				EmbedManifest="false"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
@@ -206,14 +192,13 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)\i386"
+			OutputDirectory="$(SolutionDir)\$(ConfigurationName)\i386"
 			IntermediateDirectory="$(ProjectDir)"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			CharacterSet="1"
 			WholeProgramOptimization="0"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			EnableManagedIncrementalBuild="0"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -236,25 +221,17 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\include\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
-				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
-				EnableEnhancedInstructionSet="0"
-				UsePrecompiledHeader="0"
-				AssemblerOutput="0"
 				AssemblerListingLocation=""
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
-				CallingConvention="0"
-				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -269,22 +246,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib comctl32.lib shlwapi.lib ntdll.lib user32.lib msvcrt.lib"
+				AdditionalOptions="comctl32.lib shlwapi.lib ntdll.lib user32.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
+				AdditionalLibraryDirectories="..\lib\i386"
 				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				IgnoreAllDefaultLibraries="true"
-				GenerateDebugInformation="false"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
-				SetChecksum="true"
-				RandomizedBaseAddress="0"
-				DataExecutionPrevention="2"
-				TurnOffAssemblyGeneration="false"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -322,7 +290,6 @@
 			CharacterSet="1"
 			WholeProgramOptimization="0"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
-			EnableManagedIncrementalBuild="0"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -346,25 +313,17 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
 				StringPooling="true"
-				ExceptionHandling="0"
 				RuntimeLibrary="2"
-				StructMemberAlignment="0"
 				BufferSecurityCheck="false"
-				UsePrecompiledHeader="0"
-				AssemblerOutput="0"
 				AssemblerListingLocation=""
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
-				CallingConvention="0"
-				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -380,19 +339,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				IgnoreImportLibrary="false"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib msvcrt.lib comctl32.lib shlwapi.lib ntdll.lib"
+				AdditionalOptions="comctl32.lib shlwapi.lib ntdll.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="..\lib\amd64;&quot;$(SolutionDir)$(ConfigurationName)\amd64&quot;"
+				AdditionalLibraryDirectories="..\lib\amd64"
 				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				GenerateDebugInformation="false"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="2"
 				TargetMachine="17"
 			/>
 			<Tool
@@ -402,7 +355,7 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				AdditionalManifestFiles="$(InputDir)\dcrypt64.manifest"
+				AdditionalManifestFiles="$(InputDir)\dcrypt.manifest"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
@@ -435,6 +388,22 @@
 				>
 			</File>
 			<File
+				RelativePath=".\dlg_code.c"
+				>
+			</File>
+			<File
+				RelativePath=".\dlg_drives_list.c"
+				>
+			</File>
+			<File
+				RelativePath=".\dlg_menu.c"
+				>
+			</File>
+			<File
+				RelativePath=".\drives_list.c"
+				>
+			</File>
+			<File
 				RelativePath=".\hotkeys.c"
 				>
 			</File>
@@ -447,7 +416,39 @@
 				>
 			</File>
 			<File
-				RelativePath=".\prccode.c"
+				RelativePath=".\prc_code.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_common.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_keyfiles.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_main.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_options.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_pass.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_wizard_boot.c"
+				>
+			</File>
+			<File
+				RelativePath=".\prc_wizard_encrypt.c"
+				>
+			</File>
+			<File
+				RelativePath=".\stat.c"
 				>
 			</File>
 			<File
@@ -455,11 +456,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\uicode.c"
+				RelativePath=".\threads.c"
 				>
 			</File>
 			<File
-				RelativePath=".\ukeyfiles.c"
+				RelativePath=".\ui_draw.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ui_utils.c"
 				>
 			</File>
 		</Filter>
@@ -473,11 +478,23 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\hotkeys.h"
+				RelativePath="..\include\gui\dlg_code.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\linklist.h"
+				RelativePath="..\include\gui\dlg_drives_list.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\dlg_menu.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\drives_list.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\hotkeys.h"
 				>
 			</File>
 			<File
@@ -489,7 +506,35 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\prccode.h"
+				RelativePath="..\include\gui\prc_code.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_common.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_keyfiles.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_main.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_options.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_pass.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_wizard_boot.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\prc_wizard_encrypt.h"
 				>
 			</File>
 			<File
@@ -497,15 +542,23 @@
 				>
 			</File>
 			<File
+				RelativePath="..\include\gui\stat.h"
+				>
+			</File>
+			<File
 				RelativePath="..\include\gui\subs.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\uicode.h"
+				RelativePath="..\include\gui\threads.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\gui\ukeyfiles.h"
+				RelativePath="..\include\gui\ui_draw.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\gui\ui_utils.h"
 				>
 			</File>
 		</Filter>
@@ -516,19 +569,11 @@
 				RelativePath=".\main.rc"
 				>
 			</File>
+			<File
+				RelativePath=".\version.rc"
+				>
+			</File>
 		</Filter>
-		<File
-			RelativePath=".\bitmap1.bmp"
-			>
-		</File>
-		<File
-			RelativePath=".\bmp00001.bmp"
-			>
-		</File>
-		<File
-			RelativePath=".\bmp00002.bmp"
-			>
-		</File>
 		<File
 			RelativePath=".\cdrom.bmp"
 			>
@@ -554,19 +599,11 @@
 			>
 		</File>
 		<File
-			RelativePath=".\disk1.bmp"
-			>
-		</File>
-		<File
 			RelativePath=".\disk_mask.bmp"
 			>
 		</File>
 		<File
 			RelativePath=".\icon.ico.ico"
-			>
-		</File>
-		<File
-			RelativePath=".\icon2.ico"
 			>
 		</File>
 		<File

@@ -1,28 +1,27 @@
 #ifndef _PASS_CHECK_
 #define _PASS_CHECK_
 
-#include "volume.h"
-#include "uicode.h"
+#define ST_PASS_SPRS_SYMBOLS		1
+#define ST_PASS_EMPTY				2
+#define ST_PASS_NOT_CONFIRMED		3
+#define ST_PASS_EMPTY_CONFIRM		4
+#define ST_PASS_EMPTY_KEYLIST		5
+#define ST_PASS_CORRRECT			6
 
-#define ST_PASS_SPRS_SYMBOLS      1
-#define ST_PASS_EMPTY             2
-#define ST_PASS_NOT_CONFIRMED     3
-#define ST_PASS_EMPTY_CONFIRM     4
-#define ST_PASS_EMPTY_KEYLIST     5
-#define ST_PASS_CORRRECT          6
+typedef struct __pass_inf 
+{
+	int flags;      // character groups flags
+	int entropy;    // password entropy (in bits)
+	int length;     // password length
 
-typedef struct __pass_inf {
-	int flags;      /* character groups flags     */
-	int entropy;    /* password entropy (in bits) */
-	int length;     /* password length            */
 } _pass_inf;
 
-#define P_AZ_L     1
-#define P_AZ_H     2
-#define P_09       4
-#define P_SPACE    8
-#define P_SPCH     16
-#define P_NCHAR    32
+#define P_AZ_L		1
+#define P_AZ_H		2
+#define P_09		4
+#define P_SPACE		8
+#define P_SPCH		16
+#define P_NCHAR		32
 
 #define _get_pass_keyfiles(hwnd, id_pass, id_check_key, key_list_id) ( \
 		__get_pass_keyfiles(					\

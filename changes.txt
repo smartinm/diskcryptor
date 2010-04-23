@@ -1,3 +1,16 @@
+[05.04.2010] - 0.9
+  + Added preventing system power state changes during the encryption process.
+  + Added support for Intel AES-NI instructions.
+  + Added small bootloader only with AES. This is needed for compatibility with stupid and greedy BIOS'es in PXE boot mode.
+  + Added Vista-PE plugin.
+  + Improved volume formatting speed.  
+  + Improved bootloader PXE compatibility.  
+  + New optimization for AES and XTS mode, more perfomance now!
+  + Greatly improved performance of AES for VIA processors.
+  + Fixed displaying program icon in the "Add or Remove Programs".
+  + Fixed incompatibility with Parallels Workstation BIOS.
+  + Fixed many small bugs.
+
 [28.07.2009] - 0.8
   + Added support for buggy XP configurations on Eee PC notebook.
   + Added support for Windows Embedded custom builds.

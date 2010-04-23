@@ -1,7 +1,7 @@
 #ifndef _HOTKEYS_
 #define _HOTKEYS_
 
-#define HOTKEYS   4
+#define HOTKEYS 4
 
 char _check_hotkeys(
 		HWND hwnd,
@@ -23,8 +23,6 @@ BOOL _key_name(
 		UINT    shift,
 		wchar_t *text
 	);
-
-
 
 #endif
 

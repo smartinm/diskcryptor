@@ -27,6 +27,7 @@
 #define VF_REENCRYPT      0x02 /* volume re-encryption in progress */
 #define VF_STORAGE_FILE   0x04 /* redirected area are placed in file */
 #define VF_NO_REDIR       0x08 /* redirection area is not present */
+#define VF_EXTENDED       0x10 /* this volume placed on extended partition */
 
 #define ENC_BLOCK_SIZE  (1280 * 1024)
 

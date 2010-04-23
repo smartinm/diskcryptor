@@ -35,6 +35,7 @@
 #define OP_TMO_STOP     0x04 /* cancel timeout if any key pressed                    */
 #define OP_NOPASS_ERROR 0x08 /* use incorrect password action if no password entered */
 #define OP_HW_CRYPTO    0x10 /* use hardware cryptography when possible              */
+#define OP_SMALL_BOOT   0x20 /* this is a small (aes only) bootloader                */
 
 #pragma pack (push, 1)
 
@@ -59,14 +60,28 @@ typedef struct _ldr_config {
 
 } ldr_config;
 
-#pragma pack (pop)
+typedef struct _pt_ent {
+	u8  active;
+	u8  start_head;
+	u16 start_cyl;
+	u8  os;
+	u8  end_head;
+	u16 end_cyl;
+	u32 start_sect;
+	u32 prt_size;
 
-#ifdef BOOT_LDR
- extern u8         boot_dsk;
- extern ldr_config conf;
- 
- int  on_int13(rm_ctx *ctx);
- void boot_main();
-#endif
+} pt_ent;
+
+typedef struct _lba_p {
+	u8  size;
+	u8  unk;
+	u16 numb;
+	u16 dst_off;
+	u16 dst_sel;
+	u64 sector;
+
+} lba_p;
+
+#pragma pack (pop)
 
 #endif

@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,8 +23,10 @@
 #include "prng.h"
 #include "sha512.h"
 #include "misc.h"
-#include "aes.h"
+#include "aes_key.h"
+#include "aes_asm.h"
 #include "debug.h"
+#include "misc_mem.h"
 
 typedef struct _seed_data {
 	PEPROCESS       seed1;
@@ -175,11 +176,11 @@ void rnd_reseed_now()
 
 int rnd_get_bytes(u8 *buf, int len)
 {
-	sha512_ctx  sha_ctx;
-	u8 calign   hval[SHA512_DIGEST_SIZE];
-	int         c_len, idx, i;
-	ext_seed    seed;
-	int         fail;
+	sha512_ctx sha_ctx;
+	u8         hval[SHA512_DIGEST_SIZE];
+	int        c_len, idx, i;
+	ext_seed   seed;
+	int        fail;
 
 	if (reseed_cnt < 256) {
 		DbgMsg("RNG not have sufficient entropy (%d reseeds), collect it now\n", reseed_cnt);
@@ -193,12 +194,8 @@ int rnd_get_bytes(u8 *buf, int len)
 
 	wait_object_infinity(&rnd_mutex);
 
-#ifdef AES_ASM_VIA
-	aes256_ace_rekey();
-#endif
-
 	/* derive AES key from key pool */
-	aes256_set_key(key_pool, rnd_key);
+	aes256_asm_set_key(key_pool, rnd_key);
 
 	/* mix pool state before get data from it */
 	rnd_pool_mix();
@@ -221,7 +218,7 @@ int rnd_get_bytes(u8 *buf, int len)
 
 		/* encrypt hash value with AES in ECB mode */		
 		for (i = 0; i < SHA512_DIGEST_SIZE; i += AES_BLOCK_SIZE) {
-			aes256_encrypt(hval + i, hval + i, rnd_key);
+			aes256_asm_encrypt(hval + i, hval + i, rnd_key);
 		}
 
 		/* copy data to output */
@@ -260,71 +257,12 @@ int rnd_get_bytes(u8 *buf, int len)
 	return fail == 0;
 }
 
-rnd_ctx *rnd_fast_init() 
-{
-	rnd_ctx *ctx;
-	u8       key[32];
-
-	if (ctx = mem_alloc(sizeof(rnd_ctx))) 
-	{
-		rnd_get_bytes(key, sizeof(key));
-		aes256_set_key(key, &ctx->key);
-
-		ctx->index.a = 0;
-		ctx->index.b = 0;
-	}
-
-	/* prevent leaks */
-	zeroauto(key, sizeof(key));
-
-	return ctx;
-}
-
-void rnd_fast_free(rnd_ctx *ctx)
-{
-	/* prevent leaks */
-	zeroauto(ctx, sizeof(rnd_ctx));
-	mem_free(ctx);
-}
-
-void rnd_fast_rand(rnd_ctx *ctx, u8 *buf, int len)
-{
-	u8 calign buff[16];
-	int       c_len;
-
-#ifdef AES_ASM_VIA
-	aes256_ace_rekey();
-#endif
-
-	do
-	{
-		/* encrypt counter with AES in CTR mode */
-		aes256_encrypt(pv(&ctx->index), buff, &ctx->key);
-
-		/* increment counter */
-		if (++ctx->index.b == 0) {
-			++ctx->index.a;
-		}
-
-		/* copy data to out */
-		c_len = min(len, sizeof(buff));
-		memcpy(buf, buff, c_len);
-
-		buf += c_len; len -= c_len;
-	} while (len != 0);
-
-	/* prevent leaks */
-	zeroauto(buff, sizeof(buff));
-}
-
 int rnd_init_prng()
 {
-	if ( (rnd_key = mem_alloc(sizeof(aes256_key))) == NULL ) {
+	if ( (rnd_key = mm_alloc(sizeof(aes256_key), MEM_SECURE)) == NULL ) {
 		return ST_NOMEM;
 	}
-
 	KeInitializeMutex(&rnd_mutex, 0);
-
 	rnd_reseed_now();
 
 	return ST_OK;

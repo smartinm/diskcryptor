@@ -46,19 +46,14 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dccon"
+				AdditionalIncludeDirectories="..\include;..\include\dccon;..\crypto"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
-				StringPooling="true"
-				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				FloatingPointModel="2"
-				UsePrecompiledHeader="0"
+				RuntimeLibrary="3"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
 			/>
 			<Tool
@@ -75,15 +70,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib shlwapi.lib kernel32.lib"
-				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
-				GenerateManifest="false"
+				AdditionalOptions="shlwapi.lib kernel32.lib"
+				AdditionalLibraryDirectories="..\lib\i386"
+				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				UACExecutionLevel="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -93,8 +85,6 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				AdditionalManifestFiles="$(InputDir)\dccon.manifest"
-				EmbedManifest="false"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
@@ -141,18 +131,14 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dccon"
+				AdditionalIncludeDirectories="..\include;..\include\dccon;..\crypto"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
-				StringPooling="true"
-				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				UsePrecompiledHeader="0"
+				RuntimeLibrary="3"
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
 			/>
 			<Tool
@@ -169,16 +155,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib shlwapi.lib kernel32.lib"
-				LinkIncremental="2"
-				AdditionalLibraryDirectories="..\lib\amd64;&quot;$(SolutionDir)$(ConfigurationName)\amd64&quot;"
-				GenerateManifest="false"
+				AdditionalOptions="shlwapi.lib kernel32.lib"
+				AdditionalLibraryDirectories="..\lib\amd64"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
+				UACExecutionLevel="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
 				TargetMachine="17"
 			/>
 			<Tool
@@ -188,8 +170,6 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				AdditionalManifestFiles="$(InputDir)\dccon64.manifest"
-				EmbedManifest="false"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool
@@ -240,25 +220,17 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\dccon"
+				AdditionalIncludeDirectories="..\include;..\include\dccon;..\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
-				ExceptionHandling="0"
 				RuntimeLibrary="2"
 				BufferSecurityCheck="false"
-				FloatingPointModel="0"
-				UsePrecompiledHeader="0"
-				AssemblerOutput="0"
 				AssemblerListingLocation=""
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
-				CallingConvention="0"
-				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -273,21 +245,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib shlwapi.lib msvcrt.lib kernel32.lib"
+				AdditionalOptions="shlwapi.lib kernel32.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="..\lib\i386;&quot;$(SolutionDir)$(ConfigurationName)\i386&quot;"
+				AdditionalLibraryDirectories="..\lib\i386"
 				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				IgnoreAllDefaultLibraries="true"
-				GenerateDebugInformation="false"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
-				SetChecksum="true"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="2"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -323,7 +287,7 @@
 			ConfigurationType="1"
 			UseOfMFC="0"
 			CharacterSet="1"
-			WholeProgramOptimization="1"
+			WholeProgramOptimization="0"
 			BuildLogFile="$(OutDir)\obj\$(ProjectName)\BuildLog.htm"
 			>
 			<Tool
@@ -344,29 +308,21 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="3"
+				Optimization="1"
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="1"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\include;..\include\dccon"
+				FavorSizeOrSpeed="2"
+				AdditionalIncludeDirectories="..\include;..\include\dccon;..\crypto"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
 				StringPooling="true"
-				ExceptionHandling="0"
 				RuntimeLibrary="2"
-				StructMemberAlignment="0"
 				BufferSecurityCheck="false"
-				UsePrecompiledHeader="0"
-				AssemblerOutput="0"
 				AssemblerListingLocation=""
 				ObjectFile="$(OutDir)\obj\$(ProjectName)\"
 				ProgramDataBaseFileName="$(OutDir)\obj\$(ProjectName)\vc80.pdb"
 				XMLDocumentationFileName=""
 				WarningLevel="3"
-				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
-				CallingConvention="0"
-				CompileAs="1"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -382,20 +338,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				IgnoreImportLibrary="false"
-				LinkLibraryDependencies="false"
-				AdditionalOptions="dcapi.lib shlwapi.lib msvcrt.lib kernel32.lib"
+				AdditionalOptions="shlwapi.lib kernel32.lib"
 				LinkIncremental="1"
-				AdditionalLibraryDirectories="..\lib\amd64;&quot;$(SolutionDir)$(ConfigurationName)\amd64&quot;"
+				AdditionalLibraryDirectories="..\lib\amd64"
 				GenerateManifest="false"
-				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
-				GenerateDebugInformation="false"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="2"
 				TargetMachine="17"
 			/>
 			<Tool
@@ -405,7 +354,7 @@
 				Name="VCManifestTool"
 				OutputManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest"
 				ManifestResourceFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).embed.manifest.res"
-				AdditionalManifestFiles="$(InputDir)\dccon64.manifest"
+				AdditionalManifestFiles="$(InputDir)\dccon.manifest"
 				DependencyInformationFile="$(OutDir)\obj\$(ProjectName)\mt.dep"
 			/>
 			<Tool

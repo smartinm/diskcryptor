@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -29,8 +28,8 @@
 #include "driver.h"
 #include "misc.h"
 #include "devhook.h"
-#include "fastmem.h"
 #include "debug.h"
+#include "misc_mem.h"
 
 NTSTATUS 
   io_device_control(
@@ -45,9 +44,7 @@ NTSTATUS
 	if (hook->pnp_state != Started) {
 		return STATUS_INVALID_DEVICE_STATE;
 	}
-
-	KeInitializeEvent(
-		&sync_event, NotificationEvent, FALSE);
+	KeInitializeEvent(&sync_event, NotificationEvent, FALSE);
 
 	irp = IoBuildDeviceIoControlRequest(
 		ctl_code, hook->orig_dev, in_data, in_size, out_data, out_size, FALSE, &sync_event, &io_status);
@@ -63,7 +60,6 @@ NTSTATUS
 	} else {
 		status = STATUS_INSUFFICIENT_RESOURCES;
 	}
-
 	return status;
 }
 
@@ -89,7 +85,6 @@ HANDLE io_open_device(wchar_t *dev_name)
 	if (NT_SUCCESS(status) == FALSE) {
 		handle = NULL;
 	}
-
 	return handle;
 }
 
@@ -316,8 +311,7 @@ int dc_device_rw(
 
 void wait_object_infinity(void *wait_obj)
 {
-	KeWaitForSingleObject(
-		wait_obj, Executive, KernelMode, FALSE, NULL);
+	KeWaitForSingleObject(wait_obj, Executive, KernelMode, FALSE, NULL);
 }
 
 
@@ -369,8 +363,8 @@ int dc_set_default_security(HANDLE h_object)
 	sys_acl = NULL;
 	do
 	{
-		adm_sid = mem_alloc(RtlLengthRequiredSid(2));
-		sys_sid = mem_alloc(RtlLengthRequiredSid(1));
+		adm_sid = mm_alloc(RtlLengthRequiredSid(2), 0);
+		sys_sid = mm_alloc(RtlLengthRequiredSid(1), 0);
 
 		if ( (adm_sid == NULL) || (sys_sid == NULL) ) {
 			resl = ST_NOMEM; break;
@@ -386,47 +380,38 @@ int dc_set_default_security(HANDLE h_object)
 		dacl_sz = sizeof(ACL) + (2 * sizeof(ACCESS_ALLOWED_ACE)) +
 			SeLengthSid(adm_sid) + SeLengthSid(sys_sid) + 8;
 		
-		if ( (sys_acl = mem_alloc(dacl_sz)) == NULL) {
+		if ( (sys_acl = mm_alloc(dacl_sz, 0)) == NULL) {
 			resl = ST_NOMEM; break;
 		}
-
-		status = RtlCreateAcl(
-			sys_acl, dacl_sz, ACL_REVISION);
+		status = RtlCreateAcl(sys_acl, dacl_sz, ACL_REVISION);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
-
 		status = RtlAddAccessAllowedAce(
 			sys_acl, ACL_REVISION, GENERIC_ALL, sys_sid);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
-
 		status = RtlAddAccessAllowedAce(
 			sys_acl, ACL_REVISION, GENERIC_ALL, adm_sid);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
+		status = RtlCreateSecurityDescriptor(&sc_desc, SECURITY_DESCRIPTOR_REVISION1);
 
-		status = RtlCreateSecurityDescriptor( 
-			&sc_desc, SECURITY_DESCRIPTOR_REVISION1);
+		if (NT_SUCCESS(status) == FALSE) {
+			resl = ST_ERROR; break;
+		}
+		status = RtlSetDaclSecurityDescriptor(&sc_desc, TRUE, sys_acl, FALSE);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		}
 
-		status = RtlSetDaclSecurityDescriptor( 
-			&sc_desc, TRUE, sys_acl, FALSE);
-
-		if (NT_SUCCESS(status) == FALSE) {
-			resl = ST_ERROR; break;
-		}
-
-		status = ZwSetSecurityObject(
-			h_object, DACL_SECURITY_INFORMATION, &sc_desc);
+		status = ZwSetSecurityObject(h_object, DACL_SECURITY_INFORMATION, &sc_desc);
 
 		if (NT_SUCCESS(status) != FALSE) {
 			resl = ST_OK;
@@ -435,24 +420,14 @@ int dc_set_default_security(HANDLE h_object)
 		}
 	} while (0);
 
-	if (sys_acl != NULL) {
-		mem_free(sys_acl);
-	}
-
-	if (adm_sid != NULL) {
-		mem_free(adm_sid);
-	}
-
-	if (sys_sid != NULL) {
-		mem_free(sys_sid);
-	}
+	if (sys_acl != NULL) { mm_free(sys_acl); }
+	if (adm_sid != NULL) { mm_free(adm_sid); }
+	if (sys_sid != NULL) { mm_free(sys_sid); }
 
 	return resl;
 }
 
-int dc_resolve_link(
-	  wchar_t *sym_link, wchar_t *target, u16 length
-	  )
+int dc_resolve_link(wchar_t *sym_link, wchar_t *target, u16 length)
 {
 	UNICODE_STRING    u_name;
 	OBJECT_ATTRIBUTES obj;
@@ -460,54 +435,44 @@ int dc_resolve_link(
 	HANDLE            handle;
 	int               resl;
 
-	RtlInitUnicodeString(
-		&u_name, sym_link);
+	RtlInitUnicodeString(&u_name, sym_link);
 
 	InitializeObjectAttributes(
 		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-
 	do
 	{
-		status = ZwOpenSymbolicLinkObject(
-			&handle, GENERIC_READ, &obj);
+		status = ZwOpenSymbolicLinkObject(&handle, GENERIC_READ, &obj);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			handle = NULL; resl = ST_ERROR; break;
 		}
-
 		u_name.Buffer        = target;
 		u_name.Length        = 0;
 		u_name.MaximumLength = length - 2;
 
-		status = ZwQuerySymbolicLinkObject(
-			handle, &u_name, NULL);
+		status = ZwQuerySymbolicLinkObject(handle, &u_name, NULL);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
 		} else {
 			resl = ST_OK;
 		}
-
 		target[u_name.Length >> 1] = 0;
 	} while (0);
 
 	if (handle != NULL) {
 		ZwClose(handle);
 	}
-
 	return resl;
 }
 
-int dc_get_mount_point(
-      dev_hook *hook, wchar_t *buffer, u16 length
-	  )
+int dc_get_mount_point(dev_hook *hook, wchar_t *buffer, u16 length)
 {
 	NTSTATUS       status;
 	UNICODE_STRING name;
 	int            resl;
 
-	status = RtlVolumeDeviceToDosName(
-		hook->orig_dev, &name);
+	status = RtlVolumeDeviceToDosName(hook->orig_dev, &name);
 
 	buffer[0] = 0; resl = ST_ERROR;
 
@@ -524,17 +489,14 @@ int dc_get_mount_point(
 	return resl;
 }
 
-void dc_query_object_name(
-	   void *object, wchar_t *buffer, u16 length
-	   )
+void dc_query_object_name(void *object, wchar_t *buffer, u16 length)
 {
 	u8                       buf[256];
 	POBJECT_NAME_INFORMATION inf = pv(buf);
 	u32                      bytes;
 	NTSTATUS                 status;
 
-	status = ObQueryNameString(
-		object, inf, sizeof(buf), &bytes);
+	status = ObQueryNameString(object, inf, sizeof(buf), &bytes);
 
 	if (NT_SUCCESS(status) != FALSE) {
 		bytes = min(length, inf->Name.Length);

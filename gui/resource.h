@@ -2,6 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by main.rc
 //
+#define DC_MAJOR_VER                    0
 #define IDOK3                           2
 #define IDB_                            2
 #define IDOK2                           3
@@ -21,6 +22,7 @@
 #define IDC_BTN_DECRYPT_                7
 #define IDC_BTN_ENCRYPT3                8
 #define IDC_BTN_MOUNTALL_               8
+#define DC_MINOR_VER                    9
 #define IDC_BTN_ENCRYPT4                9
 #define IDC_BTN_UNMOUNTALL_             9
 #define IDD_MAIN_DLG                    101
@@ -82,6 +84,7 @@
 #define IDD_DIALOG_KEYFILES             172
 #define DLG_WIZ_PROGRESS                173
 #define DLG_BOOT_CONF_OTHER             174
+#define IDR_MAIN_ACCEL                  174
 #define DLG_CONF_EXTENDED               175
 #define DLG_CONF_EXTNDED                175
 #define IDC_DRIVER_VER                  206
@@ -124,6 +127,7 @@
 #define IDC_EDIT1                       1010
 #define IDC_EDIT_NOTICE                 1010
 #define IDC_LIST3                       1011
+#define IDC_EDIT_CIPHER_INFO            1011
 #define IDC_EDIT_KEY_MOUNT              1012
 #define IDC_EDIT_KEY_MOUNTALL           1013
 #define IDC_BUTTON1                     1014
@@ -209,6 +213,7 @@
 #define IDC_STATIC_ALG_LIST2            1096
 #define IDC_STATIC_PASSES_LIST          1097
 #define IDC_COMBO_MODE2                 1098
+#define IDC_WIZ_CONF_WARNING            1098
 #define IDC_STATIC_SELECT_PART          1099
 #define IDC_HEAD_CURRENT                1100
 #define IDC_HEAD_PASS                   1100
@@ -326,6 +331,9 @@
 #define IDC_STATUS_PROGRESS             1213
 #define IDC_ISO_PROGRESS                1214
 #define IDC_USE_HARD_CRYPTO             1215
+#define IDC_EDIT2                       1216
+#define IDC_CONF_WARNING                1217
+#define IDC_USE_SMALL_BOOT              1218
 #define ID_FILE_EXIT                    40001
 #define ID_VOLUMES_ENCRYPT              40002
 #define ID_VOLUMES_DECRYPT              40003
@@ -398,14 +406,17 @@
 #define ID_TOOLS_E                      40072
 #define ID_TOOLS_                       40073
 #define ID_TOOLS_ENCRYPT_CD             40074
+#define ID_TAB                          40075
+#define ID_TAB_BACK                     40077
+#define ID_SHIFT_TAB                    40077
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        174
-#define _APS_NEXT_COMMAND_VALUE         40075
-#define _APS_NEXT_CONTROL_VALUE         1216
+#define _APS_NEXT_RESOURCE_VALUE        175
+#define _APS_NEXT_COMMAND_VALUE         40079
+#define _APS_NEXT_CONTROL_VALUE         1219
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

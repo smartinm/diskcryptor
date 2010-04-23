@@ -1,14 +1,12 @@
 /*
     *
-    * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007 
+    * Copyright (c) 2007-2010
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,13 +17,10 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "defines.h"
-#include "cryptodef.h"
 #include "sha512.h"
 #include "pkcs5.h"
 
-#ifndef NO_PKCS5
-
-void sha512_hmac(char *k, size_t k_len, char *d, size_t d_len, char *out)
+void sha512_hmac(const char *k, size_t k_len, const char *d, size_t d_len, char *out)
 {
 	sha512_ctx ctx;
 	u8         buf[SHA512_BLOCK_SIZE];
@@ -45,15 +40,9 @@ void sha512_hmac(char *k, size_t k_len, char *d, size_t d_len, char *out)
 	}
 
 	/* create the hash initial vector */ 
-#ifndef SMALL_CODE
 	for (i = 0; i < (SHA512_BLOCK_SIZE / 4); i++) {
 		p32(buf)[i] ^= 0x36363636;
 	}
-#else
-	for (i = 0; i < SHA512_BLOCK_SIZE; i++) {
-		buf[i] ^= 0x36;
-	}
-#endif	
 
 	/* hash key and data */
 	sha512_init(&ctx);
@@ -62,15 +51,9 @@ void sha512_hmac(char *k, size_t k_len, char *d, size_t d_len, char *out)
 	sha512_done(&ctx, hval);
 
 	/* create the second HMAC vector */
-#ifndef SMALL_CODE
 	for (i = 0; i < (SHA512_BLOCK_SIZE / 4); i++) {
         p32(buf)[i] ^= 0x6A6A6A6A;
     }
-#else
-	for (i = 0; i < SHA512_BLOCK_SIZE; i++) {
-        buf[i] ^= 0x6A;
-    } 
-#endif
 
 	/* calculate "outer" hash */
 	sha512_init(&ctx);
@@ -87,9 +70,9 @@ void sha512_hmac(char *k, size_t k_len, char *d, size_t d_len, char *out)
 
 void sha512_pkcs5_2(
 	   int i_count,
-	   void *pwd,  size_t pwd_len, 
-	   char *salt, size_t salt_len, 		  
-	   char *dk, size_t dklen
+	   const void *pwd,  size_t pwd_len, 
+	   const char *salt, size_t salt_len, 		  
+	   char       *dk,   size_t dklen
 	   )
 {
 	u8       buff[128];
@@ -103,7 +86,7 @@ void sha512_pkcs5_2(
 	{
 		/* first interation */
 		memcpy(buff, salt, salt_len);
-		PUTU32(buff + salt_len, block);
+		p32(buff + salt_len)[0] = BE32(block);
 		sha512_hmac(pwd, pwd_len, buff, salt_len + 4, hmac);
 		memcpy(blk, hmac, SHA512_DIGEST_SIZE);
 
@@ -112,15 +95,9 @@ void sha512_pkcs5_2(
 		{
 			sha512_hmac(pwd, pwd_len, hmac, SHA512_DIGEST_SIZE, hmac);
 
-#ifndef SMALL_CODE
 			for (j = 0; j < (SHA512_DIGEST_SIZE / 4); j++) {
 				p32(blk)[j] ^= p32(hmac)[j];
 			}
-#else
-			for (j = 0; j < SHA512_DIGEST_SIZE; j++) {
-				blk[j] ^= hmac[j];
-			}
-#endif
 		}
 
 		c_len = min(dklen, SHA512_DIGEST_SIZE);
@@ -133,6 +110,3 @@ void sha512_pkcs5_2(
 	zeroauto(blk,  sizeof(blk));
 	zeroauto(hmac, sizeof(hmac));
 }
-
-
-#endif /* NO_PKCS5 */

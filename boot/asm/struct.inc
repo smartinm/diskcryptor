@@ -88,3 +88,12 @@ struct bd_data
   push_fl   dw ?     ; flags pushed to stack
   mem_map   e820_map ; new memory map
 ends
+
+struct boot_mod
+  mod_sign  dd ? ; signature 'DCBM'
+  raw_size  dd ? ; raw size
+  virt_size dd ? ; virtual size
+  entry_rva dd ? ; entry point RVA
+  n_rels    dd ? ; relocations count
+  relocs    dd ? ; relocations array
+ends

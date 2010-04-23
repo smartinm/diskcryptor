@@ -4,7 +4,7 @@
  *  @author Matthew Skala <mskala@ansuz.sooke.bc.ca>, July 26, 1998
  *  @author Werner Koch, April, 1998
  *  @author Dr Brian Gladman, 1999
- *  @author ntldr <ntldr@diskcryptor.net>, 2008
+ *  @author ntldr <ntldr@diskcryptor.net>, 2008-2010
  *
  * The original author has disclaimed all copyright interest in this
  * code and thus put it in the public domain. The subsequent authors
@@ -36,8 +36,8 @@
  * Third Edition.
  */
 
-#include "twofish.h"
 #include "defines.h"
+#include "twofish.h"
 
 
 /* The large precomputed tables for the Twofish cipher (twofish.c)
@@ -47,8 +47,6 @@
 
 /* These two tables are the q0 and q1 permutations, exactly as described in
  * the Twofish paper. */
-
-#ifndef SMALL_CODE
 
 static const u8 q0[256] = {
 	0xA9, 0x67, 0xB3, 0xE8, 0x04, 0xFD, 0xA3, 0x76, 0x9A, 0x92, 0x80, 0x78,
@@ -504,10 +502,10 @@ static const u8 calc_sb_tbl[512] = {
 /* Macro exactly like CALC_SB_2, but for 256-bit keys. */
 
 #define CALC_SB256_2(i, a, b) \
-   ctx->s[0][i] = mds[0][q0[q0[q1[(b) ^ sa] ^ se] ^ si] ^ sm]; \
-   ctx->s[1][i] = mds[1][q0[q1[q1[(a) ^ sb] ^ sf] ^ sj] ^ sn]; \
-   ctx->s[2][i] = mds[2][q1[q0[q0[(a) ^ sc] ^ sg] ^ sk] ^ so]; \
-   ctx->s[3][i] = mds[3][q1[q1[q0[(b) ^ sd] ^ sh] ^ sl] ^ sp];
+   skey->s[0][i] = mds[0][q0[q0[q1[(b) ^ sa] ^ se] ^ si] ^ sm]; \
+   skey->s[1][i] = mds[1][q0[q1[q1[(a) ^ sb] ^ sf] ^ sj] ^ sn]; \
+   skey->s[2][i] = mds[2][q1[q0[q0[(a) ^ sc] ^ sg] ^ sk] ^ so]; \
+   skey->s[3][i] = mds[3][q1[q1[q0[(b) ^ sd] ^ sh] ^ sl] ^ sp];
 
 /* Macros to calculate the whitening and round subkeys.  CALC_K_2 computes the
  * last two stages of the h() function for a given index (either 2i or 2i+1).
@@ -543,8 +541,8 @@ static const u8 calc_sb_tbl[512] = {
    x = CALC_K_2 (k, l, k, l, 0); \
    y = CALC_K_2 (m, n, m, n, 4); \
    y = ROL32(y, 8); \
-   x += y; y += x; ctx->a[j] = x; \
-   ctx->a[(j) + 1] = rol32(y, 9)
+   x += y; y += x; skey->a[j] = x; \
+   skey->a[(j) + 1] = rol32(y, 9)
 
 #define CALC_K192_2(a, b, c, d, j) \
    CALC_K_2 (q0[a ^ key[(j) + 16]], \
@@ -556,8 +554,8 @@ static const u8 calc_sb_tbl[512] = {
    x = CALC_K192_2 (l, l, k, k, 0); \
    y = CALC_K192_2 (n, n, m, m, 4); \
    y = ROL32(y, 8); \
-   x += y; y += x; ctx->a[j] = x; \
-   ctx->a[(j) + 1] = ROL32(y, 9)
+   x += y; y += x; skey->a[j] = x; \
+   skey->a[(j) + 1] = ROL32(y, 9)
 
 #define CALC_K256_2(a, b, j) \
    CALC_K192_2 (q1[b ^ key[(j) + 24]], \
@@ -569,12 +567,12 @@ static const u8 calc_sb_tbl[512] = {
    x = CALC_K256_2 (k, l, 0); \
    y = CALC_K256_2 (m, n, 4); \
    y = ROL32(y, 8); \
-   x += y; y += x; ctx->a[j] = x; \
-   ctx->a[(j) + 1] = ROL32(y, 9)
+   x += y; y += x; skey->a[j] = x; \
+   skey->a[(j) + 1] = ROL32(y, 9)
 
 
 /* Perform the key setup. */
-void twofish_setkey(const u8 *key, twofish_ctx *ctx)
+void _stdcall twofish256_set_key(const unsigned char *key, twofish256_key *skey)
 {
 	int i, j, k;
 
@@ -660,17 +658,18 @@ void twofish_setkey(const u8 *key, twofish_ctx *ctx)
 	CALC_K256 (k, 30, 0xDF, 0xBC, 0x23, 0x9D);	
 }
 
+#if 0
 /* Macros to compute the g() function in the encryption and decryption
  * rounds.  G1 is the straight g() function; G2 includes the 8-bit
  * rotation for the high 32-bit word. */
 
 #define G1(a) \
-     (ctx->s[0][(a) & 0xFF]) ^ (ctx->s[1][((a) >> 8) & 0xFF]) \
-   ^ (ctx->s[2][((a) >> 16) & 0xFF]) ^ (ctx->s[3][(a) >> 24])
+     (key->s[0][(a) & 0xFF]) ^ (key->s[1][((a) >> 8) & 0xFF]) \
+   ^ (key->s[2][((a) >> 16) & 0xFF]) ^ (key->s[3][(a) >> 24])
 
 #define G2(b) \
-     (ctx->s[1][(b) & 0xFF]) ^ (ctx->s[2][((b) >> 8) & 0xFF]) \
-   ^ (ctx->s[3][((b) >> 16) & 0xFF]) ^ (ctx->s[0][(b) >> 24])
+     (key->s[1][(b) & 0xFF]) ^ (key->s[2][((b) >> 8) & 0xFF]) \
+   ^ (key->s[3][((b) >> 16) & 0xFF]) ^ (key->s[0][(b) >> 24])
 
 /* Encryption and decryption Feistel rounds.  Each one calls the two g()
  * macros, does the PHT, and performs the XOR and the appropriate bit
@@ -679,18 +678,18 @@ void twofish_setkey(const u8 *key, twofish_ctx *ctx)
 
 #define ENCROUND(n, a, b, c, d) \
    x = G1 (a); y = G2 (b); \
-   x += y; y += x + ctx->k[2 * (n) + 1]; \
-   (c) ^= x + ctx->k[2 * (n)]; \
+   x += y; y += x + key->k[2 * (n) + 1]; \
+   (c) ^= x + key->k[2 * (n)]; \
    (c) = ROR32((c), 1); \
    (d) = ROL32((d), 1) ^ y
 
 #define DECROUND(n, a, b, c, d) \
    x = G1 (a); y = G2 (b); \
    x += y; y += x; \
-   (d) ^= y + ctx->k[2 * (n) + 1]; \
+   (d) ^= y + key->k[2 * (n) + 1]; \
    (d) = ROR32((d), 1); \
    (c) = ROL32((c), 1); \
-   (c) ^= (x + ctx->k[2 * (n)])
+   (c) ^= (x + key->k[2 * (n)])
 
 /* Encryption and decryption cycles; each one is simply two Feistel rounds
  * with the 32-bit chunks re-ordered to simulate the "swap" */
@@ -710,19 +709,14 @@ void twofish_setkey(const u8 *key, twofish_ctx *ctx)
  * whitening subkey number m. */
 
 #define INPACK(n, x, m) \
-   x = le32_to_cpu(src[n]) ^ ctx->w[m]
+   x = p32(in)[n] ^ key->w[m]
 
 #define OUTUNPACK(n, x, m) \
-   x ^= ctx->w[m]; \
-   dst[n] = cpu_to_le32(x)
+   p32(out)[n] = x ^ key->w[m];
  
-#ifndef TWOFISH_ASM
 /* Encrypt one block.  in and out may be the same. */
-void pcall twofish_encrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
+void _stdcall twofish256_encrypt(const unsigned char *in, unsigned char *out, twofish256_key *key)
 {
-	const u32 *src = (const u32 *)in;
-	u32 *dst = (u32 *)out;
-
 	/* The four 32-bit chunks of the text. */
 	u32 a, b, c, d;
 	
@@ -753,11 +747,8 @@ void pcall twofish_encrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
 } 
 
 /* Decrypt one block.  in and out may be the same. */
-void pcall twofish_decrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
+void _stdcall twofish256_decrypt(const unsigned char *in, unsigned char *out, twofish256_key *key)
 {
-	const u32 *src = (const u32 *)in;
-	u32 *dst = (u32 *)out;
-  
 	/* The four 32-bit chunks of the text. */
 	u32 a, b, c, d;
 	
@@ -786,240 +777,4 @@ void pcall twofish_decrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
 	OUTUNPACK (2, c, 2);
 	OUTUNPACK (3, d, 3);
 } 
-#endif /* TWOFISH_ASM */
-#else  /* SMALL_CODE */
-
-#define extract_byte(x,n)   ((u8)((x) >> (8 * n)))
-#define G_MOD   0x0000014d
-#define q(n,x)  qp(n, x)
-#define ffm_01(x)    (x)
-#define ffm_5b(x)   ((x) ^ ((x) >> 2) ^ tab_5b[(x) & 3])
-#define ffm_ef(x)   ((x) ^ ((x) >> 1) ^ ((x) >> 2) ^ tab_ef[(x) & 3])
-#define G_M 0x0169
-
-#define fm_00   ffm_01
-#define fm_10   ffm_5b
-#define fm_20   ffm_ef
-#define fm_30   ffm_ef
-#define q_0(x)  q(1,x)
-
-#define fm_01   ffm_ef
-#define fm_11   ffm_ef
-#define fm_21   ffm_5b
-#define fm_31   ffm_01
-#define q_1(x)  q(0,x)
-
-#define fm_02   ffm_5b
-#define fm_12   ffm_ef
-#define fm_22   ffm_01
-#define fm_32   ffm_ef
-#define q_2(x)  q(1,x)
-
-#define fm_03   ffm_5b
-#define fm_13   ffm_01
-#define fm_23   ffm_ef
-#define fm_33   ffm_5b
-#define q_3(x)  q(0,x)
-
-#define f_0(n,x)    ((u32)fm_0##n(x))
-#define f_1(n,x)    ((u32)fm_1##n(x) << 8)
-#define f_2(n,x)    ((u32)fm_2##n(x) << 16)
-#define f_3(n,x)    ((u32)fm_3##n(x) << 24)
-
-#define mds(n,x)    f_0(n,q_##n(x)) ^ f_1(n,q_##n(x)) ^ f_2(n,q_##n(x)) ^ f_3(n,q_##n(x))
-
-#define q40(x)  q(0,q(0,q(1, q(1, x) ^ extract_byte(s_key[3],0)) ^ extract_byte(s_key[2],0)) ^ extract_byte(s_key[1],0)) ^ extract_byte(s_key[0],0)
-#define q41(x)  q(0,q(1,q(1, q(0, x) ^ extract_byte(s_key[3],1)) ^ extract_byte(s_key[2],1)) ^ extract_byte(s_key[1],1)) ^ extract_byte(s_key[0],1)
-#define q42(x)  q(1,q(0,q(0, q(0, x) ^ extract_byte(s_key[3],2)) ^ extract_byte(s_key[2],2)) ^ extract_byte(s_key[1],2)) ^ extract_byte(s_key[0],2)
-#define q43(x)  q(1,q(1,q(0, q(1, x) ^ extract_byte(s_key[3],3)) ^ extract_byte(s_key[2],3)) ^ extract_byte(s_key[1],3)) ^ extract_byte(s_key[0],3)
-
-#define g0_fun(x) ( mk_tab[0 + 4*extract_byte(x,0)] ^ mk_tab[1 + 4*extract_byte(x,1)] \
-                  ^ mk_tab[2 + 4*extract_byte(x,2)] ^ mk_tab[3 + 4*extract_byte(x,3)] )
-#define g1_fun(x) ( mk_tab[0 + 4*extract_byte(x,3)] ^ mk_tab[1 + 4*extract_byte(x,0)] \
-                  ^ mk_tab[2 + 4*extract_byte(x,1)] ^ mk_tab[3 + 4*extract_byte(x,2)] )
-
-static u8 tab_5b[4] = { 0, G_M >> 2, G_M >> 1, (G_M >> 1) ^ (G_M >> 2) };
-static u8 tab_ef[4] = { 0, (G_M >> 1) ^ (G_M >> 2), G_M >> 1, G_M >> 2 };
-static u8 ror4[16] = { 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15 };
-static u8 ashx[16] = { 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12, 5, 14, 7 };
-
-static u8 qt0[2][16] = 
-{   { 8, 1, 7, 13, 6, 15, 3, 2, 0, 11, 5, 9, 14, 12, 10, 4 },
-    { 2, 8, 11, 13, 15, 7, 6, 14, 3, 1, 9, 4, 0, 10, 12, 5 }
-};
-
-static u8 qt1[2][16] =
-{   { 14, 12, 11, 8, 1, 2, 3, 5, 15, 4, 10, 6, 7, 0, 9, 13 }, 
-    { 1, 14, 2, 11, 4, 12, 3, 7, 6, 13, 10, 5, 15, 9, 0, 8 }
-};
-
-static u8 qt2[2][16] = 
-{   { 11, 10, 5, 14, 6, 13, 9, 0, 12, 8, 15, 3, 2, 4, 7, 1 },
-    { 4, 12, 7, 5, 1, 6, 9, 10, 0, 14, 13, 8, 2, 11, 3, 15 }
-};
-
-static u8 qt3[2][16] = 
-{   { 13, 7, 15, 4, 1, 2, 6, 14, 9, 11, 3, 0, 8, 5, 12, 10 },
-    { 11, 9, 5, 1, 12, 3, 13, 14, 6, 4, 7, 15, 2, 0, 8, 10 }
-};
-
-static u8 qp(const u32 n, const u8 x)
-{   u8  a0, a1, a2, a3, a4, b0, b1, b2, b3, b4;
-
-    a0 = x >> 4; b0 = x & 15;
-    a1 = a0 ^ b0; b1 = ror4[b0] ^ ashx[a0];
-    a2 = qt0[n][a1]; b2 = qt1[n][b1];
-    a3 = a2 ^ b2; b3 = ror4[b2] ^ ashx[a2];
-    a4 = qt2[n][a3]; b4 = qt3[n][b3];
-    return (b4 << 4) | a4;
-};
-
-static u32 mds_rem(u32 p0, u32 p1)
-{
-	u32  i, t, u;
-
-    for(i = 0; i < 8; ++i)
-    {
-        t = p1 >> 24;   // get most significant coefficient
-        
-        p1 = (p1 << 8) | (p0 >> 24); p0 <<= 8;  // shift others up
-            
-        // multiply t by a (the primitive element - i.e. left shift)
-
-        u = (t << 1); 
-        
-        if(t & 0x80)            // subtract modular polynomial on overflow
-        
-            u ^= G_MOD; 
-
-        p1 ^= t ^ (u << 16);    // remove t * (a * x^2 + 1)  
-
-        u ^= (t >> 1);          // form u = a * t + t / a = t * (a + 1 / a); 
-        
-        if(t & 0x01)            // add the modular polynomial on underflow
-        
-            u ^= G_MOD >> 1;
-
-        p1 ^= (u << 24) | (u << 8); // remove t * (a + 1/a) * (x^3 + x)
-    }
-
-    return p1;
-};
-
-
-static u32 h_fun(twofish_ctx *ctx, const u32 x, const u32 key[])
-{
-	u32  b0, b1, b2, b3;
-    u32  m5b_b0, m5b_b1, m5b_b2, m5b_b3;
-    u32  mef_b0, mef_b1, mef_b2, mef_b3;
-
-    b0 = extract_byte(x, 0); b1 = extract_byte(x, 1); 
-	b2 = extract_byte(x, 2); b3 = extract_byte(x, 3);
-
-    b0 = q(1, (u8) b0) ^ extract_byte(key[3],0);
-    b1 = q(0, (u8) b1) ^ extract_byte(key[3],1);
-    b2 = q(0, (u8) b2) ^ extract_byte(key[3],2);
-    b3 = q(1, (u8) b3) ^ extract_byte(key[3],3);
-    b0 = q(1, (u8) b0) ^ extract_byte(key[2],0);
-    b1 = q(1, (u8) b1) ^ extract_byte(key[2],1);
-    b2 = q(0, (u8) b2) ^ extract_byte(key[2],2);
-    b3 = q(0, (u8) b3) ^ extract_byte(key[2],3);
-    b0 = q(0, (u8) (q(0, (u8) b0) ^ extract_byte(key[1],0))) ^ extract_byte(key[0],0);
-    b1 = q(0, (u8) (q(1, (u8) b1) ^ extract_byte(key[1],1))) ^ extract_byte(key[0],1);
-    b2 = q(1, (u8) (q(0, (u8) b2) ^ extract_byte(key[1],2))) ^ extract_byte(key[0],2);
-    b3 = q(1, (u8) (q(1, (u8) b3) ^ extract_byte(key[1],3))) ^ extract_byte(key[0],3);
-    
-    b0 = q(1, (u8) b0); b1 = q(0, (u8) b1); b2 = q(1, (u8) b2); b3 = q(0, (u8) b3);
-    m5b_b0 = ffm_5b(b0); m5b_b1 = ffm_5b(b1); m5b_b2 = ffm_5b(b2); m5b_b3 = ffm_5b(b3);
-    mef_b0 = ffm_ef(b0); mef_b1 = ffm_ef(b1); mef_b2 = ffm_ef(b2); mef_b3 = ffm_ef(b3);
-    b0 ^= mef_b1 ^ m5b_b2 ^ m5b_b3; b3 ^= m5b_b0 ^ mef_b1 ^ mef_b2;
-    b2 ^= mef_b0 ^ m5b_b1 ^ mef_b3; b1 ^= mef_b0 ^ mef_b2 ^ m5b_b3;
-
-    return b0 | (b3 << 8) | (b2 << 16) | (b1 << 24);
-};
-
-void twofish_setkey(const u8 *key, twofish_ctx *ctx)
-{
-	u32  i, a, b, me_key[4], mo_key[4];
-	u32 *l_key, *mk_tab;
-	u32  s_key[4];
-    u8   by;
-
-	l_key  = ctx->l_key;
-	mk_tab = ctx->mk_tab;
-
-    for (i = 0; i < 4; ++i)
-    {
-        a = p32(key)[i + i];     me_key[i] = a;
-        b = p32(key)[i + i + 1]; mo_key[i] = b;
-        s_key[4 - i - 1] = mds_rem(a, b);
-    }
-
-    for(i = 0; i < 40; i += 2)
-    {
-        a = 0x01010101 * i; b = a + 0x01010101;
-        a = h_fun(ctx, a, me_key);
-        b = ROL32(h_fun(ctx, b, mo_key), 8);
-        l_key[i] = a + b;
-        l_key[i + 1] = ROL32(a + 2 * b, 9);
-    }
-
-	for (i = 0; i < 256; ++i)
-	{
-		by = (u8)i;
-		mk_tab[0 + 4*i] = mds(0, q40(by)); mk_tab[1 + 4*i] = mds(1, q41(by));
-		mk_tab[2 + 4*i] = mds(2, q42(by)); mk_tab[3 + 4*i] = mds(3, q43(by));
-	}
-}
-
-void twofish_encrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
-{
-	u32  t0, t1, blk[4];
-	u32 *l_key  = ctx->l_key;
-	u32 *mk_tab = ctx->mk_tab;
-	int i;
-
-	blk[0] = p32(in)[0] ^ l_key[0]; blk[1] = p32(in)[1] ^ l_key[1];
-    blk[2] = p32(in)[2] ^ l_key[2]; blk[3] = p32(in)[3] ^ l_key[3];
-
-	for (i = 0; i <= 7; ++i)
-	{
-		t1 = g1_fun(blk[1]); t0 = g0_fun(blk[0]);
-		blk[2] = ROR32(blk[2] ^ (t0 + t1 + l_key[4 * (i) + 8]), 1);
-		blk[3] = ROL32(blk[3], 1) ^ (t0 + 2 * t1 + l_key[4 * (i) + 9]);
-		t1 = g1_fun(blk[3]); t0 = g0_fun(blk[2]);
-		blk[0] = ROR32(blk[0] ^ (t0 + t1 + l_key[4 * (i) + 10]), 1);
-		blk[1] = ROL32(blk[1], 1) ^ (t0 + 2 * t1 + l_key[4 * (i) + 11]);
-	}
-
-	p32(out)[0] = blk[2] ^ l_key[4]; p32(out)[1] = blk[3] ^ l_key[5];
-    p32(out)[2] = blk[0] ^ l_key[6]; p32(out)[3] = blk[1] ^ l_key[7]; 	
-}
-
-void twofish_decrypt(const u8 *in, u8 *out, twofish_ctx *ctx)
-{
-	u32  t0, t1, blk[4];
-	u32 *l_key  = ctx->l_key;
-	u32 *mk_tab = ctx->mk_tab;
-	int i;
-
-    blk[0] = p32(in)[0] ^ l_key[4]; blk[1] = p32(in)[1] ^ l_key[5];
-    blk[2] = p32(in)[2] ^ l_key[6]; blk[3] = p32(in)[3] ^ l_key[7];
-
-	for (i = 7; i >= 0; --i)
-	{
-		t1 = g1_fun(blk[1]); t0 = g0_fun(blk[0]);
-		blk[2] = ROL32(blk[2], 1) ^ (t0 + t1 + l_key[4 * (i) + 10]);
-		blk[3] = ROR32(blk[3] ^ (t0 + 2 * t1 + l_key[4 * (i) + 11]), 1);
-		t1 = g1_fun(blk[3]); t0 = g0_fun(blk[2]);
-		blk[0] = ROL32(blk[0], 1) ^ (t0 + t1 + l_key[4 * (i) +  8]);
-		blk[1] = ROR32(blk[1] ^ (t0 + 2 * t1 + l_key[4 * (i) +  9]), 1);
-	}
-
-    p32(out)[0] = blk[2] ^ l_key[0]; p32(out)[1] = blk[3] ^ l_key[1];
-    p32(out)[2] = blk[0] ^ l_key[2]; p32(out)[3] = blk[1] ^ l_key[3];     
-}
-
-#endif /* SMALL_CODE */
-
-
+#endif

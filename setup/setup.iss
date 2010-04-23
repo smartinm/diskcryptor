@@ -22,6 +22,7 @@ VersionInfoVersion={#DC_FILE_VER}
 VersionInfoCompany=http://diskcryptor.net/
 VersionInfoCopyright=ntldr <ntldr@diskcryptor.net>
 DefaultDirName={pf}\dcrypt
+UninstallDisplayIcon={app}\dcrypt.exe
 DefaultGroupName=DiskCryptor
 UsePreviousTasks=yes
 ChangesEnvironment=yes
@@ -42,13 +43,6 @@ Source: "..\release\i386\*.dll"; DestDir: "{app}"; Check: not Is64BitInstallMode
 Source: "..\release\amd64\*.exe"; DestDir: "{app}"; Check: Is64BitInstallMode
 Source: "..\release\amd64\*.sys"; DestDir: "{app}"; Check: Is64BitInstallMode
 Source: "..\release\amd64\*.dll"; DestDir: "{app}"; Check: Is64BitInstallMode
-; BartPE plugin
-Source: "..\release\i386\dcrypt.exe"; DestDir: "{app}\BartPE";
-Source: "..\release\i386\dccon.exe"; DestDir: "{app}\BartPE";
-Source: "..\release\i386\*.sys"; DestDir: "{app}\BartPE";
-Source: "..\release\i386\*.dll"; DestDir: "{app}\BartPE";
-Source: "..\bartpe\dcrypt.xml"; DestDir: "{app}\BartPE";
-Source: "..\bartpe\dcrypt.inf"; DestDir: "{app}\BartPE";
 ; misc files
 Source: "..\license.txt"; DestDir: "{app}"
 Source: "..\changes.txt"; DestDir: "{app}"

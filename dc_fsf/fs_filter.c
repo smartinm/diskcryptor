@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -1098,7 +1097,7 @@ void dc_mount_complete_worker(fsctl_ctx *fctx)
 	}
 
 	IoCompleteRequest(fctx->irp, IO_NO_INCREMENT);
-	mem_free(fctx);
+	ExFreePool(fctx);
 }
 
 static
@@ -1138,7 +1137,8 @@ NTSTATUS
 	minorf = irp_sp->MinorFunction;
 	fsc_cd = irp_sp->Parameters.FileSystemControl.FsControlCode;
 	
-	if ( (minorf == IRP_MN_MOUNT_VOLUME) && (fctx = mem_alloc(sizeof(fsctl_ctx))) )
+	if ( (minorf == IRP_MN_MOUNT_VOLUME) && 
+		 (fctx = ExAllocatePool(NonPagedPool, sizeof(fsctl_ctx))) )
 	{
 		ExInitializeWorkItem(
 			&fctx->wrk_item, dc_mount_complete_worker, fctx);

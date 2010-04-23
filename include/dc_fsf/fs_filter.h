@@ -4,7 +4,7 @@
 #include "sys/driver.h"
 #include "dcconst.h"
 
-typedef aligned struct _dc_fs_hook {
+typedef align16 struct _dc_fs_hook {
 	PDEVICE_OBJECT orig_dev;
 	PDEVICE_OBJECT hook_dev;
 	PDRIVER_OBJECT fs_drv;

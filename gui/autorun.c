@@ -1,20 +1,41 @@
+/*
+    *
+    * DiskCryptor - open source partition encryption tool
+	* Copyright (c) 2007-2010
+	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+    *
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <windows.h>
-#include <stdio.h>
-#include <wchar.h>
-#include "drv_ioctl.h"
+
+#include "main.h"
 #include "autorun.h"
+
 #include "ntdll.h"
-#include "misc.h"
 
-static wchar_t run_key[]      = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static wchar_t run_once_key[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce";
-static wchar_t run_v_name[]   = L"DiskCryptor";
+static wchar_t run_key[ ]      = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+static wchar_t run_once_key[ ] = L"Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce";
+static wchar_t run_v_name[ ]   = L"DiskCryptor";
 
-int autorun_set(int run)
+int autorun_set(
+		int run
+	)
 {
 	wchar_t  name[MAX_PATH];
 	wchar_t  path[MAX_PATH];
-	HKEY     hkey = NULL;
+	HKEY     h_key = NULL;
 	wchar_t *kname;
 	int      resl;	
 	u32      cb;
@@ -27,53 +48,62 @@ int autorun_set(int run)
 		path, sizeof_w(path), L"\"%s\" -h", name
 		);	
 
-	if (is_win_vista() != 0) {
+	if ( is_win_vista( ) != 0 )
+	{
 		kname = run_once_key;
 	} else {
 		kname = run_key;
 	}
-
 	do
 	{
-		if (run != 0) 
+		if ( run != 0 )
 		{
-			if (RegCreateKey(HKEY_LOCAL_MACHINE, kname, &hkey)) {
-				resl = ST_ACCESS_DENIED; break;
+			if ( RegCreateKey( HKEY_LOCAL_MACHINE, kname, &h_key ) ) 
+			{
+				resl = ST_ACCESS_DENIED; 
+				break;
 			}
-
 			cb = (u32)(wcslen(path) * sizeof(wchar_t));
 
-			if (RegSetValueEx(hkey, run_v_name, 0, REG_SZ, pv(path), cb)) {
-				resl = ST_ACCESS_DENIED; break;
+			if ( RegSetValueEx( h_key, run_v_name, 0, REG_SZ, pv(path), cb ) )
+			{
+				resl = ST_ACCESS_DENIED; 
+				break;
 			}
 			resl = ST_OK;
 		} else 
 		{
-			if (RegOpenKey(HKEY_LOCAL_MACHINE, kname, &hkey)) {
-				resl = ST_ACCESS_DENIED; break;
+			if ( RegOpenKey( HKEY_LOCAL_MACHINE, kname, &h_key ) )
+			{
+				resl = ST_ACCESS_DENIED; 
+				break;
 			}
-
-			if (RegDeleteValue(hkey, run_v_name)) {
-				resl = ST_ACCESS_DENIED; break;
+			if ( RegDeleteValue( h_key, run_v_name ) )
+			{
+				resl = ST_ACCESS_DENIED;
+				break;
 			}
 			resl = ST_OK;
 		}
 	} while (0);
 
-	if (hkey != NULL) {
-		RegCloseKey(hkey);
+	if ( h_key != NULL )
+	{
+		RegCloseKey( h_key );
 	}
 
 	return resl;
 }
 
 
-int on_app_start(wchar_t *cmd_line)
+int on_app_start(
+		wchar_t *cmd_line
+	)
 {
 	PROCESS_BASIC_INFORMATION pbi;
 	wchar_t                   name[MAX_PATH];
 	wchar_t                   path[MAX_PATH];
-	HKEY                      hkey;	
+	HKEY                      h_key;	
 	int                       resl, autorn;
 	u32                       cb, pid;
 	int                       isvista;	
@@ -83,64 +113,96 @@ int on_app_start(wchar_t *cmd_line)
 	PROCESS_INFORMATION       pi;
 	wchar_t                  *w_pid;
  
-    pid = 0; autorn = 0;
-	if (wcsstr(cmd_line, L"-h") != NULL) {
+    pid    = 0; 
+	autorn = 0;
+
+#ifdef LOG_FILE
+	_log( L"func:app start; cmd line == \"%s\"", cmd_line );
+#endif
+	
+	if ( wcsstr( cmd_line, L"-h" ) != NULL )
+	{
 		autorn = 1;
 	} else 
 	{
-		if (w_pid = wcsstr(cmd_line, L"-p")) {
-			autorn = 1; pid = wcstoul(w_pid + 2, NULL, 10); 
+		if ( w_pid = wcsstr( cmd_line, L"-p" ) )
+		{
+			autorn = 1; 
+			pid = wcstoul( w_pid + 2, NULL, 10 ); 
 		}
 	}
 
-	isvista = is_win_vista();
+#ifdef LOG_FILE
+	_log( L"func:app start; autorn == %d", autorn );
+#endif
 
-	if (isvista != 0)
+	isvista = is_win_vista( );
+
+#ifdef LOG_FILE
+	_log( L"func:app start; isvista == %d", isvista );
+#endif
+
+	if ( isvista != 0 )
 	{
 		/* update autorun if old autorun found */
-		if (RegCreateKey(HKEY_LOCAL_MACHINE, run_key, &hkey) == 0) 
+		if ( RegCreateKey(HKEY_LOCAL_MACHINE, run_key, &h_key ) == 0)
 		{
 			cb = sizeof(path);
 
-			if (RegQueryValueEx(hkey, run_v_name, 0, NULL, pv(path), &cb) == 0) {
-				RegDeleteValue(hkey, run_v_name);
+			if ( RegQueryValueEx( h_key, run_v_name, 0, NULL, pv(path), &cb ) == 0 )
+			{
+#ifdef LOG_FILE
+	_log( L"func:app start; autorun set" );
+#endif
+				RegDeleteValue( h_key, run_v_name );
 				autorun_set(1);
 			}
-
-			RegCloseKey(hkey);
+			RegCloseKey(h_key);
 		}
 	}
-
 	do
 	{
-		if (autorn == 0) {
-			resl = ST_OK; break;
-		}
-
-		if (isvista != 0)
+		if ( autorn == 0 )
 		{
-			if (pid == 0) 
+			resl = ST_OK;
+			break;
+		}
+		if ( isvista != 0 )
+		{
+			if ( pid == 0 )
 			{
-				status = NtQueryInformationProcess(
-					GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL
-					);
-
-				if (status == 0) 
+				status = 
+					NtQueryInformationProcess(
+						GetCurrentProcess( ), ProcessBasicInformation, &pbi, sizeof(pbi), NULL
+						);
+#ifdef LOG_FILE
+	_log( L"func:app start; %0.8X query information process" );
+#endif
+				if ( status == 0 ) 
 				{
 					GetModuleFileName(
 						NULL, name, sizeof(name)
 						);
-
+#ifdef LOG_FILE
+	_log( L"func:app start; module file name == %s", name );
+#endif
 					_snwprintf(
 						path, sizeof_w(path), L"\"%s\" -p%u", name, (u32)(pbi.InheritedFromUniqueProcessId)
 						);
 
-					zeroauto(&si, sizeof(si));
+					zeroauto( &si, sizeof(si) );
 					si.cb = sizeof(si);
 
-					if (CreateProcess(
-						NULL, path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) 
+#ifdef LOG_FILE
+	_log( L"func:app start; before create process \"%s\"", path );
+#endif
+					if ( CreateProcess(
+							NULL, path, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi
+						) )
 					{
+#ifdef LOG_FILE
+	_log( L"func:app start; process created" );
+#endif
 						CloseHandle(pi.hProcess);
 						CloseHandle(pi.hThread);
 					}
@@ -148,20 +210,32 @@ int on_app_start(wchar_t *cmd_line)
 				resl = ST_NEED_EXIT;
 			} else 
 			{
-				if (h_proc = OpenProcess(SYNCHRONIZE, FALSE, pid)) {
-					WaitForSingleObject(h_proc, INFINITE);
-					CloseHandle(h_proc);
+				if ( h_proc = OpenProcess( SYNCHRONIZE, FALSE, pid ) )
+				{
+#ifdef LOG_FILE
+	_log( L"func:app start; %0.8X open process", h_proc );
+#endif
+					WaitForSingleObject( h_proc, INFINITE );
+					CloseHandle( h_proc );
+#ifdef LOG_FILE
+	_log( L"func:app start; return wait for single object", h_proc );
+#endif
 				} else {
-					Sleep(500);
+					Sleep( 500 );
 				}
-
 				autorun_set(1);
 				resl = ST_AUTORUNNED;
 			}
-		} else {
+		} else 
+		{
 			resl = ST_AUTORUNNED;
 		}
 	} while (0);
 
+#ifdef LOG_FILE
+	_log( L"func:app start; %0.8X return", resl );
+#endif
+
 	return resl;
+
 }

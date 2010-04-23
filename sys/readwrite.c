@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -24,7 +23,6 @@
 #include "devhook.h"
 #include "misc_irp.h"
 #include "readwrite.h"
-#include "fastmem.h"
 #include "misc.h"
 #include "mount.h"
 #include "enc_dec.h"
@@ -40,11 +38,11 @@ typedef struct _sync_q_ctx {
 	
 } sync_q_ctx;
 
-typedef aligned struct _io_packet {
+typedef align16 struct _io_packet {
 	void      *old_buf;
 	PMDL       old_mdl;	
 	dev_hook  *hook;
-	aligned u8 data[];
+	align16 u8 data[];
 	
 } io_packet;
 
@@ -53,7 +51,7 @@ static NPAGED_LOOKASIDE_LIST sync_rw_mem;
 static
 NTSTATUS 
   dc_encrypted_rw_block(
-    dev_hook *hook, u32 func, void *buff, u32 size, u64 offset, u32 flags, dc_key *enc_key
+    dev_hook *hook, u32 func, void *buff, u32 size, u64 offset, u32 flags, xts_key *enc_key
 	)
 {
 	NTSTATUS status;
@@ -65,7 +63,7 @@ NTSTATUS
 		/* process IO with new memory buffer because 
 		   IoBuildSynchronousFsdRequest fails for some system buffers   
 		*/
-		if ( (new_buf = fast_alloc(size)) == NULL ) {
+		if ( (new_buf = mm_alloc(size, MEM_FAST | MEM_SUCCESS)) == NULL ) {
 			status = STATUS_INSUFFICIENT_RESOURCES; break;
 		}
 
@@ -92,7 +90,7 @@ NTSTATUS
 	} while (0);
 
 	if (new_buf != NULL) {
-		fast_free(new_buf);
+		mm_free(new_buf);
 	}
 
 	return status;
@@ -245,20 +243,13 @@ NTSTATUS
 			if ( (length >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
 			{
 				succs = dc_parallelized_crypt(
-					F_OP_DECRYPT, &hook->dsk_key, 
-					buff, buff, length, offset, dc_decrypt_complete, irp, hook);
+					0, &hook->dsk_key, dc_decrypt_complete, irp, hook, buff, buff, length, offset);
 
-				if (succs == 0) {
-					irp->IoStatus.Status      = STATUS_INSUFFICIENT_RESOURCES;
-					irp->IoStatus.Information = 0;
-				} else {
+				if (succs != 0) {
 					return STATUS_MORE_PROCESSING_REQUIRED;
 				}
-			} else 
-			{
-				dc_cipher_decrypt(
-					buff, buff, length, offset, &hook->dsk_key);
 			}
+			xts_decrypt(buff, buff, length, offset, &hook->dsk_key);
 		} else {			
 			irp->IoStatus.Status      = STATUS_INSUFFICIENT_RESOURCES;
 			irp->IoStatus.Information = 0;
@@ -281,7 +272,7 @@ NTSTATUS
 	irp->UserBuffer = iopk->old_buf;
 
 	IoReleaseRemoveLock(&iopk->hook->remv_lock, irp);
-	fast_free(iopk);
+	mm_free(iopk);
 
 	if (irp->PendingReturned) {
 		IoMarkIrpPending(irp);
@@ -344,7 +335,7 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 		}
 
 		data = mm_map_mdl_success(irp->MdlAddress);
-		iopk = fast_alloc(length + sizeof(io_packet));
+		iopk = mm_alloc(length + sizeof(io_packet), MEM_FAST | MEM_SUCCESS);
 		nmdl = mm_allocate_mdl_success(iopk->data, length);
 
 		if ( (data == NULL) || (iopk == NULL) || (nmdl == NULL) ) {
@@ -366,44 +357,33 @@ static NTSTATUS dc_write_irp(dev_hook *hook, PIRP irp)
 		irp->UserBuffer = iopk->data;
 		irp->MdlAddress = nmdl;
 
-		IoSetCompletionRoutine(
-			irp, dc_write_complete,	iopk, TRUE, TRUE, TRUE);
+		IoSetCompletionRoutine(irp, dc_write_complete, iopk, TRUE, TRUE, TRUE);
 
 		if ( (length >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
 		{
 			IoMarkIrpPending(irp);
 
 			succs = dc_parallelized_crypt(
-				F_OP_ENCRYPT, &hook->dsk_key, data, 
-				iopk->data, length, offset, dc_encrypt_complete, hook->orig_dev, irp);
+				1, &hook->dsk_key, dc_encrypt_complete, hook->orig_dev, irp, data, iopk->data, length, offset);
 
-			if (succs == 0) {
-				irp->MdlAddress = iopk->old_mdl;
-				irp->UserBuffer = iopk->old_buf;
-				status = STATUS_INSUFFICIENT_RESOURCES;
-			} else {
-				status = STATUS_PENDING;
+			if (succs != 0) {
+				status = STATUS_PENDING; break;
 			}
-		} else
-		{
-			dc_cipher_encrypt(data, iopk->data, length, offset, &hook->dsk_key);
-
-			status = IoCallDriver(hook->orig_dev, irp);
-			succs  = 1;
 		}
+		xts_encrypt(data, iopk->data, length, offset, &hook->dsk_key);
+
+		status = IoCallDriver(hook->orig_dev, irp);
+		succs  = 1;
 	} while (0);
 
 	if (succs == 0) 
 	{
 		if (nmdl != NULL) { IoFreeMdl(nmdl); }
-		if (iopk != NULL) { fast_free(iopk); }
+		if (iopk != NULL) { mm_free(iopk); }
 
-		IoSetCompletionRoutine(
-			irp, NULL, NULL, FALSE, FALSE, FALSE);
-
+		IoSetCompletionRoutine(irp, NULL, NULL, FALSE, FALSE, FALSE);
 		dc_release_irp(hook, irp, status);
 	}
-
 	return status;
 }
 

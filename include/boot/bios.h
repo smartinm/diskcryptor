@@ -117,19 +117,8 @@ typedef struct _bd_data {
 #define FL_DF		0x0400		// Direction Flag
 #define FL_OF		0x0800		// Overflow Flag
 
-#define pm_off(seg,off) (pv(((u32)seg << 4) + (u32)off) )
-#define rm_seg(off)     ((u16)((u32)off >> 4))
-#define rm_off(off)     ((u16)((u32)off & 0x0F))
-
-#ifdef BOOT_LDR
- void set_ctx(u16 ax, rm_ctx *ctx);
- int  bios_call(int num, rm_ctx *ctx);
- void bios_jump_boot(u8 disk, int n_mount);
- void bios_reboot();
- void bios_hook_ints();
-
- extern bd_data *bd_dat;
-#endif
-
+#define pm_off(seg,off) pv((d32(seg) << 4) + d32(off))
+#define rm_seg(off)     d16(d32(off) >> 4)
+#define rm_off(off)     d16(d32(off) & 0x0F)
 
 #endif

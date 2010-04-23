@@ -15,21 +15,16 @@ typedef struct _wipe_mode {
 #define P_RAND  1 /* random data        */
 
 typedef struct wipe_ctx {
-	rnd_ctx   *rand;
+	xts_key   *key;
 	wipe_mode *mode;
 	void      *hook;
 	u8        *buff;
-	int        size;	
+	int        size;
+	u64        offs;
 
 } wipe_ctx;
 
-int dc_wipe_init(
-		wipe_ctx *ctx,
-		void     *hook, 
-		int       max_size,
-		int       method
-		);
-
+int  dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher);
 int  dc_wipe_process(wipe_ctx *ctx, u64 offset, int size);
 void dc_wipe_free(wipe_ctx *ctx);
 

@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,11 +22,12 @@
 #include "defines.h"
 #include "dump_hook.h"
 #include "driver.h"
-#include "crypto.h"
+#include "xts_fast.h"
 #include "misc.h"
 #include "mount.h"
 #include "mem_lock.h"
 #include "debug.h"
+#include "misc_mem.h"
 
 typedef struct _dump_context
 {
@@ -166,11 +166,10 @@ NTSTATUS
 static
 NTSTATUS 
   dump_single_write(
-      dump_context *dump, void *buff, u32 size, u64 offset, dc_key *key
+      dump_context *dump, void *buff, u32 size, u64 offset, xts_key *key
 	  )
 {
-	dc_cipher_encrypt(
-		buff, dump_mem, size, offset, key);
+	xts_encrypt(buff, dump_mem, size, offset, key);
 
 	return dump_mem_write(dump, size, offset);
 }
@@ -546,7 +545,7 @@ static void hook_dump_entry()
 			if (img_cmp(&table->BaseDllName, L"dump_") || 
 				img_cmp(&table->BaseDllName, L"hiber_") ) 
 			{
-				if (ehook = mem_alloc(sizeof(entry_hook)))
+				if (ehook = mm_alloc(sizeof(entry_hook), 0))
 				{
 					autocpy(ehook->code, jmp_code, sizeof(jmp_code));
 					ppv(ehook->code + DEST_OFF)[0] = dump_driver_entry;
@@ -556,10 +555,8 @@ static void hook_dump_entry()
 				}
 			}
 		}
-
 		dump_imgbase = NULL;
 	}
-
 	ExReleaseFastMutex(&dump_sync);
 }
 

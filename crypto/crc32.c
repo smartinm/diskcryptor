@@ -6,9 +6,8 @@
     *
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -20,9 +19,7 @@
 */
 #include "crc32.h"
 
-#ifndef NO_CRC32
-
-static u32 crc32_tab[] = {
+static const unsigned long crc32_tab[] = {
 	0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L,
 	0x706af48fL, 0xe963a535L, 0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L,
 	0xe0d5e91eL, 0x97d2d988L, 0x09b64c2bL, 0x7eb17cbdL, 0xe7b82d07L,
@@ -77,16 +74,13 @@ static u32 crc32_tab[] = {
 	0x2d02ef8dL
 };
 
-u32 crc32(u8 *dat, u32 len)
+unsigned long crc32(const unsigned char *p, unsigned long len)
 {
-	u32 i;
-	u32 crc = 0xFFFFFFFF;
+	unsigned long i;
+	unsigned long crc = 0xFFFFFFFF;
 
 	for (i = 0; i < len; i++) {
-		crc = crc32_tab[(u8)(crc ^ dat[i])] ^ (crc >> 8);
-	}
-	
+		crc = crc32_tab[(unsigned char)(crc ^ p[i])] ^ (crc >> 8);
+	}	
 	return ~crc;
 }
-
-#endif /* NO_CRC32 */
