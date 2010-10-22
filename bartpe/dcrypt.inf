@@ -2,7 +2,7 @@
 Signature= "$Windows NT$"
 
 [PEBuilder]
-Name="DiskCryptor 0.9"
+Name="DiskCryptor 1.0"
 Enable=1
 
 [WinntDirectories]
@@ -10,7 +10,6 @@ a="Programs\dcrypt",2
 
 [SourceDisksFiles]
 dcrypt.sys=4,,1
-dc_fsf.sys=4,,1
 dcrypt.exe=a,,3
 dccon.exe=a,,3
 dcapi.dll=a,,3
@@ -30,11 +29,6 @@ nu2menu.xml, dcrypt.xml
 0x4, "ControlSet001\Services\dcrypt\config","Flags", 0x00000082
 0x3, "ControlSet001\Services\dcrypt\config","Hotkeys", 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 0x4, "ControlSet001\Services\dcrypt\config","sysBuild", 0x00000000
-0x1, "ControlSet001\Services\dc_fsf","group","System Bus Extender"
-0x4, "ControlSet001\Services\dc_fsf","Type", 0x00000002
-0x4, "ControlSet001\Services\dc_fsf","Start", 0x00000000
-0x4, "ControlSet001\Services\dc_fsf","ErrorControl", 0x00000003
-0x2, "ControlSet001\Services\dc_fsf","ImagePath","System32\drivers\dc_fsf.sys"
 0x7, "ControlSet001\Control\Class\{71A27CDD-812A-11D0-BEC7-08002BE2092F}","LowerFilters","dcrypt"
 0x7, "ControlSet001\Control\Class\{4D36E965-E325-11CE-BFC1-08002BE10318}","UpperFilters","dcrypt"
 0x2, "ControlSet001\Control\Session Manager\Environment","Path",\
@@ -42,9 +36,7 @@ nu2menu.xml, dcrypt.xml
 
 [SetValue]
 "txtsetup.sif", "BusExtenders.Load", "dcrypt", "dcrypt.sys"
-"txtsetup.sif", "BusExtenders.Load", "dc_fsf", "dc_fsf.sys"
 "txtsetup.sif", "HardwareIdsDatabase", "STORAGE\Volume", """Volume"",{71A27CDD-812A-11D0-BEC7-08002BE2092F}"
 "txtsetup.sif", "HardwareIdsDatabase", "GenCdRom", """CdRom"",{4D36E965-E325-11CE-BFC1-08002BE10318}"
 "txtsetup.sif", "SourceDisksFiles", "dcrypt.sys", "100,,,,,,4_,4,0,0,,1,4"
-"txtsetup.sif", "SourceDisksFiles", "dc_fsf.sys", "100,,,,,,4_,4,0,0,,1,4"
 

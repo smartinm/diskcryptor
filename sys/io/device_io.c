@@ -1,0 +1,159 @@
+/*
+    *
+    * DiskCryptor - open source partition encryption tool
+    * Copyright (c) 2010
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+    *
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 3 as
+    published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#include <ntifs.h>
+#include "defines.h"
+#include "devhook.h"
+#include "device_io.h"
+#include "misc.h"
+
+HANDLE io_open_device(wchar_t *dev_name)
+{
+	UNICODE_STRING    u_name;
+	OBJECT_ATTRIBUTES obj_a;
+	IO_STATUS_BLOCK   iosb;
+	NTSTATUS          status;
+	HANDLE            h_dev;
+
+	RtlInitUnicodeString(&u_name, dev_name);
+	InitializeObjectAttributes(&obj_a, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+
+	status = ZwCreateFile(&h_dev, SYNCHRONIZE | GENERIC_READ, &obj_a, &iosb, NULL, FILE_ATTRIBUTE_NORMAL, 
+		FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
+
+	if (NT_SUCCESS(status) == FALSE) {
+		h_dev = NULL;
+	}
+	return h_dev;
+}
+
+int io_hook_ioctl(dev_hook *hook, u32 code, void *p_in, u32 sz_in, void *p_out, u32 sz_out)
+{
+	IO_STATUS_BLOCK iosb;
+	KEVENT          sync;	
+	NTSTATUS        status;
+	PIRP            irp;
+
+	if (hook->pnp_state != Started) {
+		return ST_ERROR;
+	}
+	KeInitializeEvent(&sync, NotificationEvent, FALSE);
+
+	if (irp = IoBuildDeviceIoControlRequest(
+		      code, hook->orig_dev, p_in, sz_in, p_out, sz_out, FALSE, &sync, &iosb))
+	{
+		status = IoCallDriver(hook->orig_dev, irp);
+
+		if (status == STATUS_PENDING) {
+			KeWaitForSingleObject(&sync, Executive, KernelMode, FALSE, NULL);
+			status = iosb.Status;
+		}
+	} else {
+		return ST_NOMEM;
+	}
+	return (NT_SUCCESS(status) != FALSE) ? ST_OK : ST_IO_ERROR;
+}
+
+
+NTSTATUS io_device_rw(PDEVICE_OBJECT dev_obj, void *buff, u32 length, u64 offset, int is_read)
+{
+	IO_STATUS_BLOCK iosb;
+	NTSTATUS        status;
+	PIRP            irp;
+	KEVENT          sync;
+	u32             timeout;
+	
+	KeInitializeEvent(&sync, NotificationEvent,  FALSE);
+
+	timeout = DC_MEM_RETRY_TIMEOUT;
+	do
+	{
+		if (irp = IoBuildSynchronousFsdRequest(is_read != 0 ? IRP_MJ_READ : IRP_MJ_WRITE,
+				  dev_obj, buff, length, pv(&offset), &sync, &iosb))
+		{
+			IoGetNextIrpStackLocation(irp)->Flags |= SL_OVERRIDE_VERIFY_VOLUME;
+			break;
+		}
+		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
+	} while (timeout != 0);
+
+	if (irp == NULL) {
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+	status = IoCallDriver(dev_obj, irp);
+
+	if (status == STATUS_PENDING) {
+		KeWaitForSingleObject(&sync, Executive, KernelMode, FALSE, NULL);
+		status = iosb.Status;
+	}
+	return status;
+}
+
+int io_hook_rw(dev_hook *hook, void *buff, u32 length, u64 offset, int is_read)
+{
+	NTSTATUS status;
+	u32      bsize;
+	int      resl;	
+
+	if ( (hook->pnp_state != Started) || (hook->max_chunk == 0) ) {
+		return ST_RW_ERR;
+	}	
+	for (resl = ST_OK; length != 0; )
+	{
+		bsize  = min(length, hook->max_chunk);
+		status = io_device_rw(hook->orig_dev, buff, bsize, offset, is_read);
+
+		if (NT_SUCCESS(status) == FALSE)
+		{
+			if ( (hook->flags & (F_REMOVABLE | F_CDROM)) && 
+				 (status == STATUS_NO_SUCH_DEVICE || 
+				  status == STATUS_DEVICE_DOES_NOT_EXIST || status == STATUS_NO_MEDIA_IN_DEVICE) )
+			{
+				resl = ST_NO_MEDIA;
+			} else {
+				resl = ST_RW_ERR;
+			}
+			break;
+		} else {
+			buff = p8(buff) + bsize; length -= bsize; offset += bsize;
+		}
+	}
+	return resl;
+}
+
+int io_hook_rw_skip_bads(dev_hook *hook, void *buff, u32 length, u64 offset, int is_read)
+{
+	u32 block;
+	int resl;
+
+	if ( (resl = io_hook_rw(hook, buff, length, offset, is_read)) == ST_RW_ERR )
+	{
+		while (block = min(length, 4096))
+		{
+			resl = io_hook_rw(hook, buff, block, offset, is_read);
+
+			if ( (resl == ST_MEDIA_CHANGED) || (resl == ST_NO_MEDIA) ) {
+				break;
+			}
+			buff = p8(buff) + block; length -= block; offset += block;
+		}
+	}
+	return resl;
+}

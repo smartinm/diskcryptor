@@ -79,6 +79,26 @@ PMDL mm_allocate_mdl_success(void *data, u32 size)
 	return mdl;
 }
 
+PIRP mm_allocate_irp_success(CCHAR StackSize)
+{
+	PIRP irp;
+	u32  timeout;
+
+	timeout = DC_MEM_RETRY_TIMEOUT;
+	do
+	{
+		if (irp = IoAllocateIrp(StackSize, FALSE)) {
+			break;
+		}
+		if (KeGetCurrentIrql() >= DISPATCH_LEVEL) {
+			break;
+		}
+		dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
+	} while (timeout != 0);
+
+	return irp;
+}
+
 void *mm_alloc_success(POOL_TYPE pool, SIZE_T bytes, u32 tag)
 {
 	void *mem;

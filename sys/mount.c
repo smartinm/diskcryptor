@@ -32,9 +32,11 @@
 #include "fast_crypt.h"
 #include "misc_volume.h"
 #include "debug.h"
-#include "fsf_control.h"
 #include "misc_mem.h"
 #include "crypto_head.h"
+#include "disk_info.h"
+#include "device_io.h"
+#include "header_io.h"
 
 typedef struct _dsk_pass {
 	struct _dsk_pass *next;
@@ -137,37 +139,18 @@ void dc_clean_keys()
 	} 
 }
 
-void dc_init_hdr_key(xts_key *hdr_key, dc_header *header, int cipher, dc_pass *password)
-{
-	u8 dk[DISKKEY_SIZE];
-	
-	sha512_pkcs5_2(
-		1000, password->pass, password->size, 
-		header->salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
-
-	xts_set_key(dk, cipher, hdr_key);
-
-	/* prevent leaks */
-	zeroauto(dk, sizeof(dk));
-}
-
-static
-int dc_probe_decrypt(
-	  dev_hook *hook, dc_header *header, xts_key **res_key, dc_pass *password
-	  )
+static 
+int dc_probe_decrypt(dev_hook *hook, dc_header **header, xts_key **res_key, dc_pass *password)
 {
 	xts_key  *hdr_key;
 	dsk_pass *d_pass;	
 	int       resl, succs;
 
-	hdr_key = NULL; succs = 0;
+	hdr_key = NULL; succs = 0; *header = NULL;
 	do
 	{
-		/* read volume header */
-		resl = dc_device_rw(
-			hook, IRP_MJ_READ, header, sizeof(dc_header), 0);
-		
-		if (resl != ST_OK) {
+		/* read raw volume header */
+		if ( (resl = io_read_header(hook, header, NULL, NULL)) != ST_OK ) {
 			break;
 		}
 		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE | MEM_SUCCESS)) == NULL ) {
@@ -180,7 +163,7 @@ int dc_probe_decrypt(
 			if (password != NULL)
 			{
 				/* probe mount with entered password */
-				if (succs = dc_decrypt_header(hdr_key, header, password)) {
+				if (succs = cp_decrypt_header(hdr_key, *header, password)) {
 					break;
 				}
 			}
@@ -191,7 +174,7 @@ int dc_probe_decrypt(
 			/* probe mount with cached passwords */
 			for (d_pass = f_pass; d_pass; d_pass = d_pass->next)
 			{
-				if (succs = dc_decrypt_header(hdr_key, header, &d_pass->pass)) {
+				if (succs = cp_decrypt_header(hdr_key, *header, &d_pass->pass)) {
 					break;
 				}
 			}
@@ -207,6 +190,9 @@ int dc_probe_decrypt(
 		}
 	} while (0);
 
+	if (resl != ST_OK && *header != NULL) {
+		mm_free(*header); *header = NULL;
+	}
 	if (hdr_key != NULL) {
 		mm_free(hdr_key);
 	}
@@ -237,12 +223,8 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 			resl = ST_ERROR; break;
 		}
 
-		if (dc_get_dev_params(hook) != ST_OK) {
-			resl = ST_RW_ERR; break;
-		}
-
-		if ( (dc_no_usb_mount != 0) && (hook->flags & F_REMOVABLE) ) {
-			resl = ST_NO_MEDIA; break;
+		if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) {
+			break;
 		}
 
 		if ( ( (hook->flags & F_CDROM) && (hook->bps != CD_SECTOR_SIZE) ) ||
@@ -250,28 +232,32 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		{
 			hook->flags |= F_UNSUPRT; resl = ST_ERROR; break;
 		}
-
-		if ( (hcopy = mm_alloc(sizeof(dc_header), MEM_SECURE | MEM_SUCCESS)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-
-		resl = dc_probe_decrypt(hook, hcopy, &hdr_key, password);
-
-		if (resl != ST_OK) {
+		if ( (resl = dc_probe_decrypt(hook, &hcopy, &hdr_key, password)) != ST_OK ) {
 			break;
 		}
 
 		/* check volume header */		
 		if ( (IS_INVALID_VOL_FLAGS(hcopy->flags) != 0) ||
-			 (hcopy->stor_off == 0) || (hcopy->alg_1 >= CF_CIPHERS_NUM) ||
-			 (hcopy->alg_2 >= CF_CIPHERS_NUM) || (hcopy->tmp_wp_mode >= WP_NUM) ||
-//			 (hcopy->stor_off + DC_AREA_SIZE > min(hcopy->use_size, hook->dsk_size)) ||
+			 ( (hcopy->flags & VF_STORAGE_FILE) && (hcopy->stor_off == 0) ) ||
+			 (hcopy->alg_1 >= CF_CIPHERS_NUM) ||
+			 (hcopy->alg_2 >= CF_CIPHERS_NUM) || 
+			 (hcopy->tmp_wp_mode >= WP_NUM) ||
 			 ( (hook->flags & F_CDROM) && (hcopy->flags & (VF_TMP_MODE | VF_STORAGE_FILE)) ) )
 		{
 			resl = ST_INV_VOLUME; break;
 		}
-		
-		
+		if (hcopy->version > DC_HDR_VERSION) {
+			resl = ST_VOLUME_TOO_NEW; break;
+		}
+		/* update volume header if needed */
+		if ( (hcopy->version < DC_HDR_VERSION) && !(hook->flags & F_CDROM) )
+		{
+			hcopy->version = DC_HDR_VERSION;
+			zeroauto(hcopy->deprecated, sizeof(hcopy->deprecated));
+			
+			io_write_header(hook, hcopy, hdr_key, NULL);
+		}
+
 		DbgMsg("hdr_key %x\n", hdr_key);
 
 		/* initialize volume key */
@@ -279,33 +265,30 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 
 		DbgMsg("device mounted\n");
 
+		if (hcopy->flags & VF_STORAGE_FILE) {
+			hook->use_size = hook->dsk_size;
+			hook->stor_off = hcopy->stor_off;
+		} else {
+			hook->use_size = hook->dsk_size - hook->head_len;
+			hook->stor_off = hook->use_size;
+		}		
 		hook->crypt.cipher_id = d8(hcopy->alg_1);
-		hook->disk_id         = hcopy->disk_id;
-		hook->vf_version      = hcopy->version;
-		hook->stor_off        = hcopy->stor_off;
-		hook->tmp_size        = 0;
-		hook->use_size        = min(hcopy->use_size, hook->dsk_size);
-		hook->mnt_flags       = mnt_flags;
+		hook->disk_id    = hcopy->disk_id;
+		hook->vf_version = hcopy->version;		
+		hook->tmp_size   = 0;
+		hook->mnt_flags  = mnt_flags;
 
 		DbgMsg("hook->vf_version %d\n", hook->vf_version);
+		DbgMsg("hook->bps %d\n", hook->bps);
+		DbgMsg("hook->head_len %d\n", hook->head_len);		
 		DbgMsg("flags %x\n", hcopy->flags);
 
 		if (hcopy->flags & VF_STORAGE_FILE) {
 			hook->flags |= F_PROTECT_DCSYS;
 		}
-
-		if (hcopy->flags & VF_NO_REDIR) 
-		{
-			hook->flags |= F_NO_REDIRECT;
-
-			if (hook->stor_off + hook->use_size > hook->dsk_size) {
-				hook->use_size -= hook->stor_off;
-			}
-		}
-
-		/* start syncronous RW helper thread */		
-		if ( (resl = dc_start_rw_thread(hook)) != ST_OK ) {
-			break;
+		if (hcopy->flags & VF_NO_REDIR) {
+			hook->flags   |= F_NO_REDIRECT;
+			hook->stor_off = 0;			
 		}
 
 		if (hcopy->flags & VF_TMP_MODE)
@@ -333,11 +316,6 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		} else {			
 			hook->flags |= F_ENABLED; resl = ST_OK;
 		}
-		/* syncronize with RW thread */
-		KeSetEvent(&hook->rw_init_event, IO_NO_INCREMENT, FALSE);
-		/* sync device flags with FS filter */
-		dc_fsf_set_flags(hook->dev_name, hook->flags);
-
 		if (resl == ST_OK) {
 			/* increment mount changes counter */
 			lock_inc(&hook->chg_mount);
@@ -420,7 +398,7 @@ int dc_process_unmount(dev_hook *hook, int opt)
 			}			
 		}
 
-		hook->flags    &= ~(F_ENABLED | F_SYNC | F_REENCRYPT | F_PROTECT_DCSYS);
+		hook->flags    &= ~F_CLEAR_ON_UNMOUNT;
 		hook->use_size  = hook->dsk_size;
 		hook->tmp_size  = 0;
 		hook->mnt_flags = 0;
@@ -428,10 +406,6 @@ int dc_process_unmount(dev_hook *hook, int opt)
 
 		/* increment mount changes counter */
 		lock_inc(&hook->chg_mount);
-		/* stop RW thread if needed */
-		dc_stop_rw_thread(hook);
-		/* sync device flags with FS filter */
-		dc_fsf_set_flags(hook->dev_name, hook->flags);
 		/* prevent leaks */
 		zeroauto(&hook->dsk_key, sizeof(xts_key));
 
@@ -576,9 +550,14 @@ static void mount_item_proc(mount_ctx *mnt)
 	}
 
 	if (hook->flags & F_ENABLED) {
-		dc_read_write_irp(hook, mnt->irp);
-	} else {
-		dc_forward_irp(hook, mnt->irp);
+		io_read_write_irp(hook, mnt->irp);
+	} else 
+	{
+		if (IS_DEVICE_BLOCKED(hook) != 0) {
+			dc_release_irp(hook, mnt->irp, STATUS_ACCESS_DENIED);			
+		} else {
+			dc_forward_irp(hook, mnt->irp);	
+		}
 	}
 	mm_free(mnt);
 }

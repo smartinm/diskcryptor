@@ -58,8 +58,8 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto"
-				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;FPO=0;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto;.;io;cp;mm"
+				PreprocessorDefinitions="IS_DRIVER;_X86_=1;i386=1;_WIN32_WINNT=0x0601;WINVER=0x0601;NDEBUG;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06010000"
 				IgnoreStandardIncludePath="true"
 				StringPooling="true"
 				BufferSecurityCheck="false"
@@ -82,10 +82,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions="ntoskrnl.lib hal.lib"
+				AdditionalOptions="ntoskrnl.lib hal.lib fltMgr.lib"
 				OutputFile="$(OutDir)\dcrypt.sys"
-				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\i386\&quot;"
+				AdditionalLibraryDirectories="&quot;$(DDK)\lib\win7\i386\&quot;"
 				GenerateManifest="false"
+				GenerateDebugInformation="true"
 				SubSystem="3"
 				Driver="1"
 				OptimizeReferences="2"
@@ -154,8 +155,8 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto"
-				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;CONDITION_HANDLING=1;NT_INST=0;_NT1X_=100;WINNT=1;_WIN32_WINNT=0x0600;WINVER=0x0600;_WIN32_IE=0x0700;WIN32_LEAN_AND_MEAN=1;DEVL=1;__BUILDMACHINE__=WinDDK;NDEBUG;_DLL=1;_WIN2K_COMPAT_SLIST_USAGE;NTDDI_VERSION=0x06000000;KMDF_MAJOR_VERSION=01;KMDF_MINOR_VERSION=005"
+				AdditionalIncludeDirectories="&quot;$(DDK)\inc\ddk\&quot;;&quot;$(DDK)\inc\crt\&quot;;&quot;$(DDK)\inc\api\&quot;;..\include;..\include\sys;..\crypto;.;io;cp;mm"
+				PreprocessorDefinitions="IS_DRIVER;_WIN64;_AMD64_;AMD64;_WIN32_WINNT=0x0601;WINVER=0x0601;NDEBUG;NTDDI_VERSION=0x06010000"
 				IgnoreStandardIncludePath="true"
 				StringPooling="true"
 				BufferSecurityCheck="false"
@@ -179,10 +180,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions="ntoskrnl.lib hal.lib"
+				AdditionalOptions="ntoskrnl.lib hal.lib fltMgr.lib"
 				OutputFile="$(OutDir)\dcrypt.sys"
-				AdditionalLibraryDirectories="&quot;$(DDK)\lib\wlh\amd64\&quot;"
+				AdditionalLibraryDirectories="&quot;$(DDK)\lib\win7\amd64\&quot;"
 				GenerateManifest="false"
+				GenerateDebugInformation="true"
 				SubSystem="3"
 				Driver="1"
 				OptimizeReferences="2"
@@ -232,10 +234,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\crypto_head.h"
-				>
-			</File>
-			<File
 				RelativePath="..\include\sys\data_wipe.h"
 				>
 			</File>
@@ -252,6 +250,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\include\sys\disk_info.h"
+				>
+			</File>
+			<File
 				RelativePath="..\include\sys\driver.h"
 				>
 			</File>
@@ -264,19 +266,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\fast_crypt.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\fsf_control.h"
-				>
-			</File>
-			<File
 				RelativePath="..\include\sys\io_control.h"
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\mem_lock.h"
+				RelativePath=".\minifilter.h"
 				>
 			</File>
 			<File
@@ -285,10 +279,6 @@
 			</File>
 			<File
 				RelativePath="..\include\sys\misc_irp.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\misc_mem.h"
 				>
 			</File>
 			<File
@@ -304,11 +294,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\include\sys\prng.h"
-				>
-			</File>
-			<File
-				RelativePath="..\include\sys\readwrite.h"
+				RelativePath="..\include\sys\ssd_trim.h"
 				>
 			</File>
 			<File
@@ -358,6 +344,54 @@
 					RelativePath="..\crypto\xts_fast.h"
 					>
 				</File>
+				<File
+					RelativePath="..\crypto\xts_serpent_sse2.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="io"
+				>
+				<File
+					RelativePath=".\io\device_io.h"
+					>
+				</File>
+				<File
+					RelativePath=".\io\header_io.h"
+					>
+				</File>
+				<File
+					RelativePath=".\io\readwrite.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="cp"
+				>
+				<File
+					RelativePath=".\cp\crypto_head.h"
+					>
+				</File>
+				<File
+					RelativePath=".\cp\fast_crypt.h"
+					>
+				</File>
+				<File
+					RelativePath=".\cp\prng.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="mm"
+				>
+				<File
+					RelativePath=".\mm\mem_lock.h"
+					>
+				</File>
+				<File
+					RelativePath=".\mm\misc_mem.h"
+					>
+				</File>
 			</Filter>
 		</Filter>
 		<Filter
@@ -369,10 +403,6 @@
 			</File>
 			<File
 				RelativePath=".\boot_pass.c"
-				>
-			</File>
-			<File
-				RelativePath=".\crypto_head.c"
 				>
 			</File>
 			<File
@@ -388,6 +418,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\disk_info.c"
+				>
+			</File>
+			<File
 				RelativePath=".\driver.c"
 				>
 			</File>
@@ -400,19 +434,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\fast_crypt.c"
-				>
-			</File>
-			<File
-				RelativePath=".\fsf_control.c"
-				>
-			</File>
-			<File
 				RelativePath=".\io_control.c"
 				>
 			</File>
 			<File
-				RelativePath=".\mem_lock.c"
+				RelativePath=".\minifilter.c"
 				>
 			</File>
 			<File
@@ -421,10 +447,6 @@
 			</File>
 			<File
 				RelativePath=".\misc_irp.c"
-				>
-			</File>
-			<File
-				RelativePath=".\misc_mem.c"
 				>
 			</File>
 			<File
@@ -440,11 +462,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\prng.c"
-				>
-			</File>
-			<File
-				RelativePath=".\readwrite.c"
+				RelativePath=".\ssd_trim.c"
 				>
 			</File>
 			<File
@@ -481,6 +499,26 @@
 				<File
 					RelativePath="..\crypto\xts_fast.c"
 					>
+				</File>
+				<File
+					RelativePath="..\crypto\xts_serpent_sse2.c"
+					>
+					<FileConfiguration
+						Name="Release|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|x64"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
 				</File>
 				<Filter
 					Name="i386"
@@ -551,6 +589,27 @@
 					</File>
 					<File
 						RelativePath="..\crypto\i386\xts_aes_ni_i386.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\xts_serpent_sse2_i386.asm"
 						>
 						<FileConfiguration
 							Name="Release|Win32"
@@ -659,7 +718,72 @@
 							/>
 						</FileConfiguration>
 					</File>
+					<File
+						RelativePath="..\crypto\amd64\xts_serpent_sse2_amd64.asm"
+						>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="MASM"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
 				</Filter>
+			</Filter>
+			<Filter
+				Name="io"
+				>
+				<File
+					RelativePath=".\io\device_io.c"
+					>
+				</File>
+				<File
+					RelativePath=".\io\header_io.c"
+					>
+				</File>
+				<File
+					RelativePath=".\io\readwrite.c"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="cp"
+				>
+				<File
+					RelativePath=".\cp\crypto_head.c"
+					>
+				</File>
+				<File
+					RelativePath=".\cp\fast_crypt.c"
+					>
+				</File>
+				<File
+					RelativePath=".\cp\prng.c"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="mm"
+				>
+				<File
+					RelativePath=".\mm\mem_lock.c"
+					>
+				</File>
+				<File
+					RelativePath=".\mm\misc_mem.c"
+					>
+				</File>
 			</Filter>
 		</Filter>
 		<File

@@ -186,13 +186,13 @@ NTSTATUS
 	u32       s1, s2, s3;
 	u8       *p2, *p3;
 	
-	s1 = intersect(&o1, offset, size, 0, DC_AREA_SIZE);
+	s1 = d32(intersect(&o1, offset, size, 0, hook->head_len));
 	
 	if (hook->flags & F_SYNC) {
-		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, (hook->tmp_size - DC_AREA_SIZE));
-		s3 = intersect(&o3, offset, size, hook->tmp_size, hook->dsk_size);		
+		s2 = d32(intersect(&o2, offset, size, hook->head_len, (hook->tmp_size - hook->head_len)));
+		s3 = d32(intersect(&o3, offset, size, hook->tmp_size, hook->dsk_size));		
 	} else {
-		s2 = intersect(&o2, offset, size, DC_AREA_SIZE, hook->dsk_size);
+		s2 = d32(intersect(&o2, offset, size, hook->head_len, hook->dsk_size));
 		s3 = 0;
 	}
 	p2 = buff + s1;
@@ -350,7 +350,7 @@ static void dump_crash_finish(void)
 	}
 
 	dc_clean_pass_cache();
-	dc_clean_locked_mem(NULL);
+	mm_unlock_user_memory(NULL, NULL);
 	dc_clean_keys();
 
 	zeroauto(dump_mem, DUMP_MEM_SIZE);
@@ -363,7 +363,7 @@ static void dump_hiber_finish(void)
 	}
 
 	dc_clean_pass_cache();
-	dc_clean_locked_mem(NULL);
+	mm_unlock_user_memory(NULL, NULL);
 	dc_clean_keys();
 
 	dump_hiber_ctx.pg_init    = 0;
@@ -567,15 +567,9 @@ void load_img_routine(
 		 IN PIMAGE_INFO     img_info
 		 )
 {
-	if (img_info->SystemModeImage) 
-	{
-		if (dc_os_type == OS_WIN2K) {
-			hook_dump_entry();
-			dump_imgbase = img_info->ImageBase;
-		} else {
-			dump_imgbase = img_info->ImageBase;
-			hook_dump_entry();
-		}
+	if (img_info->SystemModeImage) {
+		dump_imgbase = img_info->ImageBase;
+		hook_dump_entry();
 	}
 }
 
@@ -589,17 +583,12 @@ void dump_usage_notify(
 	if (type == DeviceUsageTypeDumpFile) {
 		dump_crash_ctx.hook = hook;
 	}
-
 	if (type == DeviceUsageTypeHibernation) {
 		dump_hiber_ctx.hook = hook;
 	}
-
-	if (dc_os_type == OS_WIN2K) {
-		hook_dump_entry();
-	}
 }
 
-int dump_hook_init()
+int dump_hook_init(PDRIVER_OBJECT drv_obj)
 {
 	PLDR_DATA_TABLE_ENTRY table;
 	PHYSICAL_ADDRESS      high_addr;
@@ -612,9 +601,9 @@ int dump_hook_init()
 	ExAcquireFastMutex(&dump_sync);
 
 	/* find PsLoadedModuleListHead */
-	entry = ((PLIST_ENTRY)(dc_driver->DriverSection))->Flink;
+	entry = ((PLIST_ENTRY)(drv_obj->DriverSection))->Flink;
 
-	while (entry != dc_driver->DriverSection)
+	while (entry != drv_obj->DriverSection)
 	{
 		table = CONTAINING_RECORD(entry, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
 		entry = entry->Flink;

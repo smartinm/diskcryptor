@@ -458,6 +458,42 @@
 					RelativePath="..\crypto\xts_fast.c"
 					>
 				</File>
+				<File
+					RelativePath="..\crypto\xts_serpent_sse2.c"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug|x64"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|x64"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+				</File>
 				<Filter
 					Name="i386"
 					>
@@ -601,6 +637,44 @@
 							<Tool
 								Name="VCCustomBuildTool"
 								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+					<File
+						RelativePath="..\crypto\i386\xts_serpent_sse2_i386.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
 								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
 							/>
 						</FileConfiguration>
@@ -769,6 +843,44 @@
 							/>
 						</FileConfiguration>
 					</File>
+					<File
+						RelativePath="..\crypto\amd64\xts_serpent_sse2_amd64.asm"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Debug|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|Win32"
+							ExcludedFromBuild="true"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+						<FileConfiguration
+							Name="Release|x64"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
+								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
+							/>
+						</FileConfiguration>
+					</File>
 				</Filter>
 			</Filter>
 		</Filter>
@@ -877,6 +989,10 @@
 				</File>
 				<File
 					RelativePath="..\crypto\xts_fast.h"
+					>
+				</File>
+				<File
+					RelativePath="..\crypto\xts_serpent_sse2.h"
 					>
 				</File>
 			</Filter>

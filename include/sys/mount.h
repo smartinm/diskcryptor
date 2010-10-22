@@ -8,8 +8,6 @@ void dc_add_password(dc_pass *pass);
 void dc_clean_pass_cache();
 void dc_clean_keys();
 
-void dc_init_hdr_key(xts_key *hdr_key, dc_header *header, int cipher, dc_pass *password);
-
 int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags);
 int dc_process_unmount(dev_hook *hook, int opt);
 

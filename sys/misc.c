@@ -21,7 +21,6 @@
 #include <ntifs.h>
 #include <ntdddisk.h>
 #include <ntddcdrm.h>
-#include <ntddscsi.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include "defines.h"
@@ -30,321 +29,33 @@
 #include "devhook.h"
 #include "debug.h"
 #include "misc_mem.h"
-
-NTSTATUS 
-  io_device_control(
-    dev_hook *hook, u32 ctl_code, void *in_data, u32 in_size, void *out_data, u32 out_size
-	)
-{
-	KEVENT          sync_event;
-	IO_STATUS_BLOCK io_status;
-	NTSTATUS        status;
-	PIRP            irp;
-
-	if (hook->pnp_state != Started) {
-		return STATUS_INVALID_DEVICE_STATE;
-	}
-	KeInitializeEvent(&sync_event, NotificationEvent, FALSE);
-
-	irp = IoBuildDeviceIoControlRequest(
-		ctl_code, hook->orig_dev, in_data, in_size, out_data, out_size, FALSE, &sync_event, &io_status);
-
-	if (irp != NULL)
-	{
-		status = IoCallDriver(hook->orig_dev, irp);
-
-		if (status == STATUS_PENDING) {
-			wait_object_infinity(&sync_event);				
-			status = io_status.Status;
-		}
-	} else {
-		status = STATUS_INSUFFICIENT_RESOURCES;
-	}
-	return status;
-}
-
-
-HANDLE io_open_device(wchar_t *dev_name)
-{
-	UNICODE_STRING    u_name;
-	OBJECT_ATTRIBUTES obj;
-	IO_STATUS_BLOCK   io_status;
-	HANDLE            handle;
-	NTSTATUS          status;
-
-	RtlInitUnicodeString(&u_name, dev_name);
-
-	InitializeObjectAttributes(
-		&obj, &u_name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
-
-	status = ZwCreateFile(
-		&handle, SYNCHRONIZE | GENERIC_READ, &obj, &io_status, NULL,
-		FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN,
-		FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
-
-	if (NT_SUCCESS(status) == FALSE) {
-		handle = NULL;
-	}
-	return handle;
-}
-
-static int dc_verify_device(dev_hook *hook)
-{
-	NTSTATUS status;
-	u32      chg_count;
-
-	status = io_device_control(
-		hook, IOCTL_DISK_CHECK_VERIFY, NULL, 0, &chg_count, sizeof(chg_count));
-
-	if (NT_SUCCESS(status) != FALSE) 
-	{
-		if (lock_xchg(&hook->chg_count, chg_count) != chg_count) {
-			return ST_MEDIA_CHANGED;
-		} else {
-			return ST_OK;
-		}
-	} else {
-		return ST_NO_MEDIA;
-	}
-}
-
-static u32 dc_get_device_mtl(dev_hook *hook)
-{
-	STORAGE_ADAPTER_DESCRIPTOR sd;
-	STORAGE_PROPERTY_QUERY     sq;
-	IO_SCSI_CAPABILITIES       sc;
-	NTSTATUS                   status;
-	u32                        max_chunk = 0;
-
-	sq.PropertyId = StorageAdapterProperty;
-	sq.QueryType  = PropertyStandardQuery;
-	
-	status = io_device_control(
-		hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd));
-
-	if (NT_SUCCESS(status) != FALSE) {
-		max_chunk = min(sd.MaximumTransferLength, sd.MaximumPhysicalPages * PAGE_SIZE);
-	}
-
-	if (max_chunk == 0)
-	{
-		status = io_device_control(
-			hook, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &sc, sizeof(sc));
-
-		if (NT_SUCCESS(status) != FALSE) {
-			max_chunk = min(sc.MaximumTransferLength, sc.MaximumPhysicalPages * PAGE_SIZE);
-		}
-	}
-	if (max_chunk < 1024) {
-		max_chunk = 32768; /* safe value */
-	}
-	return max_chunk;
-}
-
-int dc_get_dev_params(dev_hook *hook)
-{
-	PARTITION_INFORMATION    pti;
-	PARTITION_INFORMATION_EX ptix;
-	DISK_GEOMETRY_EX         dgx;
-	DISK_GEOMETRY            dg;
-	NTSTATUS                 status;
-	u64                      d_size;
-
-	if (hook->pnp_state != Started) {
-		return ST_RW_ERR;
-	}
-	if (hook->flags & F_CDROM)
-	{
-		status = io_device_control(
-			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
-
-		if (NT_SUCCESS(status) == FALSE) {
-			return ST_RW_ERR;
-		}
-
-		status = io_device_control(
-			hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX, NULL, 0, &dgx, sizeof(dgx));
-
-		if (NT_SUCCESS(status) == FALSE) 
-		{
-			d_size = d64(dg.Cylinders.QuadPart) * d64(dg.TracksPerCylinder) * 
-				     d64(dg.SectorsPerTrack) * d64(dg.BytesPerSector);
-		} else {
-			d_size = dgx.DiskSize.QuadPart;
-		}
-	} else
-	{
-		status = io_device_control(
-			hook, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg));
-
-		if (NT_SUCCESS(status) == FALSE) {
-			return ST_RW_ERR;
-		}
-
-		status = io_device_control(
-			hook, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix));
-
-		if (NT_SUCCESS(status) == FALSE) 
-		{
-			status = io_device_control(
-				hook, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti));
-
-			if (NT_SUCCESS(status) == FALSE) {
-				return ST_RW_ERR;
-			}
-			d_size = pti.PartitionLength.QuadPart;
-		} else {
-			d_size = ptix.PartitionLength.QuadPart;
-		}
-	}
-
-	if (hook->flags & F_REMOVABLE) 
-	{
-		if (dc_verify_device(hook) == ST_NO_MEDIA) {
-			return ST_NO_MEDIA;
-		}
-	}
-
-	hook->dsk_size   = d_size;
-	hook->bps        = dg.BytesPerSector;
-	hook->chg_last_v = hook->chg_count;
-	hook->max_chunk  = dc_get_device_mtl(hook);
-	
-	return ST_OK;
-}
-
-
-NTSTATUS 
-  io_device_rw_block(
-    PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
-	)
-{
-	IO_STATUS_BLOCK io_status;
-	NTSTATUS        status;
-	PIRP            irp;
-	KEVENT          sync_event;
-	u32             timeout;
-	
-	do
-	{
-		KeInitializeEvent(
-			&sync_event, NotificationEvent,  FALSE);
-
-		timeout = DC_MEM_RETRY_TIMEOUT;
-		do
-		{
-			irp = IoBuildSynchronousFsdRequest(
-				func, device, buff, size, pv(&offset), &sync_event, &io_status);
-
-			if (irp != NULL) {
-				break;
-			}
-
-			dc_delay(DC_MEM_RETRY_TIME); timeout -= DC_MEM_RETRY_TIME;
-		} while (timeout != 0);
-
-		if (irp == NULL) {
-			status = STATUS_INSUFFICIENT_RESOURCES; break;
-		}
-
-		IoGetNextIrpStackLocation(irp)->Flags |= io_flags;
-
-		status = IoCallDriver(device, irp);
-
-		if (status == STATUS_PENDING) {
-			wait_object_infinity(&sync_event);
-			status = io_status.Status;
-		}
-	} while (0);
-
-	return status;
-}
-
-
-
-int dc_device_rw(
-	  dev_hook *hook, u32 function, void *buff, u32 size, u64 offset
-	  )
-{
-	NTSTATUS status;
-	u32      blen;
-	int      resl;	
-
-	if ( (hook->pnp_state != Started) || (hook->max_chunk == 0) ) {
-		return ST_RW_ERR;
-	}	
-	for (resl = ST_OK; size != 0;)
-	{
-		blen   = min(size, hook->max_chunk);
-		status = io_device_rw_block(hook->orig_dev, function, buff, blen, offset, 0);
-
-		if (NT_SUCCESS(status) == FALSE)
-		{
-			if ( (hook->flags & F_REMOVABLE) || (status == STATUS_VERIFY_REQUIRED) )
-			{
-				if ( (status == STATUS_NO_SUCH_DEVICE) || 
-					 (status == STATUS_DEVICE_DOES_NOT_EXIST) || 
-					 (status == STATUS_NO_MEDIA_IN_DEVICE) )
-				{
-					resl = ST_NO_MEDIA; break;
-				}
-
-				if ( (resl = dc_verify_device(hook)) != ST_OK ) {
-					break;
-				}
-				
-				status = io_device_rw_block(
-					hook->orig_dev, function, buff, blen, offset, SL_OVERRIDE_VERIFY_VOLUME);
-
-				if (NT_SUCCESS(status) == FALSE) {				
-					resl = ST_RW_ERR; break;
-				}
-			} else {
-				resl = ST_RW_ERR; break;
-			}
-		}
-		buff  = p8(buff) + blen; 
-		size -= blen; offset += blen;
-	}
-	return resl;
-}
+#include "disk_info.h"
 
 void wait_object_infinity(void *wait_obj)
 {
 	KeWaitForSingleObject(wait_obj, Executive, KernelMode, FALSE, NULL);
 }
 
-
-int start_system_thread(
-		PKSTART_ROUTINE thread_start,
-		PVOID           context,
-		HANDLE         *handle
-		)
+int start_system_thread(PKSTART_ROUTINE thread_start, void *param, HANDLE *handle)
 {
-	OBJECT_ATTRIBUTES obj;
+	OBJECT_ATTRIBUTES obj_a;
 	HANDLE            h_thread;
 	NTSTATUS          status;
-	int               resl;
 
-	InitializeObjectAttributes(
-		&obj, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
+	InitializeObjectAttributes(&obj_a, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
 
 	status = PsCreateSystemThread(
-		&h_thread, THREAD_ALL_ACCESS, &obj, NULL, NULL, thread_start, context);
+		&h_thread, THREAD_ALL_ACCESS, &obj_a, NULL, NULL, thread_start, param);
 
-	if (NT_SUCCESS(status)) 
-	{
-		if (handle != NULL) {
-			handle[0] = h_thread;
-		} else {
-			ZwClose(h_thread);
-		}
-		resl = ST_OK;		
-	} else {
-		resl = ST_ERR_THREAD;
+	if (NT_SUCCESS(status) == FALSE) {
+		return ST_ERR_THREAD;
 	}
-
-	return resl;
+	if (handle == NULL) {
+		ZwClose(h_thread);
+	} else {
+		*handle = h_thread;		
+	}
+	return ST_OK;
 }
 
 
@@ -485,7 +196,6 @@ int dc_get_mount_point(dev_hook *hook, wchar_t *buffer, u16 length)
 		} 
 		ExFreePool(name.Buffer);
 	}
-
 	return resl;
 }
 
@@ -507,12 +217,12 @@ void dc_query_object_name(void *object, wchar_t *buffer, u16 length)
 	}
 }
 
-u32 intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2)
+u64 intersect(u64 *i_st, u64 start1, u64 size1, u64 start2, u64 size2)
 {
 	u64 end, i;	
 	end = min(start1 + size1, start2 + size2);
 	*i_st = i = max(start1, start2);
-	return d32((i < end) ? end - i : 0);
+	return (i < end) ? end - i : 0;
 }
 
 void dc_delay(u32 msecs)

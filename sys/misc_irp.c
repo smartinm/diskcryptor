@@ -53,8 +53,9 @@ NTSTATUS
 
 NTSTATUS dc_release_irp(dev_hook *hook, PIRP irp, NTSTATUS status)
 {
+	dc_complete_irp(irp, status, 0);
 	IoReleaseRemoveLock(&hook->remv_lock, irp);
-	return dc_complete_irp(irp, status, 0);
+	return status;
 }
 
 NTSTATUS dc_forward_irp(dev_hook *hook, PIRP irp)
@@ -68,11 +69,7 @@ NTSTATUS dc_forward_irp(dev_hook *hook, PIRP irp)
 	return status;
 }
 
-static
-NTSTATUS
-  dc_sync_complete(
-    PDEVICE_OBJECT dev_obj, PIRP irp, PKEVENT sync
-	)
+static NTSTATUS dc_sync_complete(PDEVICE_OBJECT dev_obj, PIRP irp, PKEVENT sync)
 {
 	KeSetEvent(sync, IO_NO_INCREMENT, FALSE);
 
@@ -84,8 +81,7 @@ NTSTATUS dc_forward_irp_sync(dev_hook *hook, PIRP irp)
 	KEVENT   sync;
 	NTSTATUS status;
 
-	KeInitializeEvent(
-		&sync, NotificationEvent, FALSE);
+	KeInitializeEvent(&sync, NotificationEvent, FALSE);
 
 	IoCopyCurrentIrpStackLocationToNext(irp);
 
@@ -98,25 +94,24 @@ NTSTATUS dc_forward_irp_sync(dev_hook *hook, PIRP irp)
 		wait_object_infinity(&sync);
 		status = irp->IoStatus.Status;
     }
-
 	return status;
 }
 
 
-NTSTATUS
-  dc_create_close_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_create_close_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 {
 	PIO_STACK_LOCATION irp_sp;
+	PEPROCESS          process;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 
-	if (irp_sp->MajorFunction == IRP_MJ_CLOSE) {
-		dc_sync_all_encs();
-		dc_clean_locked_mem(irp_sp->FileObject);
+	if (irp_sp->MajorFunction == IRP_MJ_CLOSE) 
+	{
+		if (process = IoGetRequestorProcess(irp)) {
+			mm_unlock_user_memory(NULL, process);
+		}
+		dc_sync_all_encs();		
 	}
-
 	return dc_complete_irp(irp, STATUS_SUCCESS, 0);
 }
 
@@ -153,7 +148,7 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 		 (irp_sp->Parameters.Power.Type == SystemPowerState) &&
 		 (irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate) )
 	{
-		if ( (dc_os_type != OS_VISTA) && (dump_hibernate_action() != 0) ) {
+		if ( (dc_is_vista_or_later == 0) && (dump_hibernate_action() != 0) ) {
 			PoStartNextPowerIrp(irp);
 			status  = dc_complete_irp(irp, STATUS_UNSUCCESSFUL, 0);
 			no_pass = 1;

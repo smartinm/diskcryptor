@@ -6,12 +6,6 @@
 #include "volume.h"
 #include "dcconst.h"
 
-#ifdef IS_DRIVER
- #include <ntdddisk.h>
- #include <ntddstor.h>
- #include <ntddvol.h>
-#endif
-
 #define DC_GET_VERSION       CTL_CODE(FILE_DEVICE_UNKNOWN, 0,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_ADD_PASS      CTL_CODE(FILE_DEVICE_UNKNOWN, 1,  METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_CLEAR_PASS    CTL_CODE(FILE_DEVICE_UNKNOWN, 2,  METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -130,24 +124,27 @@ typedef struct _dc_conf {
                                ((p1)->size == (p2)->size) && \
 	                             (memcmp((p1)->pass, (p2)->pass, (p1)->size) == 0) )
 
+#define IS_STORAGE_ON_END(_flags) (  ((_flags) & F_ENABLED)       && !((_flags) & F_CDROM) && \
+	                                !((_flags) & F_PROTECT_DCSYS) && !((_flags) & F_NO_REDIRECT) )
+
+#define IS_DEVICE_BLOCKED(_hook) (                                                     \
+	((dc_conf_flags & CONF_BLOCK_UNENC_REMOVABLE) && (_hook->flags & F_REMOVABLE) &&   \
+                                                     (_hook->flags & F_CDROM) == 0) || \
+    ((dc_conf_flags & CONF_BLOCK_UNENC_CDROM)     && (_hook->flags & F_CDROM)) ||      \
+	((dc_conf_flags & CONF_BLOCK_UNENC_HDDS)      && (_hook->flags & (F_REMOVABLE | F_CDROM)) == 0) )
+
 #endif
 
 #pragma pack (pop)
-
-#define OS_UNK   0
-#define OS_WIN2K 1
-#define OS_VISTA 2
 
 #define DC_MEM_RETRY_TIME    10
 #define DC_MEM_RETRY_TIMEOUT (1000 * 30)
 
 #ifdef IS_DRIVER
  extern PDEVICE_OBJECT dc_device;
- extern PDRIVER_OBJECT dc_driver;
- extern u32            dc_os_type; 
+ extern int            dc_is_vista_or_later; 
  extern u32            dc_io_count;
  extern u32            dc_dump_disable;
- extern u32            dc_no_usb_mount;
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;
  extern u32            dc_boot_kbs;

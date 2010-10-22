@@ -3,38 +3,16 @@
 
 #include "devhook.h"
 
-NTSTATUS 
-  io_device_control(
-    dev_hook *hook, u32 ctl_code, void *in_data, u32 in_size, void *out_data, u32 out_size
-	);
-
-HANDLE io_open_device(wchar_t *dev_name);
-
-int dc_get_dev_params(dev_hook *hook);
-
-NTSTATUS io_device_rw_block(
-			PDEVICE_OBJECT device, u32 func, void *buff, u32 size, u64 offset, u32 io_flags
-			);
-
-int dc_device_rw(
-	  dev_hook *hook, u32 function, void *buff, u32 size, u64 offset
-	  );
+int start_system_thread(PKSTART_ROUTINE thread_start, void *param, HANDLE *handle);
 
 void wait_object_infinity(void *wait_obj);
-
-int start_system_thread(
-		PKSTART_ROUTINE thread_start,
-		PVOID           context,
-		HANDLE         *handle
-		);
-
 int dc_set_default_security(HANDLE h_object);
 
 int  dc_resolve_link(wchar_t *sym_link, wchar_t *target, u16 length);
 int  dc_get_mount_point(dev_hook *hook, wchar_t *buffer, u16 length);
 void dc_query_object_name(void *object, wchar_t *buffer, u16 length);
 
-u32  intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2);
+u64  intersect(u64 *i_st, u64 start1, u64 size1, u64 start2, u64 size2);
 void dc_delay(u32 msecs);
 
 

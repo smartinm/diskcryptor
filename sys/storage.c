@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2008 
+    * Copyright (c) 2008-2010
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -26,6 +26,7 @@
 #include "debug.h"
 #include "storage.h"
 #include "misc_mem.h"
+#include "device_io.h"
 
 #pragma pack (push, 1)
 
@@ -86,380 +87,234 @@ typedef struct exfat_bpb {
 #pragma pack (pop)
 
 #define FAT_DIRENTRY_LENGTH 32
+#define MAX_RETRY           128
 
-typedef struct _fs_info {
-	int                     fs;
-	u32                     bps;
-	u64                     clusters;
-	u64                     free_clus;
-	u32                     clus_size;
-	NTFS_VOLUME_DATA_BUFFER ntb;
-	union {
-		fat_bpb             bpb;
-		exfat_bpb           ex_bpb;
-	};
-
-} fs_info;
-
-#define FS_UNK   0
-#define FS_FAT   1
-#define FS_NTFS  2
-#define FS_EXFAT 3
-
-static int get_fs_info(HANDLE h_device, fs_info *info)
+static int dc_fill_dcsys(HANDLE h_file)
 {
-	u8                             buff[sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + 0x10];
-	PFILE_FS_ATTRIBUTE_INFORMATION ainf = pv(buff);
-	FILE_FS_SIZE_INFORMATION       sinf;	
-	IO_STATUS_BLOCK                iosb;
-	NTSTATUS                       status;
-	int                            resl;
-	u8                            *data;
-	u64                            offset;
+	FILE_FS_SIZE_INFORMATION info;
+	IO_STATUS_BLOCK          iosb;
+	NTSTATUS                 status;
+	u32                      length;
+	void                    *buff;
+	u64                      state = COMPRESSION_FORMAT_NONE;
 
-	data = NULL; offset = 0;
-	do
-	{
-		status = ZwQueryVolumeInformationFile(
-			h_device, &iosb, ainf, sizeof(buff), FileFsAttributeInformation);
+	status = ZwQueryVolumeInformationFile(
+		h_file, &iosb, &info, sizeof(info), FileFsSizeInformation);
 
-		if (NT_SUCCESS(status) == FALSE) {
-			resl = ST_ERROR; break;
-		}
-
-		ainf->FileSystemName[ainf->FileSystemNameLength >> 1] = 0;
-
-		status = ZwQueryVolumeInformationFile(
-			h_device, &iosb, &sinf, sizeof(sinf), FileFsSizeInformation);
-
-		if (NT_SUCCESS(status) == FALSE) {
-			resl = ST_ERROR; break;
-		}
-
-		info->fs        = FS_UNK;
-		info->bps       = sinf.BytesPerSector;
-		info->clusters  = sinf.TotalAllocationUnits.QuadPart;
-		info->free_clus = sinf.AvailableAllocationUnits.QuadPart;
-		info->clus_size = sinf.SectorsPerAllocationUnit * sinf.BytesPerSector;
-
-		if ( (wcscmp(ainf->FileSystemName, L"FAT") == 0) || 
-			 (wcscmp(ainf->FileSystemName, L"FAT32") == 0) )
-		{
-			info->fs = FS_FAT;
-		}
-
-		if (wcscmp(ainf->FileSystemName, L"exFAT") == 0) {
-			info->fs = FS_EXFAT;
-		}
-
-		if ( (info->fs == FS_FAT) || (info->fs == FS_EXFAT) ) 
-		{
-			if ( (data = mm_alloc(info->bps, 0)) == NULL ) {
-				resl = ST_ERROR; break;
-			}
-			status = ZwReadFile(
-				h_device, NULL, NULL, NULL, &iosb, data, info->bps, pv(&offset), NULL);
-
-			if (NT_SUCCESS(status) == FALSE) {				
-				resl = ST_ERROR; break;
-			}
-			autocpy(&info->ex_bpb, data, min(sizeof(info->ex_bpb), info->bps));
-		} 
-		
-		if (wcscmp(ainf->FileSystemName, L"NTFS") == 0) 
-		{
-			status = ZwFsControlFile(
-				h_device, NULL, NULL, NULL, &iosb, 
-				FSCTL_GET_NTFS_VOLUME_DATA, NULL, 0, &info->ntb, sizeof(info->ntb));
-
-			if (NT_SUCCESS(status) == FALSE) {
-				resl = ST_ERROR; break;
-			}
-			info->fs = FS_NTFS;
-		}
-		resl = ST_OK;
-	} while (0);
-
-	if (data != NULL) {
-		mm_free(data);
+	if (NT_SUCCESS(status) == FALSE) {
+		return 0;
+	} else {
+		length = max(info.SectorsPerAllocationUnit * info.BytesPerSector, sizeof(dc_header));
 	}
-	return resl;
+	if ( (buff = mm_alloc(length, MEM_ZEROED)) == NULL ) {
+		return 0;
+	}
+	ZwFsControlFile(
+		h_file, NULL, NULL, NULL, &iosb, FSCTL_SET_COMPRESSION, &state, sizeof(state), NULL, 0);
+
+	status = ZwWriteFile(h_file, NULL, NULL, NULL, &iosb, buff, length, NULL, NULL);
+	mm_free(buff);
+
+	return NT_SUCCESS(status) != FALSE;
 }
 
-static 
-u64 dc_make_continuous_file(
-		   HANDLE h_device, HANDLE h_file, fs_info *fsi
-		   )
+static void dc_delete_file(HANDLE h_file)
 {
-	STARTING_VCN_INPUT_BUFFER  vcn;
-	STARTING_LCN_INPUT_BUFFER  lcn;
-	MOVE_FILE_DATA             mvd;
-	IO_STATUS_BLOCK            iosb;
-	NTSTATUS                   status;
-	u64                        cluster, res = 0;
-	RETRIEVAL_POINTERS_BUFFER *rpb;
-	int                        i;
-	struct {
-		u64 start_lcn;
-		u64 bitmap_size;
-		u8  buffer[65536];
-	} *data = NULL;	
+	FILE_BASIC_INFORMATION       binf = { {0}, {0}, {0}, {0}, FILE_ATTRIBUTE_NORMAL };
+	FILE_DISPOSITION_INFORMATION dinf = { TRUE };
+	IO_STATUS_BLOCK              iosb;
 	
-	do
-	{
-		if (fsi->free_clus < 8) {
-			break;
-		}
-
-		if ( (data = mm_alloc(sizeof(*data), 0)) == NULL ) {
-			break;
-		}
-		/* find 8 free continuous clusters */
-		lcn.StartingLcn.QuadPart = 32; cluster = 0;
-		do
-		{
-			status = ZwFsControlFile(
-				h_device, NULL, NULL, NULL, &iosb, 
-				FSCTL_GET_VOLUME_BITMAP, &lcn, sizeof(lcn), data, sizeof(*data));
-
-			if ( (NT_SUCCESS(status) == FALSE) && (status != STATUS_BUFFER_OVERFLOW) ) {				
-				break;
-			}
-
-			for (i = 0; i < sizeof(data->buffer); i++)
-			{
-				if (data->buffer[i] == 0)
-				{
-					cluster = data->start_lcn + (i * 8);
-
-					if ( (fsi->fs == FS_NTFS) && ((cluster + 8) >= d64(fsi->ntb.MftZoneStart.QuadPart)) && 
-						 (cluster <= d64(fsi->ntb.MftZoneEnd.QuadPart)) )
-					{
-						cluster = 0; /* cluster in mft zone */
-					} else {
-						break;
-					}
-				}
-			}
-
-			lcn.StartingLcn.QuadPart += sizeof(data->buffer) * 8;
-		} while (cluster == 0);
-
-		/* move file to found clusters */
-		mvd.FileHandle           = h_file;
-		mvd.StartingVcn.QuadPart = 0;
-		mvd.StartingLcn.QuadPart = cluster;
-		mvd.ClusterCount         = ((DC_AREA_SIZE-1) / fsi->clus_size) + 1;
-
-		status = ZwFsControlFile(
-			h_device, NULL, NULL, NULL, &iosb, FSCTL_MOVE_FILE, &mvd, sizeof(mvd), NULL, 0);
-
-		if (NT_SUCCESS(status) == FALSE) {		
-			break;
-		}
-
-		/* check file position and continuity */
-		vcn.StartingVcn.QuadPart = 0; rpb = pv(data);
-
-		status = ZwFsControlFile(
-			h_file, NULL, NULL, NULL, &iosb, 
-			FSCTL_GET_RETRIEVAL_POINTERS, &vcn, sizeof(vcn), rpb, sizeof(*data));
-
-		if (NT_SUCCESS(status) == FALSE) {
-			break;
-		}
-
-		if ( (rpb->Extents[0].Lcn.QuadPart != cluster) || 
-			 ( (rpb->ExtentCount != 1) && (rpb->Extents[0].NextVcn.QuadPart < mvd.ClusterCount) ) )
-		{
-			break;
-		}
-		res = cluster;
-	} while (0);
-
-	if (data != NULL) {
-		mm_free(data);
-	}
-	return res;
+	ZwSetInformationFile(h_file, &iosb, &binf, sizeof(binf), FileBasicInformation);
+	ZwSetInformationFile(h_file, &iosb, &dinf, sizeof(dinf), FileDispositionInformation);
 }
 
-HANDLE dc_open_storage_file(
-		 wchar_t *dev_name, u32 disposition, ACCESS_MASK access
-		 )
+static void dc_rename_file(HANDLE h_file)
 {
-	UNICODE_STRING    u_name;
-	OBJECT_ATTRIBUTES obj;
+	char                     buff[sizeof(FILE_RENAME_INFORMATION) + 64];
+	PFILE_RENAME_INFORMATION info = pv(buff);
+	IO_STATUS_BLOCK          iosb;
+	
+	info->ReplaceIfExists = TRUE;
+	info->RootDirectory   = NULL;
+	info->FileNameLength  = swprintf(info->FileName, L"$dcsys$_fail_%x", __rdtsc()) * sizeof(wchar_t);
+
+	ZwSetInformationFile(h_file, &iosb, info, sizeof(buff), FileRenameInformation);
+}
+
+static HANDLE dc_create_dcsys(dev_hook *hook, int is_open)
+{
+	OBJECT_ATTRIBUTES obj_a;
+	UNICODE_STRING    u_name;	
 	IO_STATUS_BLOCK   iosb;
-	wchar_t           f_name[MAX_PATH];
-	HANDLE            h_file = NULL;
+	wchar_t           buff[MAX_PATH];
+	HANDLE            h_file;
+	NTSTATUS          status;
 	
-	_snwprintf(
-		f_name, sizeof_w(f_name), L"%s\\$dcsys$", dev_name);
+	swprintf(buff, L"%s\\$dcsys$", hook->dev_name);
 
-	f_name[sizeof_w(f_name) - 1] = 0;
+	RtlInitUnicodeString(&u_name, buff);
+	InitializeObjectAttributes(&obj_a, &u_name, OBJ_KERNEL_HANDLE, NULL, NULL);
 
-	RtlInitUnicodeString(&u_name, f_name);
-
-	InitializeObjectAttributes(
-		&obj, &u_name, OBJ_KERNEL_HANDLE, NULL, NULL);
-
-	ZwCreateFile(
-		&h_file, access | SYNCHRONIZE, &obj, &iosb, NULL, 0, 0, disposition,
+	status = ZwCreateFile(&h_file, (is_open != 0 ? FILE_WRITE_ATTRIBUTES | DELETE : GENERIC_WRITE), 
+		&obj_a, &iosb, NULL, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY, 0, 
+		(is_open != 0 ? FILE_OPEN : FILE_CREATE), 
 		FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE | FILE_WRITE_THROUGH, NULL, 0);
-	
+
+	if (NT_SUCCESS(status) == FALSE) {
+		return NULL;
+	}
+	if ( (is_open == 0) && (dc_fill_dcsys(h_file) == 0) ) {
+		dc_delete_file(h_file);
+		ZwClose(h_file); h_file = NULL;
+	}
 	return h_file;
 }
 
-static
-void dc_storage_set_attributes(HANDLE h_file, u32 attributes)
+static int dc_num_fragments(HANDLE h_file, u64 *cluster)
 {
-	IO_STATUS_BLOCK        iosb;
-	FILE_BASIC_INFORMATION binf;
+	char                       buff[sizeof(RETRIEVAL_POINTERS_BUFFER) + 16*4];
+	STARTING_VCN_INPUT_BUFFER  svcn = {0};
+	RETRIEVAL_POINTERS_BUFFER *prpb = pv(buff);
+	IO_STATUS_BLOCK            iosb;
+	NTSTATUS                   status;
+	
+	status = ZwFsControlFile(
+		h_file, NULL, NULL, NULL, &iosb, FSCTL_GET_RETRIEVAL_POINTERS, &svcn, sizeof(svcn), prpb, sizeof(buff));
 
-	zeroauto(&binf, sizeof(binf));
-	binf.FileAttributes = attributes;
+	if (NT_SUCCESS(status) != FALSE) {
+		cluster[0] = prpb->Extents[0].Lcn.QuadPart; 
+		return prpb->ExtentCount;
+	}
+	return 0;
+}
 
-	ZwSetInformationFile(
-		h_file, &iosb, &binf, sizeof(binf), FileBasicInformation);
+static int dc_first_cluster_offset(HANDLE h_dev, u32 bps, u64 *offset)
+{
+	u8                             buff[sizeof(FILE_FS_ATTRIBUTE_INFORMATION) + 0x20];
+	PFILE_FS_ATTRIBUTE_INFORMATION ainf = pv(buff);
+	LARGE_INTEGER                  vofs = {0};
+	IO_STATUS_BLOCK                iosb;
+	void                          *head;
+	int                            resl;
+	
+	if (NT_SUCCESS(ZwQueryVolumeInformationFile(
+		           h_dev, &iosb, ainf, sizeof(buff), FileFsAttributeInformation)) == FALSE) 
+	{
+		return ST_ERROR;
+	} else {
+		ainf->FileSystemName[ainf->FileSystemNameLength >> 1] = 0;
+	}
+	if (wcsicmp(ainf->FileSystemName, L"NTFS") == 0) {
+		*offset = 0; return ST_OK;
+	}
+	if ( (head = mm_alloc(bps, 0)) == NULL ) {
+		return ST_NOMEM;
+	}
+	if (NT_SUCCESS(ZwReadFile(h_dev, NULL, NULL, NULL, &iosb, head, bps, &vofs, NULL)) == FALSE) {
+		mm_free(head); return ST_RW_ERR;
+	}
+	if ( (wcsicmp(ainf->FileSystemName, L"FAT") == 0) || (wcsicmp(ainf->FileSystemName, L"FAT32") == 0) )
+	{
+		fat_bpb *bpb = head;
+		u32      fat_offset = bpb->reserved_sects;
+		u32      fat_length = bpb->fat_length ? bpb->fat_length : bpb->fat32_length;
+		u32      root_offs  = fat_offset + (bpb->num_fats * fat_length);
+		u32      root_max, data_offs;
+
+		if (root_max = bpb->dir_entries * FAT_DIRENTRY_LENGTH) {
+			data_offs = root_offs + ((root_max - 1) / bps) + 1;
+		} else {
+			data_offs = root_offs;
+		}
+		*offset = data_offs; resl = ST_OK;
+	} else if (wcsicmp(ainf->FileSystemName, L"exFAT") == 0) {
+		exfat_bpb *bpb = head; *offset = bpb->clus_blocknr; 
+		resl = ST_OK;
+	} else {
+		resl = ST_UNK_FS;
+	}
+	mm_free(head); return resl;
+}
+
+static int dc_cluster_to_offset(dev_hook *hook, HANDLE h_file, u64 cluster, u64 *offset)
+{
+	FILE_FS_SIZE_INFORMATION sinf;
+	IO_STATUS_BLOCK          iosb;
+	NTSTATUS                 status;
+	int                      resl;
+	RETRIEVAL_POINTER_BASE   base;
+	HANDLE                   h_dev;
+	
+	if (NT_SUCCESS(ZwQueryVolumeInformationFile(
+		           h_file, &iosb, &sinf, sizeof(sinf), FileFsSizeInformation)) == FALSE)
+	{
+		return ST_ERROR;
+	}
+	if ( (h_dev = io_open_device(hook->dev_name)) == NULL ) {
+		return ST_IO_ERROR;
+	}
+	status = ZwFsControlFile(
+		h_dev, NULL, NULL, NULL, &iosb, FSCTL_GET_RETRIEVAL_POINTER_BASE, NULL, 0, &base, sizeof(base));
+
+	if (NT_SUCCESS(status) == FALSE) {
+		resl = dc_first_cluster_offset(h_dev, sinf.BytesPerSector, &base.FileAreaOffset.QuadPart);
+	} else {
+		resl = ST_OK;
+	}
+	if (resl == ST_OK) 
+	{
+		*offset = (base.FileAreaOffset.QuadPart * d64(sinf.BytesPerSector)) + 
+			      (cluster * d64(sinf.SectorsPerAllocationUnit) * d64(sinf.BytesPerSector));
+	}	
+	ZwClose(h_dev); return resl;
 }
 
 int dc_create_storage(dev_hook *hook, u64 *storage)
 {
-	IO_STATUS_BLOCK iosb;
-	HANDLE          h_file;
-	HANDLE          h_device;
-	u64             cluster, offset;
-	u16             state;
-	fs_info         info;
-	int             i, resl;
-	void           *buff;
-	NTSTATUS        status;
+	HANDLE h_files[MAX_RETRY];
+	u32    n_files = 0;
+	HANDLE h_file  = NULL;
+	u64    cluster;
+	int    i, resl;
+
+	/* delete old storage first */
+	dc_delete_storage(hook);
 	
-	state  = COMPRESSION_FORMAT_NONE;
-	h_file = NULL; h_device = NULL; buff = NULL;
-	do
+	/* try to create continuous $dcsys$ file */
+	for (i = 0; (i < MAX_RETRY) && (h_file == NULL); i++)
 	{
-		/* open volume device */
-		if ( (h_device = io_open_device(hook->dev_name)) == NULL ) {
-			resl = ST_ACCESS_DENIED; break;
+		if ( (h_file = dc_create_dcsys(hook, 0)) == NULL ) {
+			continue;
 		}
-		if (get_fs_info(h_device, &info) != ST_OK) {
-			resl = ST_ERROR; break;
+		if (dc_num_fragments(h_file, &cluster) != 1) {
+			dc_rename_file(h_file);
+			dc_delete_file(h_file);
+			h_files[n_files++] = h_file; h_file = NULL;			
 		}
-		if (info.fs == FS_UNK) {
-			resl = ST_CLUS_USED; break;
-		}
-		if ( (buff = mm_alloc(DC_AREA_SIZE, MEM_ZEROED)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-		/* delete old storage first */
-		dc_delete_storage(hook);
+	}
+	/* close all fail handles */
+	while (n_files != 0) {
+		ZwClose(h_files[--n_files]);
+	}
+	if (h_file == NULL) {
+		return ST_CLUS_USED;
+	}
+	DbgMsg("$dcsys$ created, cluster %x:%0.8x\n", d32(cluster >> 32), d32(cluster));
 
-		/* create new storage file */
-		h_file = dc_open_storage_file(
-			hook->dev_name, FILE_OPEN_IF, GENERIC_WRITE);
-
-		if (h_file == NULL) {
-			resl = ST_ACCESS_DENIED; break;
-		}
-
-		status = ZwWriteFile(
-			h_file, NULL, NULL, NULL, &iosb, buff, DC_AREA_SIZE, NULL, NULL);
-
-		if (NT_SUCCESS(status) == FALSE) {
-			resl = ST_IO_ERROR; break;
-		}
-
-		if (info.fs == FS_NTFS)
-		{
-			ZwFsControlFile(
-				h_file, NULL, NULL, NULL, &iosb, 
-				FSCTL_SET_COMPRESSION, &state, sizeof(state), NULL, 0);
-
-			dc_set_default_security(h_file);
-		}
-
-		dc_storage_set_attributes(
-			h_file, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY);
-
-		/* try to make continuous file 10 times */
-		for (i = 0; i < 10; i++)
-		{
-			if (cluster = dc_make_continuous_file(h_device, h_file, &info)) {
-				break;
-			}
-			/* wait 0.2 sec */
-			dc_delay(200);
-		}
-
-		if (cluster == 0) {
-			resl = ST_CLUS_USED; break;
-		}
-
-		DbgMsg("cluster %0.8x%0.8x\n", p32(&cluster)[1], p32(&cluster)[0]);
-
-		/* translate cluster number to volume offset */
-		switch (info.fs)
-		{
-			case FS_FAT:
-				{
-					u32 fat_offset, fat_length;
-					u32 root_max, data_offset;
-					u32 root_offset;
-
-					fat_offset = info.bpb.reserved_sects;
-					fat_length = info.bpb.fat_length ? info.bpb.fat_length:info.bpb.fat32_length;
-					root_offset = fat_offset + (info.bpb.num_fats * fat_length);
-
-					if (root_max = info.bpb.dir_entries * FAT_DIRENTRY_LENGTH) {
-						data_offset = root_offset + ((root_max - 1) / info.bps) + 1;
-					} else {
-						data_offset = root_offset;
-					}
-					offset = (d64(data_offset) * d64(info.bps)) + (cluster * d64(info.clus_size));
-				}
-			break;
-			case FS_EXFAT:
-				{
-					offset = (cluster * d64(info.clus_size)) + (info.ex_bpb.clus_blocknr * info.bps);
-				}
-			break;
-			case FS_NTFS:
-				{
-					offset = cluster * d64(info.clus_size);
-				}
-			break;
-		}		
-		DbgMsg("offset %0.8x%0.8x\n", p32(&offset)[1], p32(&offset)[0]);
-		storage[0] = offset; resl = ST_OK;
-	} while (0);
-
-	if (h_file != NULL)   { ZwClose(h_file); }
-	if (h_device != NULL) { ZwClose(h_device); }
-	if (buff != NULL)     { mm_free(buff); }
-
-	return resl;
+	if ( (resl = dc_cluster_to_offset(hook, h_file, cluster, storage)) != ST_OK ) {
+		dc_delete_file(h_file);
+	} else {
+		DbgMsg("offset: %x:%0.8x\n", d32(*storage >> 32), d32(*storage));
+	}
+	ZwClose(h_file); return resl;
 }
-
 
 void dc_delete_storage(dev_hook *hook)
 {
-	FILE_DISPOSITION_INFORMATION info;
-	IO_STATUS_BLOCK              iosb;
-	HANDLE                       h_file;
+	HANDLE h_file;
 
-	h_file = dc_open_storage_file(
-		hook->dev_name, FILE_OPEN, FILE_WRITE_ATTRIBUTES | DELETE);
-
-	if (h_file != NULL)
-	{
-		info.DeleteFile = TRUE;
-
-		dc_storage_set_attributes(h_file, FILE_ATTRIBUTE_NORMAL);
-				
-		ZwSetInformationFile(
-			h_file, &iosb, &info, sizeof(info), FileDispositionInformation);
-
+	if (h_file = dc_create_dcsys(hook, 1)) {
+		dc_delete_file(h_file);
 		ZwClose(h_file);
 	}
 }

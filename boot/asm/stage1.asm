@@ -98,7 +98,7 @@ next2:
  call	load_module
  ; load boot_load module
  mov	ebp, edx
- mov	ebx, 8000h
+ mov	ebx, 10000h
  call	load_module
  jmp	$
 

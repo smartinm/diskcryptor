@@ -3,7 +3,7 @@
 
 #include "devhook.h"
 
-int dump_hook_init();
+int dump_hook_init(PDRIVER_OBJECT drv_obj);
 
 void dump_usage_notify(
 	     IN dev_hook                      *hook,

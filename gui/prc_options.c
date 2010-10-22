@@ -50,7 +50,9 @@ _options_dlg_proc(
 	_ctl_init ctl_chk_extended[ ] =
 	{
 		{ STR_NULL, IDC_HARD_CRYPTO_SUPPORT,	CONF_HW_CRYPTO		},
-		{ STR_NULL, IDC_HIDE_FILES,				CONF_HIDE_DCSYS		}
+		{ STR_NULL, IDC_HIDE_FILES,				CONF_HIDE_DCSYS		},
+		{ STR_NULL, IDC_DISABLE_TRIM,			CONF_DISABLE_TRIM	},
+		{ STR_NULL, IDC_SSD_OPTIMIZATION,		CONF_ENABLE_SSD_OPT	}
 	};
 
 	_ctl_init static_head_general[ ] = 

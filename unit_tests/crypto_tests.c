@@ -15,6 +15,7 @@
  #include "aes_padlock.h"
  #include "xts_fast.h"
  #include "xts_aes_ni.h"
+ #include "xts_serpent_sse2.h"
 #endif
 
 int wmain(int argc, wchar_t *argv[])
@@ -24,6 +25,7 @@ int wmain(int argc, wchar_t *argv[])
 #endif
 #ifndef SMALL_CODE
 	printf("AES-NI support: %d\n", xts_aes_ni_available());
+	printf("SSE2 support: %d\n", xts_serpent_sse2_available());
 #endif
 	printf("crc32: %d\n", test_crc32());
 	printf("sha512: %d\n", test_sha512());

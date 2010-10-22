@@ -161,7 +161,6 @@ int dc_encrypt_cd(
 		head.version  = DC_HDR_VERSION;
 		head.flags    = VF_NO_REDIR;
 		head.alg_1    = cipher;
-		head.use_size = iso_sz;
 		head.data_off = sizeof(dc_header);
 		head.hdr_crc  = crc32(pv(&head.version), DC_CRC_AREA_SIZE);
 

@@ -57,7 +57,7 @@ int dc_k_benchmark(crypt_info *crypt, dc_bench *info)
 		time = KeQueryPerformanceCounter(pv(&freq)).QuadPart;
 
 		for (i = 0; i < TEST_BLOCK_NUM; i++) {
-			dc_fast_encrypt(buff, buff, TEST_BLOCK_LEN, offset, dc_k);
+			cp_fast_encrypt(buff, buff, TEST_BLOCK_LEN, offset, dc_k);
 			offset += TEST_BLOCK_LEN;
 		}
 		time = KeQueryPerformanceCounter(NULL).QuadPart - time;

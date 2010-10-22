@@ -72,7 +72,7 @@ static u64         getrnd_cnt;  /* getrand counter */
 static KMUTEX      rnd_mutex;
 static aes256_key *rnd_key;
 
-static void rnd_pool_mix()
+static void cp_rand_pool_mix()
 {
 	sha512_ctx sha_ctx;
 	int        i, n;
@@ -88,15 +88,12 @@ static void rnd_pool_mix()
 			rnd_pool[i + n] += hval[n];
 		}
 	}
-
 	/* Prevent leaks */
 	zeroauto(hval, sizeof(hval));
 	zeroauto(&sha_ctx, sizeof(sha_ctx));
 }
 
-
-
-void rnd_add_buff(void *data, int size)
+void cp_rand_add_seed(void *data, int size)
 {
 	sha512_ctx sha_ctx;
 	ext_seed   seed;
@@ -119,7 +116,6 @@ void rnd_add_buff(void *data, int size)
 		if ( (pos = rnd_pos) >= RNG_POOL_SIZE) {
 			pos = 0; 
 		}
-
 		rnd_pool[pos] += hval[i];
 		rnd_pos        = pos + 1;
 	}
@@ -127,17 +123,14 @@ void rnd_add_buff(void *data, int size)
 	/* add hash value to key buffer */
 	for (i = 0; i < SHA512_DIGEST_SIZE; i++) {
 		key_pool[i % AES_KEY_SIZE] += hval[i];
-	}
-	
+	}	
 	/* prevent leaks */
 	zeroauto(&sha_ctx, sizeof(sha_ctx));
 	zeroauto(&hval, sizeof(hval));
 	zeroauto(&seed, sizeof(seed));
 }
 
-
-
-void rnd_reseed_now()
+void cp_rand_reseed()
 {
 	seed_data seed;
 
@@ -168,13 +161,13 @@ void rnd_reseed_now()
 	}	
 	KeQueryTickCount(&seed.seed21);
 	
-	rnd_add_buff(&seed, sizeof(seed));
+	cp_rand_add_seed(&seed, sizeof(seed));
 	
 	/* Prevent leaks */	
 	zeroauto(&seed, sizeof(seed));
 }
 
-int rnd_get_bytes(u8 *buf, int len)
+int cp_rand_bytes(u8 *buf, int len)
 {
 	sha512_ctx sha_ctx;
 	u8         hval[SHA512_DIGEST_SIZE];
@@ -186,19 +179,18 @@ int rnd_get_bytes(u8 *buf, int len)
 		DbgMsg("RNG not have sufficient entropy (%d reseeds), collect it now\n", reseed_cnt);
 	}
 	/* in RNG not have sufficient entropy, then collect it now */
-	while (reseed_cnt < 256) 
-	{
+	while (reseed_cnt < 256) {
 		dc_delay(1); /* wait 1 millisecond */
-		rnd_reseed_now();
+		cp_rand_reseed();
 	}
 
-	wait_object_infinity(&rnd_mutex);
+	KeWaitForSingleObject(&rnd_mutex, Executive, KernelMode, FALSE, NULL);
 
 	/* derive AES key from key pool */
 	aes256_asm_set_key(key_pool, rnd_key);
 
 	/* mix pool state before get data from it */
-	rnd_pool_mix();
+	cp_rand_pool_mix();
 
 	/* idx - position for extraction pool data */
 	idx = 0; fail = 0;
@@ -209,7 +201,7 @@ int rnd_get_bytes(u8 *buf, int len)
 		seed.seed2 = len;
 
 		/* collect additional entropy before extract data block */
-		rnd_reseed_now();
+		cp_rand_reseed();
 
 		sha512_init(&sha_ctx);
 		sha512_hash(&sha_ctx, rnd_pool + idx, SHA512_DIGEST_SIZE);
@@ -233,18 +225,18 @@ int rnd_get_bytes(u8 *buf, int len)
 		if ( (idx += SHA512_DIGEST_SIZE) == RNG_POOL_SIZE ) {
 			/* if all data from pool extracted then 
 			  mix pool for use new entropy added with reseeds */
-			rnd_pool_mix(); idx = 0; 
+			cp_rand_pool_mix(); idx = 0; 
 		}
 
 		/* collect additional entropy after extract data block */		
-		rnd_reseed_now();
+		cp_rand_reseed();
 
 		/* update buffer pointer and remaining length */
 		buf += c_len; len -= c_len;
 	} while ( (len != 0) && (fail == 0) );
 
 	/* mix pool after get data to prevent "could boot" attacks to generated keys */
-	rnd_pool_mix();
+	cp_rand_pool_mix();
 
 	/* Prevent leaks */
 	zeroauto(rnd_key, sizeof(aes256_key));
@@ -257,13 +249,13 @@ int rnd_get_bytes(u8 *buf, int len)
 	return fail == 0;
 }
 
-int rnd_init_prng()
+int cp_rand_init()
 {
 	if ( (rnd_key = mm_alloc(sizeof(aes256_key), MEM_SECURE)) == NULL ) {
 		return ST_NOMEM;
 	}
 	KeInitializeMutex(&rnd_mutex, 0);
-	rnd_reseed_now();
+	cp_rand_reseed();
 
 	return ST_OK;
 }

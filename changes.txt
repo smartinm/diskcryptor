@@ -1,3 +1,14 @@
+[xx.xx.xxxx] - 1.0
+  - Removed compatibility with Windows 2000
+  + Added new optimizations special for SSD and fast RAID's
+  + Added TRIM support for SSD and "disable TRIM" option.
+  + Added optimized for SSE2 implementation of the Serpent.
+  + Improved compatibility with third-party bootloaders.
+  + Added ability to change the size of the encrypted partitions.
+  + Improved compatibility of PXE booting.
+  + Added 'Deny access to unencrypted devices' option.
+  + New command-line options.
+
 [05.04.2010] - 0.9
   + Added preventing system power state changes during the encryption process.
   + Added support for Intel AES-NI instructions.

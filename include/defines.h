@@ -51,13 +51,16 @@ typedef void (*callback_ex)(void*,void*);
 #define p16(_x)  ((u16*)(_x))
 #define p32(_x)  ((u32*)(_x))
 #define p64(_x)  ((u64*)(_x))
+#define p128(_x) ((__m128i*)(_x))
 #define pv(_x)   ((void*)(_x))
 #define ppv(_x)  ((void**)(_x)) 
 
 #define in_reg(a,base,size)     ( (a >= base) && (a < base+size)  )
 #define is_intersect(start1, size1, start2, size2) ( max(start1, start2) < min(start1 + size1, start2 + size2) )
 #define addof(a,o)              ( pv(p8(a)+o) )
+#ifndef offsetof
 #define offsetof(type,field)    ( d32(&(((type *)0)->field)) )
+#endif
 
 #ifdef BOOT_LDR
  #pragma warning(disable:4142)
@@ -141,10 +144,25 @@ typedef void (*callback_ex)(void*,void*);
 	{ __stosb(pv(m), 0, (size_t)(s)); } }
 #endif
 
-#define lock_inc(_x)          ( _InterlockedIncrement(_x) )
-#define lock_dec(_x)          ( _InterlockedDecrement(_x) )
-#define lock_xchg(_p, _v)     ( _InterlockedExchange(_p, _v) )
-#define lock_xchg_add(_p, _v) ( _InterlockedExchangeAdd(_p, _v) )
+#define lock_inc(_x)             ( _InterlockedIncrement(_x) )
+#define lock_dec(_x)             ( _InterlockedDecrement(_x) )
+#define lock_xchg(_p, _v)        ( _InterlockedExchange(_p, _v) )
+#define lock_xchg_add(_p, _v)    ( _InterlockedExchangeAdd(_p, _v) )
+#define lock_cmpxchg64(_d,_e,_c) ( _InterlockedCompareExchange64((_d),(_e),(_c)) )
+
+#ifdef _M_IX86
+ u64 __forceinline lock_xchg64(u64 *p, u64 v)
+ {
+	 u64 ov;
+	 do 
+	 {
+		 ov = *p;
+	 } while (lock_cmpxchg64((__int64*)(p), v, ov) != ov);
+	 return ov;
+ }
+#else
+ #define lock_xchg64(t,v) ( _InterlockedExchange64((t),(v)) )
+#endif
 
 #pragma warning(disable:4995)
 #pragma intrinsic(memcpy,memset,memcmp)

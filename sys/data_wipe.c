@@ -26,6 +26,7 @@
 #include "misc.h"
 #include "fast_crypt.h"
 #include "misc_mem.h"
+#include "device_io.h"
 
 static wipe_mode dod_mode = { /* US DoD 5220.22-M (8-306. / E, C and E) */
 	7, 
@@ -122,7 +123,7 @@ int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher
 				break;
 			}
 			/* generate random key */
-			rnd_get_bytes(key, sizeof(key));
+			cp_rand_bytes(key, sizeof(key));
 			xts_set_key(key, cipher, ctx->key);
 		}
 		ctx->hook = hook;
@@ -174,10 +175,10 @@ int dc_wipe_process(wipe_ctx *ctx, u64 offset, int size)
 			} else 
 			{
 				zerofast(buff, size);
-				dc_fast_encrypt(buff, buff, size, ctx->offs, ctx->key);
+				cp_fast_encrypt(buff, buff, size, ctx->offs, ctx->key);
 				ctx->offs += size;
 			}
-			if ( (resl = dc_device_rw(ctx->hook, IRP_MJ_WRITE, buff, size, offset)) != ST_OK ) {
+			if ( (resl = io_hook_rw(ctx->hook, buff, size, offset, 0)) != ST_OK ) {
 				break;
 			}
 		}

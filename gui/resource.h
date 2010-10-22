@@ -2,7 +2,6 @@
 // Microsoft Visual C++ generated include file.
 // Used by main.rc
 //
-#define DC_MAJOR_VER                    0
 #define IDOK3                           2
 #define IDB_                            2
 #define IDOK2                           3
@@ -22,7 +21,6 @@
 #define IDC_BTN_DECRYPT_                7
 #define IDC_BTN_ENCRYPT3                8
 #define IDC_BTN_MOUNTALL_               8
-#define DC_MINOR_VER                    9
 #define IDC_BTN_ENCRYPT4                9
 #define IDC_BTN_UNMOUNTALL_             9
 #define IDD_MAIN_DLG                    101
@@ -102,7 +100,10 @@
 #define IDC_HARD_CRYPTO_SUPPORT         314
 #define IDC_STATIC_KEY_UNMOUNTALL       315
 #define IDC_AUTO_MOUNT_ON_BOOT          315
+#define IDC_DISABLE_TRIM                315
 #define IDC_TREE                        316
+#define IDC_DISABLE_TRIM2               316
+#define IDC_SSD_OPTIMIZATION            316
 #define IDCCANCEL                       317
 #define IDC_LT_GET_PASS                 318
 #define IDC_STATIC_MODE_LIST            319

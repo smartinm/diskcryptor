@@ -130,8 +130,10 @@ static int pe2mod(wchar_t *in, wchar_t *out)
 
 		if (h_out != INVALID_HANDLE_VALUE) 
 		{
-			if (WriteFile(h_out, b_mod, b_mod->raw_size, &bytes, NULL) != 0) {
-				wprintf(L"Boot module OK (Virtual size: %d, Raw size: %d)\n", b_mod->virt_size, b_mod->raw_size);				
+			if (WriteFile(h_out, b_mod, b_mod->raw_size, &bytes, NULL) != 0) 
+			{
+				wprintf(L"Boot module OK (Virtual size: %d, Raw size: %d, EP: %d)\n", 
+					b_mod->virt_size, b_mod->raw_size, b_mod->entry_rva);
 				resl = 0;
 			}
 			CloseHandle(h_out);

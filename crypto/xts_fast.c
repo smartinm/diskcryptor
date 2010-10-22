@@ -21,6 +21,7 @@
 #include "aes_asm.h"
 #include "aes_padlock.h"
 #include "xts_aes_ni.h"
+#include "xts_serpent_sse2.h"
 
 typedef __declspec(align(1)) union _m128 {
     u32 v32[4];    
@@ -29,6 +30,11 @@ typedef __declspec(align(1)) union _m128 {
 
 static xts_proc aes_selected_encrypt;
 static xts_proc aes_selected_decrypt;
+
+#ifdef _M_IX86
+static xts_proc serpent_selected_encrypt;
+static xts_proc serpent_selected_decrypt;
+#endif
 
 #ifdef _M_X64
 #define def_tweak \
@@ -67,7 +73,7 @@ static xts_proc aes_selected_decrypt;
 	memcpy(_buf, &t, sizeof(t))
 #endif
 
-#ifdef KMDF_MAJOR_VERSION
+#ifdef IS_DRIVER
  static NPAGED_LOOKASIDE_LIST padlock_tmp_mem;
  static u32                   padlock_tmp_ok;
 
@@ -164,8 +170,10 @@ DEF_XTS_PROC(xts_aes_basic_decrypt, aes256_asm_encrypt, aes256_asm_decrypt, aes)
 DEF_XTS_PROC(xts_twofish_encrypt, twofish256_encrypt, twofish256_encrypt, twofish);
 DEF_XTS_PROC(xts_twofish_decrypt, twofish256_encrypt, twofish256_decrypt, twofish);
 
-DEF_XTS_PROC(xts_serpent_encrypt, serpent256_encrypt, serpent256_encrypt, serpent);
-DEF_XTS_PROC(xts_serpent_decrypt, serpent256_encrypt, serpent256_decrypt, serpent);
+#ifdef _M_IX86
+ DEF_XTS_PROC(xts_serpent_basic_encrypt, serpent256_encrypt, serpent256_encrypt, serpent);
+ DEF_XTS_PROC(xts_serpent_basic_decrypt, serpent256_encrypt, serpent256_decrypt, serpent);
+#endif
 
 DEF_XTS_AES_PADLOCK(xts_aes_padlock_encrypt, aes256_padlock_encrypt, xts_aes_basic_encrypt);
 DEF_XTS_AES_PADLOCK(xts_aes_padlock_decrypt, aes256_padlock_decrypt, xts_aes_basic_decrypt);
@@ -173,15 +181,13 @@ DEF_XTS_AES_PADLOCK(xts_aes_padlock_decrypt, aes256_padlock_decrypt, xts_aes_bas
 static void _stdcall xts_aes_encrypt(
     const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
 {
-#if defined(_M_IX86) && defined(KMDF_MAJOR_VERSION)
+#if defined(_M_IX86) && defined(IS_DRIVER)
 	KFLOATING_SAVE state;
-	xts_proc       selected = aes_selected_encrypt;
+	xts_proc       selected;
 
-	if (selected == xts_aes_ni_encrypt)
+	if ((selected = aes_selected_encrypt) == xts_aes_ni_encrypt)
 	{
-		if ( (KeGetCurrentIrql() <= DISPATCH_LEVEL) &&
-			 (NT_SUCCESS(KeSaveFloatingPointState(&state)) != 0) )
-		{
+		if (KeGetCurrentIrql() <= DISPATCH_LEVEL && NT_SUCCESS(KeSaveFloatingPointState(&state)) ) {
 			xts_aes_ni_encrypt(in, out, len, offset, key);
 			KeRestoreFloatingPointState(&state);
 		} else {
@@ -198,15 +204,13 @@ static void _stdcall xts_aes_encrypt(
 static void _stdcall xts_aes_decrypt(
     const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
 {
-#if defined(_M_IX86) && defined(KMDF_MAJOR_VERSION)
+#if defined(_M_IX86) && defined(IS_DRIVER)
 	KFLOATING_SAVE state;
-	xts_proc       selected = aes_selected_decrypt;
+	xts_proc       selected;
 
-	if (selected == xts_aes_ni_decrypt)
+	if ((selected = aes_selected_decrypt) == xts_aes_ni_decrypt)
 	{
-		if ( (KeGetCurrentIrql() <= DISPATCH_LEVEL) &&
-			 (NT_SUCCESS(KeSaveFloatingPointState(&state)) != 0) )
-		{
+		if (KeGetCurrentIrql() <= DISPATCH_LEVEL && NT_SUCCESS(KeSaveFloatingPointState(&state)) ) {
 			xts_aes_ni_decrypt(in, out, len, offset, key);
 			KeRestoreFloatingPointState(&state);
 			return;
@@ -220,6 +224,58 @@ static void _stdcall xts_aes_decrypt(
 	aes_selected_decrypt(in, out, len, offset, key);
 #endif
 }
+
+#ifdef _M_IX86
+
+static void _stdcall xts_serpent_encrypt(
+    const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+{
+#ifdef IS_DRIVER
+	KFLOATING_SAVE state;
+	xts_proc       selected;
+
+	if ( (selected = serpent_selected_encrypt) == xts_serpent_sse2_encrypt)
+	{
+		if (KeGetCurrentIrql() <= DISPATCH_LEVEL && NT_SUCCESS(KeSaveFloatingPointState(&state)) ) {
+			xts_serpent_sse2_encrypt(in, out, len, offset, key);
+			KeRestoreFloatingPointState(&state);
+		} else {
+			xts_serpent_basic_encrypt(in, out, len, offset, key);
+		}
+	} else {
+		selected(in, out, len, offset, key);
+	}
+#else
+	serpent_selected_encrypt(in, out, len, offset, key);
+#endif
+}
+
+static void _stdcall xts_serpent_decrypt(
+    const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+{
+#ifdef IS_DRIVER
+	KFLOATING_SAVE state;
+	xts_proc       selected;
+
+	if ( (selected = serpent_selected_decrypt) == xts_serpent_sse2_decrypt)
+	{
+		if (KeGetCurrentIrql() <= DISPATCH_LEVEL && NT_SUCCESS(KeSaveFloatingPointState(&state)) ) {
+			xts_serpent_sse2_decrypt(in, out, len, offset, key);
+			KeRestoreFloatingPointState(&state);
+		} else {
+			xts_serpent_basic_decrypt(in, out, len, offset, key);
+		}
+	} else {
+		selected(in, out, len, offset, key);
+	}
+#else
+	serpent_selected_decrypt(in, out, len, offset, key);
+#endif
+}
+#else  /* _M_IX86 */
+ #define xts_serpent_encrypt xts_serpent_sse2_encrypt
+ #define xts_serpent_decrypt xts_serpent_sse2_decrypt
+#endif /* _M_IX86 */
 
 static void _stdcall xts_aes_twofish_encrypt(
     const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
@@ -347,6 +403,15 @@ void xts_set_key(const unsigned char *key, int alg, xts_key *skey)
 
 void xts_init(int hw_crypt)
 {
+#ifdef _M_IX86
+	if (xts_serpent_sse2_available() != 0) {
+		serpent_selected_encrypt = xts_serpent_sse2_encrypt;
+		serpent_selected_decrypt = xts_serpent_sse2_decrypt;		
+	} else {
+		serpent_selected_encrypt = xts_serpent_basic_encrypt;
+		serpent_selected_decrypt = xts_serpent_basic_decrypt;
+	}
+#endif
 	if ( (hw_crypt != 0) && (xts_aes_ni_available() != 0) ) {
 		aes_selected_encrypt = xts_aes_ni_encrypt;
 		aes_selected_decrypt = xts_aes_ni_decrypt;
@@ -354,7 +419,7 @@ void xts_init(int hw_crypt)
 	}
 	if ( (hw_crypt != 0) && (aes256_padlock_available() != 0) ) 
 	{
-#ifdef KMDF_MAJOR_VERSION
+#ifdef IS_DRIVER
 		if (lock_xchg(&padlock_tmp_ok, 1) == 0) {
 			ExInitializeNPagedLookasideList(&padlock_tmp_mem, NULL, NULL, 0, PAGE_SIZE, 'ldap', 0);
 		}

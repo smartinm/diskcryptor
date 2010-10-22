@@ -17,6 +17,10 @@
 #define F_PREVENT_ENC   0x1000 /* fail any encrypt/decrypt requests with ST_CANCEL status */
 #define F_CDROM         0x2000 /* this is CDROM device */
 #define F_NO_REDIRECT   0x4000 /* redirection area is not used */
+#define F_SSD           0x8000 /* this is SSD disk */
+
+#define F_CLEAR_ON_UNMOUNT ( \
+	F_ENABLED | F_SYNC | F_REENCRYPT | F_FORMATTING | F_PROTECT_DCSYS | F_NO_REDIRECT )
 
 /* unmount flags */
 #define MF_FORCE    0x01 /* unmount volume if FSCTL_LOCK_VOLUME fail */
@@ -79,6 +83,7 @@
 #define ST_ENCRYPTED      51 /* */
 #define ST_INCOMPATIBLE   52 /* */
 #define ST_LOADED         53 /* */
+#define ST_VOLUME_TOO_NEW 54
 
 /* data wipe modes */
 #define WP_NONE    0 /* no data wipe                           */
@@ -97,6 +102,15 @@
 #define CONF_HIDE_DCSYS       0x040
 #define CONF_HW_CRYPTO        0x080
 #define CONF_AUTOMOUNT_BOOT   0x100
+#define CONF_DISABLE_TRIM     0x200
+#define CONF_ENABLE_SSD_OPT   0x400
+
+#define CONF_BLOCK_UNENC_REMOVABLE 0x0800
+#define CONF_BLOCK_UNENC_HDDS      0x1000
+#define CONF_BLOCK_UNENC_CDROM     0x2000
+
+#define IS_BLOCK_UNENC_HDDS_DISABLED(_sysdev_flags) \
+	((_sysdev_flags & (F_SYNC | F_FORMATTING)) || (_sysdev_flags & F_ENABLED) == 0)
 
 /* driver status flags */
 #define DST_VIA_PADLOCK 0x01 /* VIA Padlock instructions available */

@@ -38,7 +38,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy /B $(ProjectDir)\bin\stage1.bin+$(ProjectDir)\bin\boot_hook.mod+$(ProjectDir)\bin\boot_load.mod $(ProjectDir)\bin\dcldr&#x0D;&#x0A;copy /B $(ProjectDir)\bin\stage1.bin+$(ProjectDir)\bin\boot_hook_small.mod+$(ProjectDir)\bin\boot_load.mod $(ProjectDir)\bin\dcldr_small"
+				CommandLine="copy /B $(ProjectDir)\bin\stage1.bin+$(ProjectDir)\bin\boot_hook.mod+$(ProjectDir)\bin\boot_load.mod $(ProjectDir)\bin\dcldr&#x0D;&#x0A;copy /B $(ProjectDir)\bin\stage1.bin+$(ProjectDir)\bin\boot_hook_small.mod+$(ProjectDir)\bin\boot_load.mod $(ProjectDir)\bin\dcldr_small&#x0D;&#x0A;"
 			/>
 		</Configuration>
 	</Configurations>
@@ -58,7 +58,7 @@
 					>
 					<Tool
 						Name="VCCustomBuildTool"
-						CommandLine="&quot;%fasm%\fasm.exe&quot; &quot;$(InputPath)&quot; bin\$(InputName).bin&#x0D;&#x0A;"
+						CommandLine="yasm -Xvc -f bin -o &quot;$(ProjectDir)\bin\$(InputName).bin&quot; &quot;$(InputPath)&quot;"
 						Outputs="$(ProjectDir)\bin\$(InputName).bin"
 					/>
 				</FileConfiguration>

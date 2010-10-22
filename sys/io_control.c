@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2009 
+    * Copyright (c) 2007-2010 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -19,6 +19,9 @@
 */
 
 #include <ntifs.h>
+#include <ntddcdrm.h>
+#include <ntdddisk.h>
+#include <ntddvol.h>
 #include "defines.h"
 #include "devhook.h"
 #include "driver.h"
@@ -32,13 +35,30 @@
 #include "readwrite.h"
 #include "mem_lock.h"
 #include "misc_volume.h"
-#include "fsf_control.h"
-#include <ntddcdrm.h>
+#include "misc_mem.h"
+#include "device_io.h"
+#include "disk_info.h"
 
 #define IS_VERIFY_IOCTL(ioctl) ( \
-	(ioctl == IOCTL_DISK_CHECK_VERIFY) || \
-	(ioctl == IOCTL_CDROM_CHECK_VERIFY) || \
-	(ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
+	(ioctl == IOCTL_DISK_CHECK_VERIFY) || (ioctl == IOCTL_CDROM_CHECK_VERIFY) || (ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
+
+#define TRIM_BUFF_MAX(_set) ( \
+	_align(sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES), sizeof(DEVICE_DATA_SET_RANGE)) + \
+	((_set)->DataSetRangesLength * 2) + (sizeof(DEVICE_DATA_SET_RANGE) * 2) )
+
+#define TRIM_BUFF_LENGTH(_set) ( \
+	(_set)->DataSetRangesOffset + (_set)->DataSetRangesLength )
+
+#define TRIM_ADD_RANGE(_set, _start, _size) if ((_size) != 0) { \
+	PDEVICE_DATA_SET_RANGE _range = addof((_set), (_set)->DataSetRangesOffset + (_set)->DataSetRangesLength); \
+	(_set)->DataSetRangesLength += sizeof(DEVICE_DATA_SET_RANGE); \
+	_range->StartingOffset = (_start); \
+	_range->LengthInBytes  = (_size); \
+}
+
+#define LEN_BEFORE_STORAGE(_hook) ( (_hook)->stor_off - (_hook)->head_len )
+#define OFF_END_OF_STORAGE(_hook) ( (_hook)->stor_off + (_hook)->head_len )
+#define LEN_AFTER_STORAGE(_hook)  ( (_hook)->dsk_size - OFF_END_OF_STORAGE(_hook) )
 
 static int dc_ioctl_process(u32 code, dc_ioctl *data)
 {
@@ -54,8 +74,7 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 		break;
 		case DC_CTL_MOUNT:
 			{
-				resl = dc_mount_device(
-					data->device, &data->passw1, data->flags);
+				resl = dc_mount_device(data->device, &data->passw1, data->flags);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 					dc_add_password(&data->passw1);
@@ -74,14 +93,12 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 		break;
 		case DC_CTL_UNMOUNT:
 			{
-				resl = dc_unmount_device(
-					data->device, (data->flags & MF_FORCE));
+				resl = dc_unmount_device(data->device, (data->flags & MF_FORCE));
 			}
 		break;
 		case DC_CTL_CHANGE_PASS:
 			{
-				resl = dc_change_pass(
-					data->device, &data->passw1, &data->passw2);
+				resl = dc_change_pass(data->device, &data->passw1, &data->passw2);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 					dc_add_password(&data->passw2);
@@ -90,8 +107,7 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 		break;
 		case DC_CTL_ENCRYPT_START:
 			{
-				resl = dc_encrypt_start(
-					data->device, &data->passw1, &data->crypt);
+				resl = dc_encrypt_start(data->device, &data->passw1, &data->crypt);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 					dc_add_password(&data->passw1);
@@ -105,8 +121,7 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 		break;
 		case DC_CTL_RE_ENC_START:
 			{
-				resl = dc_reencrypt_start(
-					data->device, &data->passw1, &data->crypt);
+				resl = dc_reencrypt_start(data->device, &data->passw1, &data->crypt);
 			}
 		break;
 		case DC_CTL_ENCRYPT_STEP:
@@ -136,15 +151,14 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 		break;
 		case DC_FORMAT_START:
 			{
-				resl = dc_format_start(
-					data->device, &data->passw1, &data->crypt);
+				resl = dc_format_start(data->device, &data->passw1, &data->crypt);
 
 				if ( (resl == ST_OK) && (dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 					dc_add_password(&data->passw1);
 				}
 			}
 		break;
-		case DC_FORMAT_STEP:
+		case DC_FORMAT_STEP: 
 			{
 				resl = dc_format_step(data->device, data->crypt.wp_mode);
 			}
@@ -159,10 +173,7 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 	return resl;
 }
 
-NTSTATUS
-  dc_drv_control_irp(
-     PDEVICE_OBJECT dev_obj, PIRP irp
-	 )
+NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 {
 	PIO_STACK_LOCATION  irp_sp  = IoGetCurrentIrpStackLocation(irp);
 	NTSTATUS            status  = STATUS_INVALID_DEVICE_REQUEST;
@@ -229,7 +240,7 @@ NTSTATUS
 			{
 				 if (in_len != 0) 
 				 {
-					 rnd_add_buff(data, in_len);
+					 cp_rand_add_seed(data, in_len);
 					 status = STATUS_SUCCESS;
 					 /* prevent leaks */
 					 zeromem(data, in_len);
@@ -246,7 +257,7 @@ NTSTATUS
 					{
 						ProbeForWrite(rctl->buff, rctl->size, sizeof(u8));
 
-						if (rnd_get_bytes(rctl->buff, rctl->size) != 0) {
+						if (cp_rand_bytes(rctl->buff, rctl->size) != 0) {
 							status = STATUS_SUCCESS;
 						}
 					} 
@@ -271,7 +282,7 @@ NTSTATUS
 			{
 				lock_inc(&dc_dump_disable);
 				dc_clean_pass_cache();
-				dc_clean_locked_mem(NULL);
+				mm_unlock_user_memory(NULL, NULL);
 				dc_clean_keys();
 
 				KeBugCheck(IRQL_NOT_LESS_OR_EQUAL);
@@ -301,34 +312,34 @@ NTSTATUS
 					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 						dc_clean_pass_cache();
 					}
-					dc_fsf_set_conf();
 					xts_init(dc_conf_flags & CONF_HW_CRYPTO);
 				}
 			}
 		break;
 		case DC_CTL_LOCK_MEM:
 			{
-				dc_lock_ctl *smem = data;
+				PEPROCESS    process = IoGetRequestorProcess(irp);
+				dc_lock_ctl *smem = data;				
 
-				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
+				if ( (process != NULL) && (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) ) 
 				{
-					smem->resl = dc_lock_mem(smem->data, smem->size, irp_sp->FileObject);
+					smem->resl = mm_lock_user_memory(smem->data, smem->size, process);
 
-					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_lock_ctl);
+					status = STATUS_SUCCESS; bytes = sizeof(dc_lock_ctl);
 				}
 			}
 		break;
 		case DC_CTL_UNLOCK_MEM:
 			{
+				PEPROCESS    process = IoGetRequestorProcess(irp);
 				dc_lock_ctl *smem = data;
 
-				if ( (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
+				if ( (process != NULL) && (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
 				{
-					smem->resl = dc_unlock_mem(smem->data, irp_sp->FileObject);
+					mm_unlock_user_memory(smem->data, process);
 
-					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_lock_ctl);
+					status = STATUS_SUCCESS; bytes = sizeof(dc_lock_ctl);
+					smem->resl = ST_OK;
 				}
 			}
 		break; 
@@ -340,8 +351,7 @@ NTSTATUS
 				{
 					back->device[MAX_DEVICE] = 0;
 
-					back->status = dc_backup_header(
-						back->device, &back->pass, back->backup);
+					back->status = dc_backup_header(back->device, &back->pass, back->backup);
 
 					/* prevent leaks */
 					zeroauto(&back->pass, sizeof(back->pass));
@@ -359,8 +369,7 @@ NTSTATUS
 				{
 					back->device[MAX_DEVICE] = 0;
 
-					back->status = dc_restore_header(
-						back->device, &back->pass, back->backup);
+					back->status = dc_restore_header(back->device, &back->pass, back->backup);
 
 					/* prevent leaks */
 					zeroauto(&back->pass, sizeof(back->pass));
@@ -395,23 +404,14 @@ NTSTATUS
 	return dc_complete_irp(irp, status, bytes);
 }
 
-static
-NTSTATUS
-  dc_ioctl_complete(
-    PDEVICE_OBJECT dev_obj, PIRP irp, void *param
-    )
+static NTSTATUS dc_ioctl_complete(PDEVICE_OBJECT dev_obj, PIRP irp, void *param)
 {
-	PIO_STACK_LOCATION irp_sp;
-	dev_hook          *hook;
-	u32                ioctl;
-	NTSTATUS           status;
+	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
+	dev_hook          *hook   = dev_obj->DeviceExtension;
+	u32                ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
+	NTSTATUS           status = irp->IoStatus.Status;
 	u32               *chg_c;
     int                change;
-
-	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	hook   = dev_obj->DeviceExtension;
-	ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
-	status = irp->IoStatus.Status;
 
 	if (irp->PendingReturned) {
 		IoMarkIrpPending(irp);
@@ -466,29 +466,95 @@ NTSTATUS
 	return STATUS_SUCCESS;
 }
 
+static NTSTATUS dc_trim_irp(dev_hook *hook, PIRP irp)
+{
+	PIO_STACK_LOCATION                 irp_sp = IoGetCurrentIrpStackLocation(irp);
+	PDEVICE_MANAGE_DATA_SET_ATTRIBUTES p_set  = irp->AssociatedIrp.SystemBuffer;
+	u32                                length = irp_sp->Parameters.DeviceIoControl.InputBufferLength;	
+	u64                                offset, rnglen;
+	PDEVICE_DATA_SET_RANGE             range;
+	PDEVICE_MANAGE_DATA_SET_ATTRIBUTES n_set;
+	u64                                off1, off2;
+	u64                                len1, len2;
+	u32                                i;
 
+	if ( (length < sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES)) ||
+		 (p_set->Action != DeviceDsmAction_Trim) ||
+		 (length < d64(p_set->DataSetRangesOffset) + d64(p_set->DataSetRangesLength)) )
+	{
+		return dc_forward_irp(hook, irp);
+	}
+	if (dc_conf_flags & CONF_DISABLE_TRIM) {
+		return dc_release_irp(hook, irp, STATUS_SUCCESS);
+	}
+	if ( (n_set = mm_alloc(TRIM_BUFF_MAX(p_set), 0)) == NULL ) {
+		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
+	}
+	n_set->Size = sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES);
+	n_set->Action = DeviceDsmAction_Trim;
+	n_set->Flags = 0;
+	n_set->ParameterBlockOffset = 0;
+	n_set->ParameterBlockLength = 0;
+	n_set->DataSetRangesOffset = _align(sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES), sizeof(DEVICE_DATA_SET_RANGE));
+	n_set->DataSetRangesLength = 0;
+
+	if (p_set->Flags & DEVICE_DSM_FLAG_ENTIRE_DATA_SET_RANGE)
+	{
+		if (hook->flags & F_NO_REDIRECT) {
+			TRIM_ADD_RANGE(n_set, hook->head_len, hook->dsk_size - hook->head_len);
+		} else {
+			TRIM_ADD_RANGE(n_set, hook->head_len, LEN_BEFORE_STORAGE(hook));
+			TRIM_ADD_RANGE(n_set, OFF_END_OF_STORAGE(hook), LEN_AFTER_STORAGE(hook));
+		}
+	} else
+	{
+		for (i = 0, range = addof(p_set, p_set->DataSetRangesOffset);
+			 i < p_set->DataSetRangesLength / sizeof(DEVICE_DATA_SET_RANGE); i++, range++)
+		{
+			if ( (offset = range->StartingOffset) + (rnglen = range->LengthInBytes) > hook->use_size ) {
+				continue;
+			}
+			if (hook->flags & F_NO_REDIRECT) {
+				TRIM_ADD_RANGE(n_set, offset + hook->head_len, min(rnglen, hook->use_size - offset));
+				continue;
+			}
+			len1 = intersect(&off1, offset, rnglen, hook->head_len, LEN_BEFORE_STORAGE(hook));
+			len2 = intersect(&off2, offset, rnglen, OFF_END_OF_STORAGE(hook), LEN_AFTER_STORAGE(hook));
+
+			TRIM_ADD_RANGE(n_set, off1, len1);
+			TRIM_ADD_RANGE(n_set, off2, len2);
+		}
+	}
+	if (n_set->DataSetRangesLength != 0) {
+		io_hook_ioctl(hook, IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES, n_set, TRIM_BUFF_LENGTH(n_set), NULL, 0);
+	}
+	mm_free(n_set);
+
+	return dc_release_irp(hook, irp, STATUS_SUCCESS);
+}
 
 NTSTATUS dc_io_control_irp(dev_hook *hook, PIRP irp)
 {	
-	PIO_STACK_LOCATION irp_sp;
-	u32                ioctl;
+	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
+	u32                ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
 	
-	irp_sp = IoGetCurrentIrpStackLocation(irp);
-	ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
-
-	if ( (ioctl == IOCTL_DISK_GET_LENGTH_INFO) || 
-		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO) ||
-		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO_EX) || 
-		 (ioctl == IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX) ||
+	if ( (ioctl == IOCTL_DISK_GET_LENGTH_INFO)       || (ioctl == IOCTL_DISK_GET_PARTITION_INFO) ||
+		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO_EX) || (ioctl == IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX) ||
 		 (IS_VERIFY_IOCTL(ioctl) != 0) )
 	{
 		IoCopyCurrentIrpStackLocationToNext(irp);
-
-		IoSetCompletionRoutine(
-			irp, dc_ioctl_complete,	NULL, TRUE, TRUE, TRUE);
-
+		IoSetCompletionRoutine(irp, dc_ioctl_complete, NULL, TRUE, TRUE, TRUE);
 		return IoCallDriver(hook->orig_dev, irp);
-	} else {
-		return dc_forward_irp(hook, irp);
+	}
+	if (hook->flags & F_ENABLED)
+	{
+		if (ioctl == IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES) {
+			return dc_trim_irp(hook, irp);
+		}
+		if (ioctl == IOCTL_VOLUME_UPDATE_PROPERTIES) {
+			dc_update_volume(hook);
+			return dc_release_irp(hook, irp, STATUS_SUCCESS);
+		}
 	}	
+	return dc_forward_irp(hook, irp);
 }

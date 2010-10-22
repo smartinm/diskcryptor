@@ -9,6 +9,7 @@
 
 void *mm_map_mdl_success(PMDL mdl);
 PMDL  mm_allocate_mdl_success(void *data, u32 size);
+PIRP  mm_allocate_irp_success(CCHAR StackSize);
 void *mm_alloc_success(POOL_TYPE pool, SIZE_T bytes, u32 tag);
 
 void *mm_alloc(size_t size, int flags);

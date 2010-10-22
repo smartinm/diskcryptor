@@ -237,6 +237,8 @@ void boot_load_main(bd_data *db, boot_vtab *vt)
 	vt->p_xts_init(conf.options & OP_HW_CRYPTO);
 	/* prepare MBR copy buffer */
 	autocpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
+	/* hook BIOS interrupts */
+	bios_hook_ints();
 
 	if (dc_find_hdds() == 0) {
 		die("disks not found\n");
@@ -298,10 +300,7 @@ retry_auth:;
 	}
 	if (db->password.size != 0) 
 	{
-		if (n_mount = dc_mount_parts()) {
-			/* hook BIOS interrupts */
-			bios_hook_ints();
-		} else {
+		if ( (n_mount = dc_mount_parts()) == 0 ) {
 			/* zero password buffer to prevent leaks */
 			zeroauto(&db->password, sizeof(dc_pass));
 		}

@@ -56,7 +56,7 @@ NTSTATUS dc_pnp_usage_irp(dev_hook *hook, PIRP irp)
 
 		if (usage == DeviceUsageTypeHibernation) 
 		{
-			if ( (dc_os_type == OS_VISTA) && (dump_hibernate_action() != 0) ) {
+			if ( (dc_is_vista_or_later != 0) && (dump_hibernate_action() != 0) ) {
 				/* preventing hibernate if memory contain sensitive data */
 				status = STATUS_UNSUCCESSFUL; complete = 1;
 			}
@@ -147,8 +147,9 @@ NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 
 				DbgMsg("remove device %ws\n", hook->dev_name);
 
-				status = dc_forward_irp(hook, irp);
-
+				IoSkipCurrentIrpStackLocation(irp);
+				status = IoCallDriver(hook->orig_dev, irp);
+				
 				dc_process_unmount(hook, MF_NOFSCTL);
 				dc_remove_hook(hook);
 
@@ -228,7 +229,7 @@ NTSTATUS dc_add_device(PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT dev_obj)
 		dc_query_object_name(dev_obj, dname, sizeof(dname));
 	}
 
-	rnd_reseed_now();
+	cp_rand_reseed();
 
 	if ( (dev_obj == NULL) || (dname[0] == 0) ) {
 		return STATUS_SUCCESS;

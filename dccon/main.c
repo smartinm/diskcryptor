@@ -50,89 +50,97 @@ static wchar_t   boot_dev[MAX_PATH];
 static void print_usage()
 {
 	wprintf(
-		L"dccon [-key] [params]\n\n"
-		L"  key:\n"
-		L"   -version                      display DiskCryptor version\n"
-		L"   -install                      install DiskCryptor driver\n"
-		L"   -remove                       uninstall DiskCryptor driver\n"
-		L"   -update                       update DiskCryptor driver\n"
-		L"   -enum                         enum all volume devices in system\n"
-		L"   -info    [device]             display information about device\n"
-		L"   -addpass [params]             add password to password cache\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -mount   [device] [params]    mount encrypted device\n"		
-		L"      -mp [mount point]   add volume mount point\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -mountall                     mount all encrypted devices\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -unmount [device] [-f]        unmount encrypted device\n"
-		L"      -f       force unmount with close all opened files\n"
-		L"      -dp      delete volume mount point\n"
-		L"   -unmountall                   force unmount all devices\n"
-		L"   -clean                        wipe cached passwords in memory\n"
-		L"   -encrypt [device] [params] encrypt volume device\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"     Cipher settings:\n"
-		L"      -aes                 AES cipher\n"
-		L"      -twofish             Twofish cipher\n"
-		L"      -serpent             Serpent cipher\n"
-		L"      -aes-twofish         AES-Twofish ciphers chain\n"
-		L"      -twofish-serpent     Twofish-Serpent ciphers chain\n"
-		L"      -serpent-aes         Serpent-AES ciphers chain\n"
-		L"      -aes-twofish-serpent AES-Twofish-Serpent ciphers chain\n"
-		L"     Original data wipe settings:\n"
-		L"      -dod_e   US DoD 5220.22-M (8-306. / E)          (3 passes)\n"
-		L"      -dod     US DoD 5220.22-M (8-306. / E, C and E) (7 passes)\n"
-		L"      -gutmann Gutmann mode                           (35 passes)\n"
-		L"   -decrypt [device]             decrypt volume device\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -reencrypt [device] [params]  re-encrypt encrypted device with new parameters\n"
-		L"                                 all parameters are similar to -encrypt\n"
-		L"   -chpass  [device]             change volume password\n"
-		L"      -op  [password]      get old password from command line\n"
-		L"      -np  [password]      get new password from command line\n"
-		L"      -okf [keyfiles path] old keyfiles\n"
-		L"      -nkf [keyfiles path] new keyfiles\n"
-		L"   -format  [device] [params]    format volume device with encryption\n"
-		L"                                 encryption parameters are similar to -encrypt\n"
-		L"      -q     quick format\n"
-		L"      -fat   format to FAT file system\n"
-		L"      -fat32 format to FAT32 file system\n"
-		L"      -exfat format to exFAT file system\n"
-		L"      -ntfs  format to NTFS file system\n"
-		L"      -raw   file system does not needed\n"
-		L"   -backup  [device] [file]      backup volume header to file\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -restore [device] [file]      restore volume header from file\n"
-		L"      -p  [password]      get password from command line\n"
-		L"      -kf [keyfiles path] use keyfiles\n"
-		L"   -benchmark                    encryption benchmark\n"
-		L"   -config                       change program configuration\n"
-		L"   -keygen [file]                make 64 bytes random keyfile\n"
-		L"   -bsod                         erase all keys in memory and generate BSOD\n"
-		L"   -enciso [src] [dst] [params]  encrypt .iso image\n"
-		L"      -src    source file\n"
-		L"      -dst    destination file\n"
-		L"      -params encryption parameters (similar to -encrypt)\n"
-		L"   -boot [action]\n"
-		L"      -enum                            enumerate all HDDs\n"
-		L"      -setmbr   [hdd] [opt]            setup bootloader to HDD master boot record\n"
-		L"         -small                        use small bootloader, only with AES\n"
-		L"      -delmbr   [hdd]                  delete bootloader from HDD master boot record\n"
-		L"      -updmbr   [hdd]                  update bootloader on HDD master boot record\n"
-		L"      -setpar   [partition root] [opt] setup bootloader to bootable partition (Floppy, USB-Stick, etc)\n"
-		L"         -small                        use small bootloader, only with AES\n"
-	    L"      -makeiso  [file] [opt]           make .iso bootloader image\n"
-		L"         -small                        use small bootloader, only with AES\n"
-		L"      -makepxe  [file] [opt]           make bootloader image for PXE network booting\n"
-		L"         -small                        use small bootloader, only with AES\n"
-		L"      -config   [hdd/file]             change bootloader configuration\n");
+		L"DiskCryptor (c) <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E\n"
+		L"\n"
+		L"Usage: dccon [key] [param]\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -enum                           Enum all volume devices in system\n"
+		L" -info [dev]                     Display information about device\n"
+		L" -version                        Display DiskCryptor version\n"
+		L" -benchmark                      Encryption benchmark\n"
+		L" -config                         Change program configuration\n"
+		L" -keygen [file]                  Make 64 bytes random keyfile\n"
+		L" -bsod                           Erase all keys in memory and generate BSOD\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -addpass [param]                Add password to password cache\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L" -clean                          Wipe cached passwords in memory\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -mount [dev] [param]            Mount encrypted device\n"
+		L"    -mp [mount point]     Add volume mount point\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L" -mountall [param]               Mount all encrypted devices\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L" -unmount [dev] [param]          Unmount encrypted device\n"
+		L"    -f                    Force unmount with close all opened files\n"
+		L"    -dp                   Delete volume mount point\n"
+		L" -unmountall                     Force unmount all devices\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -encrypt [dev] [param]          Encrypt volume device\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L"             ======  Cipher settings:   ======\n"
+		L"    -a                    AES cipher\n"
+		L"    -t                    Twofish cipher\n"
+		L"    -s                    Serpent cipher\n"
+		L"    -at                   AES-Twofish ciphers chain\n"
+		L"    -ts                   Twofish-Serpent ciphers chain\n"
+		L"    -sa                   Serpent-AES ciphers chain\n"
+		L"    -ats                  AES-Twofish-Serpent ciphers chain\n"
+		L"             ======  Original data wipe settings:  ======\n"
+		L"    -dod_e                US DoD 5220.22-M (8-306./E)          (3 passes)\n"
+		L"    -dod                  US DoD 5220.22-M (8-306./E, C and E) (7 passes)\n"
+		L"    -g                    Gutmann mode                         (35 passes)\n"
+		L" -decrypt [dev] [param]          Decrypt volume device\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L" -reencrypt [dev] [param]        Re-encrypt device with new parameters,\n"
+		L"                                 parameters are equal to -encrypt\n"
+		L" -format [dev] [param]           Format volume device with encryption,\n"
+		L"                                 parameters are equal to -encrypt\n"
+		L"    -q                    Quick format\n"
+		L"    -fat                  Format to FAT file system\n"
+		L"    -fat32                Format to FAT32 file system\n"
+		L"    -exfat                Format to exFAT file system\n"
+		L"    -ntfs                 Format to NTFS file system\n"
+		L"    -raw                  File system does not needed\n"
+		L" -enciso [src] [dst] [param]     Encrypt .iso image,\n"
+		L"                                 parameters are equal to -encrypt\n"
+		L"    -src                  Source file\n"
+		L"    -dst                  Destination file\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -chpass [dev] [param]           Change volume password\n"
+		L"    -op  [password]       Get old password from command line\n"
+		L"    -np  [password]       Get new password from command line\n"
+		L"    -okf [keyfiles path]  Old keyfiles\n"
+		L"    -nkf [keyfiles path]  New keyfiles\n"
+		L" -backup [dev] [file] [param]    Backup volume header to file\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L" -restore [dev] [file] [param]   Restore volume header from file\n"
+		L"    -p  [password]        Get password from command line\n"
+		L"    -kf [keyfiles path]   Use keyfiles\n"
+		L"________________________________________________________________________________\n"
+		L"\n"
+		L" -boot [action]\n"
+		L"    -enum                        Enumerate all HDDs\n"
+		L"    -config  [hdd/file]          Change bootloader configuration\n"
+		L"    -setmbr  [hdd] [opt]         Setup bootloader to HDD master boot record\n"
+		L"    -updmbr  [hdd]               Update bootloader on HDD master boot record\n"
+		L"    -delmbr  [hdd]               Delete bootloader from HDD master boot record\n"
+		L"    -setpar  [root par] [opt]    Setup bootloader to bootable partition\n"
+		L"    -makeiso [file] [opt]        Make bootloader image (.iso)\n"
+		L"    -makepxe [file] [opt]        Make bootloader image for PXE network booting\n"
+		L"       -small             Use small bootloader, only with AES\n"
+		);
 }
 
 static void make_dev_status(vol_inf *inf, wchar_t *status)
@@ -199,29 +207,28 @@ static void enum_devices()
 static vol_inf *find_device(wchar_t *name)
 {
 	wchar_t w_name[MAX_PATH];
-	u32     idx;
+	u32     i;
 
+	if (name == NULL) 
+	{
+		for (i = 0; i < vol_cnt; i++) {
+			if (volumes[i].status.flags & F_SYSTEM) return &volumes[i];
+		}
+		return NULL;
+	}
 	wcscpy(w_name, name); _wcslwr(w_name);
 
-	if ( (w_name[0] == L'p') && (w_name[1] == L't') && (isdigit(name[2]) != 0) )
-	{
-		if ( (idx = _wtoi(name+2)) < vol_cnt ) {
-			return &volumes[idx];
-		}
+	if ( (w_name[0] == L'p') && (w_name[1] == L't') && (isdigit(name[2]) != 0) ) {
+		if ( (i = _wtoi(name+2)) < vol_cnt ) return &volumes[i];
 	} else 
 	{
 		if (w_name[1] == L':') {
 			w_name[2] = 0;
 		}
-
-		for (idx = 0; idx < vol_cnt; idx++) 
-		{
-			if (_wcsicmp(w_name, volumes[idx].status.mnt_point) == 0) {
-				return &volumes[idx];
-			}
+		for (i = 0; i < vol_cnt; i++) {
+			if (_wcsicmp(w_name, volumes[i].status.mnt_point) == 0) return &volumes[i];
 		}
 	}
-
 	return NULL;
 }
 
@@ -564,9 +571,9 @@ dc_pass* dc_load_pass_and_keyfiles(
 		return NULL;
 	}
 
-	if (p_param == NULL) { p_param = L"-p"; }
-	if (kf_param == NULL) { kf_param = L"-kf"; }
-	if (gp_msg == NULL) { gp_msg = L"Enter password: "; }
+	if (p_param == NULL)  p_param = L"-p";
+	if (kf_param == NULL) kf_param = L"-kf";
+	if (gp_msg == NULL)   gp_msg = L"Enter password: ";
 	
 	if (cmde = get_param(p_param))
 	{
@@ -609,19 +616,19 @@ dc_pass* dc_load_pass_and_keyfiles(
 static void get_crypt_info(crypt_info *crypt)
 {
 	/* get cipher */
-	if (is_param(L"-aes") != 0) {
+	if (is_param(L"-a") != 0) {
 		crypt->cipher_id = CF_AES;
-	} else if (is_param(L"-twofish") != 0) {
+	} else if (is_param(L"-t") != 0) {
 		crypt->cipher_id = CF_TWOFISH;
-	} else if (is_param(L"-serpent") != 0) {
+	} else if (is_param(L"-s") != 0) {
 		crypt->cipher_id = CF_SERPENT;
-	} else if (is_param(L"-aes-twofish") != 0) {
+	} else if (is_param(L"-at") != 0) {
 		crypt->cipher_id = CF_AES_TWOFISH;
-	} else if (is_param(L"-twofish-serpent") != 0) {
+	} else if (is_param(L"-ts") != 0) {
 		crypt->cipher_id = CF_TWOFISH_SERPENT;
-	} else if (is_param(L"-serpent-aes") != 0) {
+	} else if (is_param(L"-sa") != 0) {
 		crypt->cipher_id = CF_SERPENT_AES;
-	} else if (is_param(L"-aes-twofish-serpent") != 0) {
+	} else if (is_param(L"-ats") != 0) {
 		crypt->cipher_id = CF_AES_TWOFISH_SERPENT;
 	}
 
@@ -630,7 +637,7 @@ static void get_crypt_info(crypt_info *crypt)
 		crypt->wp_mode = WP_DOD_E;
 	} else if (is_param(L"-dod") != 0) {
 		crypt->wp_mode = WP_DOD;
-	} else if (is_param(L"-gutmann") != 0) {
+	} else if (is_param(L"-g") != 0) {
 		crypt->wp_mode = WP_GUTMANN;
 	}
 }
@@ -697,57 +704,6 @@ int wmain(int argc, wchar_t *argv[])
 			resl = ST_OK; break;
 		}
 
-		if ( (argc >= 2) && (wcscmp(argv[1], L"-install") == 0) ) 
-		{
-			if (status != ST_ERROR) 
-			{
-				wprintf(L"DiskCryptor driver already installed\n");
-
-				if (status != ST_OK) {
-					wprintf(L"Please reboot you system\n");
-				}
-				resl = ST_OK; break;
-			}
-
-			if ( (resl = dc_install_driver(NULL)) == ST_OK ) {
-				wprintf(L"DiskCryptor driver installed, please reboot you system\n");
-			}
-			break;
-		}
-
-		if ( (argc >= 2) && (wcscmp(argv[1], L"-remove") == 0) ) 
-		{
-			if (status == ST_ERROR) {
-				wprintf(L"DiskCryptor driver not installed\n");
-				resl = ST_OK; break;
-			}
-
-			if ( (resl = dc_remove_driver(NULL)) == ST_OK ) {
-				wprintf(L"DiskCryptor driver uninstalled, please reboot you system\n");				
-			}
-			break;
-		}
-
-		if ( (argc >= 2) && (wcscmp(argv[1], L"-update") == 0) ) 
-		{
-			if (status == ST_ERROR) {
-				wprintf(L"DiskCryptor driver not installed\n");
-				resl = ST_ERROR; break;
-			}
-
-			if ( (resl = dc_update_boot(-1)) == ST_OK ) {
-				wprintf(L"DiskCryptor bootloader updated\n");
-			} else if (resl != ST_BLDR_NOTINST) {
-				wprintf(L"Bootloader update error, please update it manually\n");
-				break;
-			}
-
-			if ( (resl = dc_update_driver()) == ST_OK ) {
-				wprintf(L"DiskCryptor driver updated, please reboot you system\n");				
-			}
-			break;			
-		}
-
 		if ( (argc >= 3) && (wcscmp(argv[1], L"-boot") == 0) ) 
 		{
 			resl = boot_menu(argc, argv);
@@ -757,8 +713,8 @@ int wmain(int argc, wchar_t *argv[])
 		if (status != ST_OK) 
 		{
 			wprintf(
-				L"DiskCryptor driver not installed.\n"
-				L"please run \"dccon -install\" and reboot you system\n");
+				L"DiskCryptor is not installed,\n"
+				L"please install DiskCryptor and reboot you system\n");
 			resl = ST_OK; break;
 		}
 
@@ -776,7 +732,7 @@ int wmain(int argc, wchar_t *argv[])
 			{
 				wprintf(
 					L"Old DiskCryptor driver detected\n"
-					L"please run \"dccon -update\" and reboot you system\n");
+					L"please update DiskCryptor and reboot you system\n");
 				resl = ST_OK; break;
 			}
 
@@ -1098,6 +1054,7 @@ int wmain(int argc, wchar_t *argv[])
 		if ( (argc >= 3) && (wcscmp(argv[1], L"-decrypt") == 0) ) 
 		{
 			dc_pass *pass;
+			dc_conf  dcfg;
 
 			if ( (inf = find_device(argv[2])) == NULL ) {
 				resl = ST_NF_DEVICE; break;
@@ -1117,7 +1074,13 @@ int wmain(int argc, wchar_t *argv[])
 				wprintf(L"Invalid device state\n");
 				resl = ST_OK; break;
 			}
-
+			if ( (inf->status.flags & F_SYSTEM) && 
+				 (dc_get_conf_flags(&dcfg) == ST_OK) && (dcfg.conf_flags & CONF_BLOCK_UNENC_HDDS) )
+			{
+				wprintf(L"This device can not be decrypted because "
+					    L"'Deny access to unencrypted HDD's' option enabled.\n");
+				resl = ST_OK; break;
+			}
 			pass = dc_load_pass_and_keyfiles(NULL, NULL, NULL, 0);
 
 			if (pass == NULL) {
@@ -1342,11 +1305,8 @@ int wmain(int argc, wchar_t *argv[])
 				L"        cipher       |     speed\n"
 				L"---------------------+--------------\n");			
 
-			for (i = 0; i < n; i++) 
-			{
-				wprintf(
-					L" %-19s | %-.2f mb/s\n",
-					bench[i].alg, bench[i].speed);
+			for (i = 0; i < n; i++) {
+				wprintf(L" %-19s | %-.2f mb/s\n", bench[i].alg, bench[i].speed);
 			}
 			resl = ST_OK; break;
 		}
@@ -1441,43 +1401,61 @@ int wmain(int argc, wchar_t *argv[])
 
 			do
 			{
-				int  onoff;
-				char ch;
+				vol_inf *inf = find_device(NULL);
+				int      onoff;
+				char     ch;	
 
 				cls_console();
 
 				wprintf(
-					L"1 - On/Off passwords caching (%s)\n"
-					L"2 - On/Off hiding $dcsys$ files (%s)\n"
-					L"3 - On/Off hardware cryptography support (%s)\n"
-					L"4 - On/Off automounting at boot time (%s)\n"
-					L"5 - Save changes and exit\n\n",					
+					L"0 - On/Off passwords caching (%s)\n"
+					L"1 - On/Off hiding $dcsys$ files (%s)\n"
+					L"2 - On/Off hardware cryptography support (%s)\n"
+					L"3 - On/Off automounting at boot time (%s)\n"
+					L"4 - On/Off optimization for SSD disks (%s)\n"
+					L"5 - On/Off disable TRIM on encrypted SSD disks (%s)\n"
+					L"--------------------------------------------------\n"
+					L"6 - On/Off Deny access to unencrypted removable devices (%s)\n"
+					L"7 - On/Off Deny access to unencrypted HDD's (%s)\n"
+					L"8 - On/Off Deny access to unencrypted CDROM (%s)\n"
+					L"--------------------------------------------------\n"
+					L"9 - Save changes and exit\n\n",				
 					on_off(dc_conf.conf_flags & CONF_CACHE_PASSWORD),
 					on_off(dc_conf.conf_flags & CONF_HIDE_DCSYS),
 					(dc_conf.load_flags & DST_HW_CRYPTO) ? 
 					    on_off(dc_conf.conf_flags & CONF_HW_CRYPTO) : L"not available",
-					on_off(dc_conf.conf_flags & CONF_AUTOMOUNT_BOOT)
+					on_off(dc_conf.conf_flags & CONF_AUTOMOUNT_BOOT),
+					on_off(dc_conf.conf_flags & CONF_ENABLE_SSD_OPT),
+					on_off(dc_conf.conf_flags & CONF_DISABLE_TRIM),
+					on_off(dc_conf.conf_flags & CONF_BLOCK_UNENC_REMOVABLE),
+					(inf != NULL && IS_BLOCK_UNENC_HDDS_DISABLED(inf->status.flags) == 0) ?
+					    on_off(dc_conf.conf_flags & CONF_BLOCK_UNENC_HDDS) : L"non permitted",
+					on_off(dc_conf.conf_flags & CONF_BLOCK_UNENC_CDROM)
 					);
 
-				if ( (ch = getchr('1', '5')) == '5' ) {
+				if ( (ch = getchr('0', '9')) == '9' ) {
 					break;
 				}
 
-				if ( !(dc_conf.load_flags & DST_HW_CRYPTO) && (ch == '3') ) {
+				if ( ((ch == '2') && (dc_conf.load_flags & DST_HW_CRYPTO) == 0) ||
+					 ((ch == '7') && (inf == NULL || IS_BLOCK_UNENC_HDDS_DISABLED(inf->status.flags))) )
+				{
 					continue;
 				}
 
-				wprintf(L"0 - OFF\n1 - ON\n");
-				onoff = (getchr('0', '1') == '1');
+				wprintf(L"0 - OFF\n1 - ON\n"); onoff = (getchr('0', '1') == '1');
 
-				if (ch == '1') {
-					set_flag(dc_conf.conf_flags, CONF_CACHE_PASSWORD, onoff);
-				} else if (ch == '2') {
-					set_flag(dc_conf.conf_flags, CONF_HIDE_DCSYS, onoff);
-				} else if (ch == '3') {
-					set_flag(dc_conf.conf_flags, CONF_HW_CRYPTO, onoff);
-				} else {
-					set_flag(dc_conf.conf_flags, CONF_AUTOMOUNT_BOOT, onoff);
+				switch (ch) {
+					case '0': set_flag(dc_conf.conf_flags, CONF_CACHE_PASSWORD, onoff); break;
+					case '1': set_flag(dc_conf.conf_flags, CONF_HIDE_DCSYS, onoff); break;
+					case '2': set_flag(dc_conf.conf_flags, CONF_HW_CRYPTO, onoff); break;
+					case '3': set_flag(dc_conf.conf_flags, CONF_AUTOMOUNT_BOOT, onoff); break;
+					case '4': set_flag(dc_conf.conf_flags, CONF_ENABLE_SSD_OPT, onoff); break;
+					case '5': set_flag(dc_conf.conf_flags, CONF_DISABLE_TRIM, onoff); break;
+					/**/
+					case '6': set_flag(dc_conf.conf_flags, CONF_BLOCK_UNENC_REMOVABLE, onoff); break;
+					case '7': set_flag(dc_conf.conf_flags, CONF_BLOCK_UNENC_HDDS, onoff); break;
+					case '8': set_flag(dc_conf.conf_flags, CONF_BLOCK_UNENC_CDROM, onoff); break;
 				}
 			} while (1);
 

@@ -19,6 +19,7 @@
 */
 
 #include <windows.h>
+#include <math.h>
 
 #include "main.h"
 #include "pass.h"
@@ -26,16 +27,12 @@
 #include "prc_keyfiles.h"
 #include "keyfiles.h"
 
-static
-void _check_password(
-		dc_pass   *pass,
-		_pass_inf *inf
-	)
+static void _check_password(dc_pass *pass, _pass_inf *inf)
 {
 	wchar_t c;
 	int     flags = 0;
-	u32     maxc  = 0;
-	int     i, bits, len;
+	int     chars = 0;
+	int     i, len;
 
 	len = pass->size / sizeof(wchar_t);
 	
@@ -44,20 +41,16 @@ void _check_password(
 		c = pass->pass[i];
 		do
 		{
-			if ( (c >= L'a') && (c <= L'z') ) 
-			{
+			if ( (c >= L'a') && (c <= L'z') ) {
 				flags |= P_AZ_L; break;
 			}
-			if ( (c >= L'A') && (c <= L'Z') ) 
-			{
+			if ( (c >= L'A') && (c <= L'Z') ) {
 				flags |= P_AZ_H; break;
 			}
-			if ( (c >= L'0') && (c <= L'9') ) 
-			{
+			if ( (c >= L'0') && (c <= L'9') ) {
 				flags |= P_09; break;
 			}
-			if ( c == L' ' )
-			{
+			if (c == L' ') {
 				flags |= P_SPACE; break;
 			}
 			if ( ((c >= L'!') && (c <= L'/')) ||
@@ -75,37 +68,26 @@ void _check_password(
 		} while (0);
 	}
 
-	if ( flags & P_09 )
-	{
-		maxc += '9' - '0' + 1;
+	if (flags & P_09) {
+		chars += '9' - '0' + 1;
 	}
-	if ( flags & P_AZ_L )
-	{
-		maxc += 'z' - 'a' + 1;
+	if (flags & P_AZ_L) {
+		chars += 'z' - 'a' + 1;
 	}
-	if ( flags & P_AZ_H )
-	{
-		maxc += 'Z' - 'A' + 1;
+	if (flags & P_AZ_H) {
+		chars += 'Z' - 'A' + 1;
 	}
-	if ( flags & P_SPACE )
-	{
-		maxc++;
+	if (flags & P_SPACE) {
+		chars++;
 	}
-	if ( flags & P_SPCH )
-	{
-		maxc += ('/' - '!') + ('@' - ':') + ('`' - '[') + 
-			    ('~' - '{') + ('—' - '‘') + 6;
+	if (flags & P_SPCH) {
+		chars += ('/' - '!') + ('@' - ':') + ('`' - '[') + ('~' - '{') + ('—' - '‘') + 6;
 	}
-	if ( flags & P_NCHAR )
-	{
-		maxc += 64;
-	}
-	if ( bsr(&bits, maxc) == 0 )
-	{
-		bits = 0;
+	if (flags & P_NCHAR) {
+		chars += 64;
 	}	
 	inf->flags   = flags;
-	inf->entropy = len * (bits+1);
+	inf->entropy = len * log(chars) / log(2);
 	inf->length  = len;
 }
 
@@ -149,7 +131,7 @@ void _draw_pass_rating(
 			pass_gr_ctls[4].color = pass_gr_ctls[5].color;
 		}
 	}	
-	*entropy = inf.entropy;
+	*entropy = (int)inf.entropy;
 
 	if ( inf.entropy > 192 ) idx = 4;
 	if ( inf.entropy < 193 ) idx = 3;

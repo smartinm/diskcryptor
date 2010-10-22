@@ -362,7 +362,11 @@ void _draw_static(
 		DrawState( itst->hDC, NULL, NULL, (LPARAM)data, 0, x, y, 0, 0, DST_PREFIXTEXT | state );
 		if ( itst->itemState & ODS_FOCUS )
 		{
-			InflateRect( &rc, -2, -2 );
+			modify_rect( rc, 1, 2, -2, -2 );
+			if ( itst->itemState & ODS_SELECTED )
+			{
+				modify_rect( rc, 1, 1, 1, 1 );
+			}
 			DrawFocusRect( itst->hDC, &rc );
 		}
 
@@ -380,8 +384,9 @@ void _draw_static(
 
 				_fill(itst->hDC, &itst->rcItem, _cl(COLOR_BTNSHADOW, DARK_CLR - 7));
 
-				tp.iLeftMargin += 10;
+				tp.iLeftMargin   += 10;
 				itst->rcItem.top += 1;
+
 				DrawTextEx(itst->hDC, data + 1, -1, &itst->rcItem, DT_END_ELLIPSIS, &tp);					
 			}
 			else 

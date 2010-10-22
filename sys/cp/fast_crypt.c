@@ -44,9 +44,8 @@ typedef struct _req_item {
 	const char *in;
 	char       *out;
 	u64         offset;
-	callback_ex on_complete;
-	void       *param1;
-	void       *param2;
+	callback    on_complete;
+	void       *param;
 	xts_key    *key;
 	req_part    parts[MAX_CPU_COUNT];
 
@@ -60,7 +59,7 @@ static SLIST_HEADER          pool_head;
 static KSPIN_LOCK            pool_lock;
 static HANDLE                pool_threads[MAX_CPU_COUNT];
 
-static void dc_worker_thread(void *param)
+static void cp_worker_thread(void *param)
 {
 	SLIST_ENTRY *entry;
 	req_part    *part;
@@ -90,9 +89,8 @@ static void dc_worker_thread(void *param)
 			} else {
 				xts_decrypt(in, out, length, offset, item->key);
 			}
-			if (lock_xchg_add(&item->length, 0-length) == length)			
-			{
-				item->on_complete(item->param1, item->param2);
+			if (lock_xchg_add(&item->length, 0-length) == length) {
+				item->on_complete(item->param);
 				ExFreeToNPagedLookasideList(&pool_req_mem, item);
 			}
 		}	
@@ -101,17 +99,24 @@ static void dc_worker_thread(void *param)
 	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
-int dc_parallelized_crypt(
-	   int   is_encrypt, xts_key *key, callback_ex on_complete, void *param1, void *param2,
-	   const unsigned char *in, unsigned char *out, u32 len, u64 offset)
+void cp_parallelized_crypt(
+	   int   is_encrypt, xts_key *key, callback on_complete, 
+	   void *param, const unsigned char *in, unsigned char *out, u32 len, u64 offset)
 {
 	req_item *item;
 	req_part *part;
 	u32       part_sz;
 	u32       part_of;
 
-	if ( (item = ExAllocateFromNPagedLookasideList(&pool_req_mem)) == NULL) {
-		return 0;
+	if ( (len < F_OP_THRESOLD) ||
+		 ((item = ExAllocateFromNPagedLookasideList(&pool_req_mem)) == NULL) )
+	{
+		if (is_encrypt != 0) {
+			xts_encrypt(in, out, len, offset, key);
+		} else {
+			xts_decrypt(in, out, len, offset, key);
+		}
+		on_complete(param); return;
 	}
 	item->is_encrypt = is_encrypt;
 	item->length = len;
@@ -119,9 +124,8 @@ int dc_parallelized_crypt(
 	item->out = out;
 	item->offset      = offset;
 	item->on_complete = on_complete;
-	item->param1 = param1;
-	item->param2 = param2;
-	item->key    = key;
+	item->param = param;
+	item->key   = key;
 
 	part_sz = _align(len / dc_cpu_count, F_MIN_REQ);
 	part_of = 0; part = &item->parts[0];
@@ -138,41 +142,26 @@ int dc_parallelized_crypt(
 	} while (len != 0);
 
 	KeSetEvent(&pool_signal_event, IO_NO_INCREMENT, FALSE);
-	return 1;
 }
 
-static void dc_fast_op_complete(PKEVENT sync_event, void *param)
+static void cp_fast_complete(PKEVENT sync_event)
 {
 	KeSetEvent(sync_event, IO_NO_INCREMENT, FALSE);
 }
 
-void dc_fast_crypt_op(
+void cp_fast_crypt_op(
 		int   is_encrypt, xts_key *key,
 		const unsigned char *in, unsigned char *out, u32 len, u64 offset)
 {
 	KEVENT sync_event;
-	int    succs;
+	
+	KeInitializeEvent(&sync_event, NotificationEvent, FALSE);
 
-	if ( (len >= F_OP_THRESOLD) && (dc_cpu_count > 1) )
-	{
-		KeInitializeEvent(&sync_event, NotificationEvent, FALSE);
-
-		succs = dc_parallelized_crypt(
-			is_encrypt, key, dc_fast_op_complete, &sync_event, NULL, in, out, len, offset);
-		
-		if (succs != 0) {
-			KeWaitForSingleObject(&sync_event, Executive, KernelMode, FALSE, NULL);
-			return;
-		}
-	}
-	if (is_encrypt != 0) {
-		xts_encrypt(in, out, len, offset, key);
-	} else {
-		xts_decrypt(in, out, len, offset, key);
-	}
+	cp_parallelized_crypt(is_encrypt, key, cp_fast_complete, &sync_event, in, out, len, offset);		
+	KeWaitForSingleObject(&sync_event, Executive, KernelMode, FALSE, NULL);
 }
 
-void dc_free_fast_crypt()
+void cp_free_fast_crypt()
 {
 	int i;
 
@@ -194,7 +183,7 @@ void dc_free_fast_crypt()
 	ExDeleteNPagedLookasideList(&pool_req_mem);
 }
 
-int dc_init_fast_crypt()
+int cp_init_fast_crypt()
 {
 	int i;
 
@@ -213,8 +202,8 @@ int dc_init_fast_crypt()
 	/* start worker threads */
 	for (i = 0; i < dc_cpu_count; i++)
 	{
-		if (start_system_thread(dc_worker_thread, NULL, &pool_threads[i]) != ST_OK) {
-			dc_free_fast_crypt(); return ST_ERR_THREAD;
+		if (start_system_thread(cp_worker_thread, NULL, &pool_threads[i]) != ST_OK) {
+			cp_free_fast_crypt(); return ST_ERR_THREAD;
 		}
 	}
 	return ST_OK;

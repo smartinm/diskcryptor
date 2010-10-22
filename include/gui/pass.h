@@ -10,9 +10,9 @@
 
 typedef struct __pass_inf 
 {
-	int flags;      // character groups flags
-	int entropy;    // password entropy (in bits)
-	int length;     // password length
+	int    flags;      // character groups flags
+	double entropy;    // password entropy (in bits)
+	int    length;     // password length
 
 } _pass_inf;
 

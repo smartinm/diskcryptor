@@ -1,5 +1,5 @@
 [Main]
-Title=DiskCryptor 0.9
+Title=DiskCryptor 1.0
 Type=script
 Selected=True
 Level=5
@@ -25,7 +25,6 @@ Echo,"Copying files.."
 RunFromRam,True
 DirMake,"%ProgDir%"
 FileCopy,"%ScriptDir%\dcrypt.sys","%SysDrivers%"
-FileCopy,"%ScriptDir%\dc_fsf.sys","%SysDrivers%"
 FileCopy,"%ScriptDir%\dcrypt.exe","%ProgDir%"
 FileCopy,"%ScriptDir%\dccon.exe","%ProgDir%"
 FileCopy,"%ScriptDir%\dcapi.dll","%ProgDir%"
@@ -54,11 +53,6 @@ reg_add,0x4,"%reg%\ControlSet001\Services\dcrypt","Type","1"
 reg_add,0x4,"%reg%\ControlSet001\Services\dcrypt\config","Flags","0x82"
 reg_add,0x3,"%reg%\ControlSet001\Services\dcrypt\config","Hotkeys","00","00","00","00","00","00","00","00","00","00","00","00","00","00","00","00"
 reg_add,0x4,"%reg%\ControlSet001\Services\dcrypt\config","sysBuild","0"
-reg_add,0x1,"%reg%\ControlSet001\Services\dc_fsf","group","System Bus Extender"
-reg_add,0x4,"%reg%\ControlSet001\Services\dc_fsf","Type","2"
-reg_add,0x4,"%reg%\ControlSet001\Services\dc_fsf","Start","0"
-reg_add,0x4,"%reg%\ControlSet001\Services\dc_fsf","ErrorControl","3"
-reg_add,0x2,"%reg%\ControlSet001\Services\dc_fsf","ImagePath","System32\drivers\dc_fsf.sys"
 reg_add,0x7,"%reg%\ControlSet001\Control\Class\{71A27CDD-812A-11D0-BEC7-08002BE2092F}","LowerFilters","dcrypt"
 reg_add,0x7,"%reg%\ControlSet001\Control\Class\{4D36E965-E325-11CE-BFC1-08002BE10318}","UpperFilters","dcrypt"
 Hive_Unload,HKLM

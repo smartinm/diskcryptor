@@ -39,17 +39,15 @@
 #include "mem_lock.h"
 #include "fast_crypt.h"
 #include "debug.h"
-#include "fsf_control.h"
 #include "xts_aes_ni.h"
 #include "aes_padlock.h"
 #include "misc_mem.h"
+#include "minifilter.h"
 
-PDRIVER_OBJECT dc_driver;
 PDEVICE_OBJECT dc_device;
-u32            dc_os_type;	   
+int            dc_is_vista_or_later;	   
 u32            dc_io_count;
 u32            dc_dump_disable;
-u32            dc_no_usb_mount;
 u32            dc_conf_flags; /* config flags readed from registry  */
 u32            dc_load_flags; /* other flags setted by driver       */
 u32            dc_boot_kbs;   /* bootloader base memory size in kbs */
@@ -61,8 +59,8 @@ static dc_dispatch hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_forward_irp,    /* IRP_MJ_CREATE */
 	dc_forward_irp,    /* IRP_MJ_CREATE_NAMED_PIPE */
 	dc_forward_irp,    /* IRP_MJ_CLOSE */
-	dc_read_write_irp, /* IRP_MJ_READ */
-	dc_read_write_irp, /* IRP_MJ_WRITE */
+	io_read_write_irp, /* IRP_MJ_READ */
+	io_read_write_irp, /* IRP_MJ_WRITE */
 	dc_forward_irp,    /* IRP_MJ_QUERY_INFORMATION */
 	dc_forward_irp,    /* IRP_MJ_SET_INFORMATION */
 	dc_forward_irp,    /* IRP_MJ_QUERY_EA */
@@ -141,18 +139,10 @@ static void dc_automount_thread(void *param)
 	/* complete automounting */
 	dc_mount_all(NULL, 0);
 
-	/* delay 10 seconds before mounting USB devices on win2k, 
-	   because win2k USB stack contains bug */
-	if (dc_no_usb_mount != 0) {
-		dc_delay(10*1000); dc_no_usb_mount = 0;
-		dc_mount_all(NULL, 0);
-	}
-
 	/* clean cached passwords */
-	if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
+	if ( (dc_conf_flags & CONF_CACHE_PASSWORD) == 0 ) {
 		dc_clean_pass_cache();
 	}
-
 	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
@@ -161,14 +151,12 @@ void dc_reinit_routine(
 	   PDRIVER_OBJECT drv_obj, void *context, u32 count
 	   )
 {
-	/* connect to FS filter */
-	dc_fsf_connect();
-	dc_fsf_set_conf();
+	mf_init(drv_obj);
 
 	if (dc_conf_flags & CONF_AUTOMOUNT_BOOT) {
 		start_system_thread(dc_automount_thread, NULL, NULL);
 	} else {
-		dc_clean_pass_cache(); dc_no_usb_mount = 0;
+		dc_clean_pass_cache();
 	}
 }
 
@@ -226,7 +214,7 @@ static void dc_load_config(
 	}
 }
 
-static int dc_create_control_device()
+static int dc_create_control_device(PDRIVER_OBJECT drv_obj)
 {
 	UNICODE_STRING dev_name_u;
 	UNICODE_STRING dos_name_u;
@@ -241,7 +229,7 @@ static int dc_create_control_device()
 	do
 	{
 		status = IoCreateDevice(
-			dc_driver, 0, &dev_name_u, FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device);
+			drv_obj, 0, &dev_name_u, FILE_DEVICE_UNKNOWN, 0, FALSE, &dc_device);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_ERROR; break;
@@ -313,24 +301,15 @@ NTSTATUS
     IN PUNICODE_STRING RegistryPath
 	)
 {
-	NTSTATUS  status;
+	NTSTATUS  status = STATUS_DRIVER_INTERNAL_ERROR;
 	ULONG     maj_ver;
 	ULONG     min_ver;
 	KAFFINITY cpu_mask;
 	int       num;
 
 	PsGetVersion(&maj_ver, &min_ver, NULL, NULL);
+	dc_is_vista_or_later = (maj_ver >= 6);
 
-	dc_os_type = OS_UNK; 
-	status     = STATUS_DRIVER_INTERNAL_ERROR;
-	dc_driver  = DriverObject;
-
-	if ( (maj_ver == 5) && (min_ver == 0) ) {
-		dc_os_type = OS_WIN2K; dc_no_usb_mount = 1;
-	}
-	if (maj_ver >= 6) {
-		dc_os_type = OS_VISTA;
-	}	
 #ifdef DBG_MSG
 	dc_dbg_init();
 #endif
@@ -359,8 +338,8 @@ NTSTATUS
 	dc_init_devhook(); 
 	dc_init_mount();
 	mm_init(); 
-	mem_lock_init();
-	dc_init_rw();
+	mm_init_mem_lock();
+	io_init();
 	dc_get_boot_pass();
 	dc_check_base_mem();
 	
@@ -373,37 +352,34 @@ NTSTATUS
 	do
 	{
 		/* init random number generator */
-		if (rnd_init_prng() != ST_OK) {
+		if (cp_rand_init() != ST_OK) {
 			break;
 		}
 
 		/* initialize crashdump port driver hooking */
-		if (dump_hook_init() == 0) {
+		if (dump_hook_init(DriverObject) == 0) {
 			break;
 		}
 
-		if (dc_cpu_count > 1)
-		{
-			if (dc_init_fast_crypt() != ST_OK) {
-				break;
-			}
+		if (cp_init_fast_crypt() != ST_OK) {
+			break;
 		}
 
-		if (dc_create_control_device() != ST_OK) {
+		if (dc_create_control_device(DriverObject) != ST_OK) {
 			break;
 		}
 		status = STATUS_SUCCESS;
 		/* register reinit routine for complete automounting and clear cached passwords */
-		IoRegisterDriverReinitialization(dc_driver, dc_reinit_routine, NULL);
+		IoRegisterDriverReinitialization(DriverObject, dc_reinit_routine, NULL);
 	} while (0);
 
 	/* secondary reseed PRNG after all operations */
-	rnd_reseed_now();
+	cp_rand_reseed();
 
 	if (NT_SUCCESS(status) == FALSE) {
-		dc_free_fast_crypt();
+		cp_free_fast_crypt();
 		mm_uninit();
-		dc_free_rw();
+		io_free();
 	}
 	return status;
 }

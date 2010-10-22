@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2008-2009
+    * Copyright (c) 2008-2010
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -19,6 +19,7 @@
 */
 
 #include <ntifs.h>
+#include <ntddvol.h>
 #include "defines.h"
 #include "devhook.h"
 #include "misc_volume.h"
@@ -31,64 +32,9 @@
 #include "debug.h"
 #include "crypto_head.h"
 #include "misc_mem.h"
-
-static
-int dc_write_header(
-	  dev_hook *hook, dc_header *header, dc_pass *password
-	  )
-{
-	u8         salt[PKCS5_SALT_SIZE];
-	dc_header *t_header;
-	xts_key   *hdr_key;
-	int        resl;
-
-	t_header = NULL; hdr_key = NULL;
-	do
-	{
-		if ( (t_header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-		/* copy header to new buffer */
-		autocpy(t_header, header, sizeof(dc_header));
-
-		/* add volume header to random pool because RNG not 
-		   have sufficient entropy at boot time 
-		*/
-		rnd_add_buff(header, sizeof(dc_header));
-		/* generate new salt */
-		rnd_get_bytes(t_header->salt, PKCS5_SALT_SIZE);
-		/* save original salt */
-		autocpy(salt, t_header->salt, PKCS5_SALT_SIZE);
-		/* calc header CRC */
-		t_header->hdr_crc = crc32(pv(&t_header->version), DC_CRC_AREA_SIZE);
-
-		/* init new header key */
-		dc_init_hdr_key(
-			hdr_key, t_header, hook->crypt.cipher_id, password);
-				
-		/* encrypt header with new key */
-		xts_encrypt(
-			pv(t_header), pv(t_header), sizeof(dc_header), 0, hdr_key);
-
-		/* restore original salt */
-		autocpy(t_header->salt, salt, PKCS5_SALT_SIZE);
-
-		/* write new header */
-		resl = dc_device_rw(
-			hook, IRP_MJ_WRITE, t_header, sizeof(dc_header), 0);
-	} while (0);
-
-	/* prevent leaks */
-	zeroauto(salt, sizeof(salt));
-
-	if (hdr_key != NULL)  { mm_free(hdr_key); }
-	if (t_header != NULL) { mm_free(t_header); }
-
-	return resl;
-}
+#include "disk_info.h"
+#include "device_io.h"
+#include "header_io.h"
 
 int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 {
@@ -103,49 +49,29 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 		if ( (hook = dc_find_hook(dev_name)) == NULL ) {
 			resl = ST_NF_DEVICE; break;
 		}
-
 		wait_object_infinity(&hook->busy_lock);
 
 		if (hook->flags & (F_SYNC | F_UNSUPRT | F_DISABLE | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
-
-		/* get device params */
-		if ( (hook->dsk_size == 0) && (dc_get_dev_params(hook) != ST_OK) ) {
-			resl = ST_RW_ERR; break;
-		}
-
-		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
 		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-
-		resl = dc_device_rw(
-			hook, IRP_MJ_READ, header, sizeof(dc_header), 0);
-
-		if (resl != ST_OK) {
+		/* get device params */
+		if (hook->dsk_size == 0) {
+			if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) break;
+		}
+		if ( (resl = io_read_header(hook, &header, NULL, password)) != ST_OK ) {
 			break;
 		}
-
-		if (dc_decrypt_header(hdr_key, header, password) == 0) {
-			resl = ST_PASS_ERR; break;
-		}
-
 		/* generate new salt */
-		rnd_get_bytes(header->salt, PKCS5_SALT_SIZE);
+		cp_rand_bytes(header->salt, PKCS5_SALT_SIZE);
 		/* save original salt */
-		autocpy(salt, header->salt, PKCS5_SALT_SIZE);
-		
+		autocpy(salt, header->salt, PKCS5_SALT_SIZE);		
 		/* init new header key */
-		dc_init_hdr_key(
-			hdr_key, header, header->alg_1, password);
-		
+		cp_set_header_key(hdr_key, header->salt, header->alg_1, password);		
 		/* encrypt header with new key */
-		xts_encrypt(
-			pv(header), pv(header), sizeof(dc_header), 0, hdr_key);
-
+		xts_encrypt(pv(header), pv(header), sizeof(dc_header), 0, hdr_key);
 		/* restore original salt */
 		autocpy(header->salt, salt, PKCS5_SALT_SIZE);
 
@@ -158,13 +84,11 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	/* prevent leaks */
 	zeroauto(salt, sizeof(salt));
-
-	if (hdr_key != NULL) { mm_free(hdr_key); }
-	if (header != NULL)  { mm_free(header); }	
-
+	/* free memory */	
+	if (header != NULL) mm_free(header);
+	if (hdr_key != NULL) mm_free(hdr_key);
 	return resl;
 }
 
@@ -180,16 +104,14 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 		if ( (hook = dc_find_hook(dev_name)) == NULL ) {
 			resl = ST_NF_DEVICE; break;
 		}
-
 		wait_object_infinity(&hook->busy_lock);
 
 		if (hook->flags & (F_ENABLED | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
-
 		/* get device params */
-		if ( (hook->dsk_size == 0) && (dc_get_dev_params(hook) == 0) ) {
-			resl = ST_RW_ERR; break;
+		if (hook->dsk_size == 0) {
+			if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) break;
 		}
 		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
@@ -201,20 +123,19 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 			resl = ST_NOMEM; break;
 		}
 		/* decrypt header */
-		if (dc_decrypt_header(hdr_key, header, password) == 0) {
+		if (cp_decrypt_header(hdr_key, header, password) == 0) {
 			resl = ST_PASS_ERR; break;
 		}
-
-		/* write volume header */
-		resl = dc_write_header(hook, header, password);
+		/* write new volume header */
+		resl = io_write_header(hook, header, NULL, password);
 	} while (0);
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-	if (hdr_key != NULL) { mm_free(hdr_key); }
-	if (header != NULL)  { mm_free(header); }
+	if (hdr_key != NULL) mm_free(hdr_key);
+	if (header != NULL) mm_free(header);
 
 	return resl;
 }
@@ -252,8 +173,8 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 
 		/* get device params */
-		if (dc_get_dev_params(hook) != ST_OK) {
-			resl = ST_RW_ERR; break;
+		if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) {
+			break;
 		}
 
 		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
@@ -275,7 +196,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}		
 		/* lock volume */
 		status = ZwFsControlFile(
-					h_dev, NULL, NULL, NULL, &iosb, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0);
+			h_dev, NULL, NULL, NULL, &iosb, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0);
 
 		if (NT_SUCCESS(status) == FALSE) {
 			resl = ST_LOCK_ERR; break; 
@@ -295,28 +216,26 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		} else break;
 
 		/* wipe first sectors */
-		dc_wipe_process(&hook->wp_ctx, 0, DC_AREA_SIZE);
+		dc_wipe_process(&hook->wp_ctx, 0, hook->head_len);
 
 		/* create random temporary key */
-		rnd_get_bytes(key_buf, sizeof(key_buf));
+		cp_rand_bytes(key_buf, sizeof(key_buf));
 
 		xts_set_key(key_buf, crypt->cipher_id, tmp_key);
 
 		/* create volume header */
 		zeroauto(header, sizeof(dc_header));
 
-		rnd_get_bytes(pv(header->salt),     PKCS5_SALT_SIZE);
-		rnd_get_bytes(pv(&header->disk_id), sizeof(u32));
-		rnd_get_bytes(pv(header->key_1),    DISKKEY_SIZE);
+		cp_rand_bytes(pv(header->salt),     PKCS5_SALT_SIZE);
+		cp_rand_bytes(pv(&header->disk_id), sizeof(u32));
+		cp_rand_bytes(pv(header->key_1),    DISKKEY_SIZE);
 
-		header->sign     = DC_VOLM_SIGN;
-		header->version  = DC_HDR_VERSION;
-		header->alg_1    = crypt->cipher_id;
-		header->stor_off = hook->dsk_size - DC_AREA_SIZE;
-		header->use_size = header->stor_off;
+		header->sign    = DC_VOLM_SIGN;
+		header->version = DC_HDR_VERSION;
+		header->alg_1   = crypt->cipher_id;		
 
 		/* write volume header */
-		if ( (resl = dc_write_header(hook, header, password)) != ST_OK ) {
+		if ( (resl = io_write_header(hook, header, NULL, password)) != ST_OK ) {
 			break;
 		}
 		/* mount device */
@@ -325,7 +244,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}		
 		/* set hook fields */
 		hook->flags    |= F_FORMATTING;
-		hook->tmp_size  = DC_AREA_SIZE;
+		hook->tmp_size  = hook->head_len;
 		hook->tmp_buff  = buff;
 		hook->tmp_key   = tmp_key;
 	} while (0);
@@ -348,7 +267,6 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 	/* prevent leaks */
 	zeroauto(key_buf, sizeof(key_buf));
 	
-
 	if (h_dev != NULL)
 	{
 		if (resl != ST_LOCK_ERR)
@@ -418,10 +336,10 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 		/* zero buffer */
 		zerofast(buff, size);
 		/* encrypt buffer with temporary key */
-		dc_fast_encrypt(buff, buff, size, offs, hook->tmp_key);
+		cp_fast_encrypt(buff, buff, size, offs, hook->tmp_key);
 
 		/* write pseudo-random data to device */
-		resl = dc_device_rw(hook, IRP_MJ_WRITE, buff, size, offs);
+		resl = io_hook_rw(hook, buff, size, offs, 0);
 
 		if ( (resl == ST_OK) || (resl == ST_RW_ERR) ) {
 			hook->tmp_size += size;
@@ -435,7 +353,6 @@ int dc_format_step(wchar_t *dev_name, int wp_mode)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-
 	return resl;
 }
 
@@ -451,13 +368,11 @@ int dc_format_done(wchar_t *dev_name)
 		if ( (hook = dc_find_hook(dev_name)) == NULL ) {
 			resl = ST_NF_DEVICE; break;
 		}
-
 		wait_object_infinity(&hook->busy_lock);
 
 		if ( !(hook->flags & F_FORMATTING) ) {
 			resl = ST_ERROR; break;
 		}
-
 		/* set hook fields */
 		hook->tmp_size = 0;
 		hook->flags   &= ~F_FORMATTING;		
@@ -477,62 +392,40 @@ int dc_format_done(wchar_t *dev_name)
 
 int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 {
-	dc_header *header;
-	dev_hook  *hook    = NULL;
-	xts_key   *hdr_key = NULL;
+	dc_header *header = NULL;
+	dev_hook  *hook   = NULL;
 	int        wp_init = 0;
 	int        resl;
 	wipe_ctx   wipe;	
 	
-	header = NULL;
 	do
 	{
 		if ( (hook = dc_find_hook(dev_name)) == NULL ) {
 			resl = ST_NF_DEVICE; break;
 		}
-
 		wait_object_infinity(&hook->busy_lock);
 
 		if ( !(hook->flags & F_ENABLED) ) {
 			resl = ST_NO_MOUNT; break;
 		}
-
 		if (hook->flags & (F_SYNC | F_FORMATTING | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
-
-		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
-			resl = ST_NOMEM; break;
-		}
-
 		/* read old volume header */
-		resl = dc_device_rw(
-			hook, IRP_MJ_READ, header, sizeof(dc_header), 0);	
-		
-		if (resl != ST_OK) {			
+		if ( (resl = io_read_header(hook, &header, NULL, old_pass)) != ST_OK ) {
 			break;
 		}
-
-		/* decrypt volume header */
-		if (dc_decrypt_header(hdr_key, header, old_pass) == 0) {
-			resl = ST_PASS_ERR; break;
-		}
-
 		/* init data wipe */
-		resl = dc_wipe_init(
-			&wipe, hook, DC_AREA_SIZE, WP_GUTMANN, hook->crypt.cipher_id);
-
-		if (resl == ST_OK) {
+		if ( (resl = dc_wipe_init(
+			&wipe, hook, hook->head_len, WP_GUTMANN, hook->crypt.cipher_id)) == ST_OK )
+		{
 			wp_init = 1;
 		} else break;
 
 		/* wipe volume header */
-		dc_wipe_process(&wipe, 0, DC_AREA_SIZE);		
+		dc_wipe_process(&wipe, 0, hook->head_len);		
 		/* write new volume header */
-		resl = dc_write_header(hook, header, new_pass);
+		resl = io_write_header(hook, header, NULL, new_pass);
 	} while (0);
 
 	if (wp_init != 0) {
@@ -542,8 +435,39 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}	
-	if (hdr_key != NULL) { mm_free(hdr_key); }
-	if (header != NULL)  { mm_free(header); }
-	
+	if (header != NULL) mm_free(header);
 	return resl;
+}
+
+void dc_update_volume(dev_hook *hook)
+{
+	void *p_buff = NULL;
+	u64   old_sz = hook->dsk_size;
+
+	wait_object_infinity(&hook->busy_lock);
+
+	if (IS_STORAGE_ON_END(hook->flags) != 0)
+	{
+		if ( (p_buff = mm_alloc(hook->head_len, 0)) == NULL ) {
+			goto exit;
+		}
+		if (NT_SUCCESS(io_device_rw(hook->hook_dev, p_buff, hook->head_len, 0, 1)) == FALSE) {
+			goto exit;
+		}
+	}
+	if (io_hook_ioctl(hook, IOCTL_VOLUME_UPDATE_PROPERTIES, NULL, 0, NULL, 0) != ST_OK) {
+		goto exit;
+	}	
+	if ( (dc_fill_disk_info(hook) != ST_OK) || (hook->dsk_size == old_sz) ) {
+		goto exit;
+	} else {
+		hook->use_size += hook->dsk_size - old_sz;
+	}
+	if (p_buff != NULL) {
+		hook->stor_off = hook->dsk_size - hook->head_len;
+		io_device_rw(hook->hook_dev, p_buff, hook->head_len, 0, 0);
+	}
+exit:
+	if (p_buff != NULL) mm_free(p_buff);
+	KeReleaseMutex(&hook->busy_lock, FALSE);
 }

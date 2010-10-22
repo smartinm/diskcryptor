@@ -1,9 +1,6 @@
 #ifndef _DEVHOOK_
 #define _DEVHOOK_
 
-#include <ntdddisk.h>
-#include <ntddstor.h>
-#include <ntddvol.h>
 #include "defines.h"
 #include "xts_fast.h"
 #include "driver.h"
@@ -43,6 +40,8 @@ typedef align16 struct _dev_hook
 	u32            chg_count;    /* media changes counter */
 	u32            chg_mount;    /* mount changes counter */
 	u32            chg_last_v;   /* changes counter at last IOCTL_STORAGE_CHECK_VERIFY */
+	u32            io_depth;     /* depth of the I/O queue   */
+	u64            expect_off;   /* expected next I/O offset */
 
 	u32            max_chunk;
 	int            mnt_probed;
@@ -60,22 +59,16 @@ typedef align16 struct _dev_hook
 	u64            use_size; /* user available part size */
 	u32            bps;      /* bytes per sector */
 
-	u64            tmp_size;	
-	u64            stor_off;
-
+	u64            tmp_size; 
+	u64            stor_off; /* redirection area offset */
+	u32            head_len; /* DC header length */
+	
 	KMUTEX         busy_lock;
 	KMUTEX         key_lock;
 
 	int            sync_init_type;
 	int            sync_init_status; /* sync mode init status */
 
-	/* hook RW helper thread fields */
-	KEVENT         rw_init_event;
-	KEVENT         rw_work_event;
-	HANDLE         rw_thread;
-	LIST_ENTRY     rw_queue_head;
-	KSPIN_LOCK     rw_queue_lock;
-	
 	/* fields for synchronous requests processing */
 	LIST_ENTRY     sync_req_queue;
 	LIST_ENTRY     sync_irp_queue;

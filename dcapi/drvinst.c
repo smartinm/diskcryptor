@@ -287,7 +287,7 @@ static int dc_add_filter(wchar_t *key, wchar_t *name, int upper)
 	int  resl;
 	int  succs;
 
-	if (RegOpenKey(HKEY_LOCAL_MACHINE, key, &h_key) == 0) 
+	if (RegOpenKey(HKEY_LOCAL_MACHINE, key, &h_key) == 0)
 	{
 		if (upper != 0) {
 			succs = set_to_val(h_key, upf_str, name);
@@ -313,15 +313,12 @@ int dc_remove_driver()
 		/* remove CDROM class filter */
 		dc_remove_filter(cdr_key, drv_dc);
 
-		/* delete drivers files */
+		/* delete drivers file */
 		dc_get_driver_path(buf, drv_dc);
 		DeleteFile(buf);
-		dc_get_driver_path(buf, drv_fsf);
-		DeleteFile(buf);
 
-		/* remove services */
-		succs &= (dc_remove_service(drv_dc)  == ST_OK);
-		succs &= (dc_remove_service(drv_fsf) == ST_OK);
+		/* remove service */
+		succs &= (dc_remove_service(drv_dc) == ST_OK);		
 	} while(0);
 
 	return (succs != 0) ? ST_OK : ST_ERROR;
@@ -344,7 +341,7 @@ static int dc_add_service(wchar_t *name, u32 type)
 
 		h_svc = CreateService(
 			h_scm, name, NULL, SERVICE_ALL_ACCESS, type, SERVICE_BOOT_START, 
-			SERVICE_ERROR_CRITICAL, buf, L"Filter", NULL, NULL, NULL, NULL);
+			SERVICE_ERROR_CRITICAL, buf, L"Filter", NULL, L"FltMgr", NULL, NULL);
 
 		if (h_svc == NULL) {
 			resl = ST_SCM_ERROR;
@@ -363,6 +360,35 @@ static int dc_add_service(wchar_t *name, u32 type)
 	return resl;
 }
 
+static int dc_add_altitude()
+{
+	HKEY hkey1 = NULL;
+	HKEY hkey2 = NULL;
+	int  succs = 0;
+	u32  flags = 0;
+
+	if (RegCreateKey(
+		HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Services\\dcrypt\\Instances", &hkey1) != 0) 
+	{
+		goto exit;
+	}
+	if (RegSetValueEx(hkey1, L"DefaultInstance", 0, REG_SZ, pv(L"dcrypt"), sizeof(L"dcrypt")) != 0) {
+		goto exit;
+	}
+	if (RegCreateKey(hkey1, L"dcrypt", &hkey2) != 0) {
+		goto exit;
+	}
+	if (RegSetValueEx(hkey2, L"Altitude", 0, REG_SZ, pv(L"87150"), sizeof(L"87150")) != 0) {
+		goto exit;
+	}
+	succs = RegSetValueEx(hkey2, L"Flags", 0, REG_DWORD, pv(&flags), sizeof(flags)) == 0;
+
+	if (hkey2 != NULL) RegCloseKey(hkey2);
+	if (hkey1 != NULL) RegCloseKey(hkey1);
+exit:
+	return succs != 0 ? ST_OK : ST_REG_ERROR;
+}
+
 int dc_install_driver()
 {
 	dc_conf_data conf;
@@ -373,24 +399,22 @@ int dc_install_driver()
 		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
 			break;
 		}
-		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
-			break;
-		}
 		if ( (resl = dc_add_service(drv_dc, SERVICE_KERNEL_DRIVER)) != ST_OK ) {
-			break;
-		}
-		if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
 			break;
 		}
 		/* add Volume class filter */
 		if ( (resl = dc_add_filter(vol_key, drv_dc, 0)) != ST_OK ) {
 			break;
 		}
+		/* add Altitude */
+		if ( (resl = dc_add_altitude()) != ST_OK ) {
+			break;
+		}
 		/* add CDROM class filter */
 		dc_add_filter(cdr_key, drv_dc, 1);
 		/* setup default config */
 		zeroauto(&conf, sizeof(conf));
-		conf.conf_flags = (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
+		conf.conf_flags = CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT | CONF_ENABLE_SSD_OPT;
 		
 		resl = dc_save_conf(&conf);
 	} while (0);
@@ -436,16 +460,19 @@ int dc_update_driver()
 		if ( (resl = dc_save_drv_file(drv_dc)) != ST_OK ) {
 			break;
 		}
-		if ( (resl = dc_save_drv_file(drv_fsf)) != ST_OK ) {
-			break;
-		}
 		if ( (resl = dc_load_conf(&conf)) != ST_OK ) {
 			break;
 		}
-		if (conf.build < 331) 
+		if (conf.build < 692) 
 		{
-			/* install file system filter driver */
-			if ( (resl = dc_add_service(drv_fsf, SERVICE_FILE_SYSTEM_DRIVER)) != ST_OK ) {
+			/* remove old file system filter driver */
+			if (dc_remove_service(drv_fsf) == ST_OK)
+			{
+				dc_get_driver_path(buff, drv_fsf);
+				DeleteFile(buff);
+			}
+			/* add Altitude */
+			if ( (resl = dc_add_altitude()) != ST_OK ) {
 				break;
 			}
 		}
@@ -454,7 +481,10 @@ int dc_update_driver()
 			/* add CDROM class filter */
 			dc_add_filter(cdr_key, drv_dc, 1);
 			/* set new default flags */
-			conf.conf_flags |= (CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT);
+			conf.conf_flags |= CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT;
+		}
+		if (conf.build < 642) {
+			conf.conf_flags |= CONF_ENABLE_SSD_OPT;
 		}
 		resl = dc_save_conf(&conf);
 	} while (0);
