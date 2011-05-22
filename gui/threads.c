@@ -259,7 +259,7 @@ _dact *_create_act_thread(
 		if ( !exist )
 		{
 			act = malloc(sizeof(_dact));
-			zeroauto(act, sizeof(_dact));
+			memset(act, 0, sizeof(_dact));
 		
 			act->wp_mode = node->mnt.info.status.crypt.wp_mode;
 			wcsncpy( act->device, node->mnt.info.device, MAX_PATH );

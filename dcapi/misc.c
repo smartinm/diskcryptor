@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2008
+	* Copyright (c) 2008-2011
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * partial copyright Juergen Schmied and Jon Griffiths
 
@@ -238,7 +238,7 @@ void secure_free(void *mem)
 	size_t   s_size = s_mem->size;
 
 	/* zero memory to prevent leaks */
-	zeromem(s_mem, s_size);
+	burn(s_mem, s_size);
 
 	/* unlock region */
 	if (dc_unlock_memory(s_mem) != ST_OK)
@@ -398,7 +398,7 @@ int dc_disk_read(dc_disk_p *dp, void *buff, int size, u64 offset)
 	if (p_buff != buff)
 	{
 		if (resl == ST_OK) {
-			fastcpy(buff, p_buff + b_offs, size);
+			memcpy(buff, p_buff + b_offs, size);
 		}
 		free(p_buff);
 	}
@@ -444,7 +444,7 @@ int dc_disk_write(dc_disk_p *dp, void *buff, int size, u64 offset)
 				resl = ST_IO_ERROR; break;
 			}
 
-			fastcpy(p_buff + b_offs, buff, size);
+			memcpy(p_buff + b_offs, buff, size);
 
 			SetFilePointer(
 				dp->hdisk, d32(n_offs), &p32(&n_offs)[1], FILE_BEGIN);
@@ -562,3 +562,11 @@ int dc_format_fs(wchar_t *root, wchar_t *fs)
 
 	return resl;
 }
+
+#ifdef _M_IX86
+long _stdcall save_fpu_state(unsigned char state[32]) {
+	return 0;
+}
+void _stdcall load_fpu_state(unsigned char state[32]) {
+}
+#endif

@@ -246,7 +246,7 @@ _keyfiles_dlg_proc(
 						if ( (rlt = dc_get_random(keyfile, sizeof(keyfile))) == ST_OK ) 
 						{
 							rlt = save_file(s_file, keyfile, sizeof(keyfile));
-							zeroauto(keyfile, sizeof(keyfile));
+							burn(keyfile, sizeof(keyfile));
 						}
 						if ( rlt == ST_OK )
 						{							

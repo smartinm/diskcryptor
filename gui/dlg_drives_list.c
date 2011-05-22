@@ -231,7 +231,7 @@ void _list_devices(
 	ldr_config conf;
 	_dnode *root = malloc(sizeof(_dnode));
 
-	zeroauto( root, sizeof(_dnode) );
+	memset( root, 0, sizeof(_dnode) );
 	root->is_root = TRUE;
 
 	_init_list_headers( h_list, _boot_headers );

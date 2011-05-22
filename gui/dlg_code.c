@@ -318,7 +318,7 @@ LPARAM _get_item_index(
 	)
 {
 	LVITEM lvi;
-	zeroauto( &lvi, sizeof(LVITEM) );
+	memset( &lvi, 0, sizeof(LVITEM) );
 
 	lvi.mask  = LVIF_PARAM;
 	lvi.iItem = item;

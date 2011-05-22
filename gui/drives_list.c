@@ -51,10 +51,10 @@ _add_drive_node(
 	if ( mnt == NULL )
 	{
 		mnt = malloc( sizeof(_dnode) );
-		zeroauto( mnt, sizeof(_dnode) );
+		memset( mnt, 0, sizeof(_dnode) );
 	}
 	mnt->exists = TRUE;
-	autocpy( &mnt->mnt.info, vol, sizeof(vol_inf) );
+	memcpy( &mnt->mnt.info, vol, sizeof(vol_inf) );
 
 	_snwprintf( path, sizeof_w(path), L"%s\\", vol->status.mnt_point );
 	GetVolumeInformation( path, label, sizeof_w(label), 0, 0, 0, fs, sizeof_w(fs) );
@@ -83,15 +83,15 @@ _add_drive_node(
 			}
 		}
 		mnt->is_root = FALSE;
-		autocpy( &mnt->root.info, new_drv, sizeof(drive_inf) );
+		memcpy( &mnt->root.info, new_drv, sizeof(drive_inf) );
 
 		if (! root_exists )
 		{
 			root = malloc(sizeof(_dnode));	
 			root->is_root = TRUE;
 
-			autocpy(&root->mnt.info, vol, sizeof(vol_inf));
-			autocpy(&root->root.info, new_drv, sizeof(drive_inf));
+			memcpy(&root->mnt.info, vol, sizeof(vol_inf));
+			memcpy(&root->root.info, new_drv, sizeof(drive_inf));
 
 			wcscpy(root->root.dsk_name, drvname);
 			root->root.dsk_num = disk_number;	

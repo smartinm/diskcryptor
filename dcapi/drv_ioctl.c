@@ -208,7 +208,7 @@ int dc_mount_volume(wchar_t *device, dc_pass *password, int flags)
 		wcscpy(dctl->device, device); dctl->flags = flags;
 
 		if (password != NULL) {
-			autocpy(&dctl->passw1, password, sizeof(dc_pass));
+			memcpy(&dctl->passw1, password, sizeof(dc_pass));
 		}
 
 		succs = DeviceIoControl(
@@ -243,7 +243,7 @@ int dc_mount_all(dc_pass *password, int *mounted, int flags)
 		}
 
 		if (password != NULL) {
-			autocpy(&dctl->passw1, password, sizeof(dc_pass));			
+			memcpy(&dctl->passw1, password, sizeof(dc_pass));			
 		}
 
 		dctl->flags = flags;
@@ -347,7 +347,7 @@ int dc_add_password(dc_pass *password)
 			resl = ST_NOMEM; break;
 		}
 
-		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+		memcpy(&dctl->passw1, password, sizeof(dc_pass));
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_CTL_ADD_PASS,
@@ -381,7 +381,7 @@ int dc_start_encrypt(wchar_t *device, dc_pass *password, crypt_info *crypt)
 		}
 
 		wcscpy(dctl->device, device);
-		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+		memcpy(&dctl->passw1, password, sizeof(dc_pass));
 		
 		dctl->crypt = crypt[0];
 
@@ -417,7 +417,7 @@ int dc_start_re_encrypt(wchar_t *device, dc_pass *password, crypt_info *crypt)
 		}
 
 		wcscpy(dctl->device, device);
-		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+		memcpy(&dctl->passw1, password, sizeof(dc_pass));
 
 		dctl->crypt = crypt[0];
 
@@ -453,7 +453,7 @@ int dc_start_decrypt(wchar_t *device, dc_pass *password)
 		}
 
 		wcscpy(dctl->device, device);
-		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+		memcpy(&dctl->passw1, password, sizeof(dc_pass));
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_CTL_DECRYPT_START,
@@ -489,8 +489,8 @@ int dc_change_password(
 		}
 
 		wcscpy(dctl->device, device);
-		autocpy(&dctl->passw1, old_pass, sizeof(dc_pass));
-		autocpy(&dctl->passw2, new_pass, sizeof(dc_pass));
+		memcpy(&dctl->passw1, old_pass, sizeof(dc_pass));
+		memcpy(&dctl->passw2, new_pass, sizeof(dc_pass));
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_CTL_CHANGE_PASS,
@@ -648,20 +648,15 @@ int dc_get_random(void *data, int size)
 	}
 }
 
-int dc_benchmark(crypt_info *crypt, dc_bench *info)
+int dc_benchmark(int cipher, dc_bench_info *info)
 {
 	u32 bytes;
 	int succs;
 
-	succs = DeviceIoControl(
-		TlsGetValue(h_tls_idx), DC_CTL_BENCHMARK, 
-		crypt, sizeof(crypt_info), info, sizeof(dc_bench), &bytes, NULL);
+	succs = DeviceIoControl(TlsGetValue(h_tls_idx), DC_CTL_BENCHMARK, 
+		&cipher, sizeof(cipher), info, sizeof(dc_bench_info), &bytes, NULL);
 
-	if (succs == 0) {
-		return ST_ERROR;
-	} else {
-		return ST_OK;
-	}
+	return succs != 0 ? ST_OK : ST_ERROR;
 }
 
 int dc_get_conf_flags(dc_conf *conf)
@@ -771,7 +766,7 @@ int dc_start_format(wchar_t *device, dc_pass *password, crypt_info *crypt)
 		}
 
 		wcscpy(dctl->device, device);
-		autocpy(&dctl->passw1, password, sizeof(dc_pass));
+		memcpy(&dctl->passw1, password, sizeof(dc_pass));
 
 		dctl->crypt = crypt[0];
 
@@ -834,7 +829,7 @@ int dc_backup_header(wchar_t *device, dc_pass *password, void *out)
 		}
 
 		wcscpy(back->device, device);
-		autocpy(&back->pass, password, sizeof(dc_pass));
+		memcpy(&back->pass, password, sizeof(dc_pass));
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_BACKUP_HEADER,
@@ -844,7 +839,7 @@ int dc_backup_header(wchar_t *device, dc_pass *password, void *out)
 			resl = ST_ERROR; break;
 		}
 
-		autocpy(out, back->backup, DC_AREA_SIZE);
+		memcpy(out, back->backup, DC_AREA_SIZE);
 		resl = back->status;
 	} while (0);
 
@@ -869,8 +864,8 @@ int dc_restore_header(wchar_t *device, dc_pass *password, void *in)
 		}
 
 		wcscpy(back->device, device);
-		autocpy(&back->pass, password, sizeof(dc_pass));
-		autocpy(back->backup, in, DC_AREA_SIZE);
+		memcpy(&back->pass, password, sizeof(dc_pass));
+		memcpy(back->backup, in, DC_AREA_SIZE);
 
 		succs = DeviceIoControl(
 			TlsGetValue(h_tls_idx), DC_RESTORE_HEADER,

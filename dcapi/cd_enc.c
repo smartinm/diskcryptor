@@ -151,7 +151,7 @@ int dc_encrypt_cd(
 		}
 
 		/* create volume header */
-		zeroauto(&head, sizeof(dc_header));
+		memset(&head, 0, sizeof(dc_header));
 
 		dc_get_random(pv(salt),          PKCS5_SALT_SIZE);
 		dc_get_random(pv(&head.disk_id), sizeof(u32));
@@ -178,7 +178,7 @@ int dc_encrypt_cd(
 		xts_encrypt(pv(&head), pv(&head), sizeof(dc_header), 0, h_key);
 
 		/* save salt */
-		autocpy(head.salt, salt, PKCS5_SALT_SIZE);
+		memcpy(head.salt, salt, PKCS5_SALT_SIZE);
 
 		/* write volume header to file */
 		if (WriteFile(h_dst, &head, sizeof(head), &bytes, NULL) == 0) {
@@ -189,19 +189,19 @@ int dc_encrypt_cd(
 	} while (0);
 
 	/* prevent leaks */
-	zeroauto(dk, sizeof(dk));
-	zeroauto(&head, sizeof(head));
+	burn(dk, sizeof(dk));
+	burn(&head, sizeof(head));
 	dc_unlock_memory(dk);
 	dc_unlock_memory(&head);
 
 	if (v_key != NULL) {
-		zeroauto(v_key, sizeof(xts_key));
+		burn(v_key, sizeof(xts_key));
 		dc_unlock_memory(v_key);
 		VirtualFree(v_key, 0, MEM_RELEASE);
 	}
 
 	if (h_key != NULL) {
-		zeroauto(h_key, sizeof(xts_key));
+		burn(h_key, sizeof(xts_key));
 		dc_unlock_memory(h_key);
 		VirtualFree(h_key, 0, MEM_RELEASE);
 	}

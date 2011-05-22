@@ -2,7 +2,11 @@
 #include "bios.h"
 #include "hdd_io.h"
 #include "boot_hook.h"
+#ifdef AES_ONLY
+#include "xts_small_aes.h"
+#else
 #include "xts_small.h"
+#endif
 
 static u16 intersect(u64 *i_st, u64 start1, u32 size1, u64 start2, u64 size2)
 {
@@ -152,18 +156,18 @@ int dc_disk_io(int hdd_n, void *buff, u16 sectors, u64 start, int read)
 			  (start == 0) && (read == 0) ) 
 		{
 			/* save old buffer */
-			autocpy(old, buff, SECTOR_SIZE);
+			mincpy(old, buff, SECTOR_SIZE);
 			/* read my MBR */
 			hdd_io(hdd_n, buff, 1, 0, 1);
 			/* copy partition table to MBR */
-			autocpy(p8(buff) + 432, old + 432, 80);
+			mincpy(p8(buff) + 432, old + 432, 80);
 			saved = 1;
 		}
 		res = hdd_io(hdd_n, buff, sectors, start, read);
 
 		if (saved != 0) {
 			/* restore old buffer */
-			autocpy(buff, old, SECTOR_SIZE);
+			mincpy(buff, old, SECTOR_SIZE);
 		}
 	}
 	return res;

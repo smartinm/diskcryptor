@@ -190,7 +190,7 @@ int on_app_start(
 						path, sizeof_w(path), L"\"%s\" -p%u", name, (u32)(pbi.InheritedFromUniqueProcessId)
 						);
 
-					zeroauto( &si, sizeof(si) );
+					memset( &si, 0, sizeof(si) );
 					si.cb = sizeof(si);
 
 #ifdef LOG_FILE

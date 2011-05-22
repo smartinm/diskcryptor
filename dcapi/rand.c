@@ -99,7 +99,7 @@ static void seed_send()
 	dc_add_seed(seed_buff, seed_size);
 
 	/* prevent leaks */
-	zeroauto(seed_buff, SEED_MAX);
+	burn(seed_buff, SEED_MAX);
 	seed_size = 0;
 }
 
@@ -116,7 +116,7 @@ void seed_collect(u8 *data, int size)
 	}
 
 	/* prevent leaks */
-	zeromem(data, size);
+	burn(data, size);
 }
 
 
@@ -155,7 +155,7 @@ static LRESULT CALLBACK rnd_mouse_hook(int code, WPARAM wparam,  LPARAM lparam)
 		seed.seed1 = __rdtsc();
 		seed.seed2 = wparam;
 		seed.seed3 = lparam;
-		autocpy(&seed.seed4, pv(lparam), sizeof(MOUSEHOOKSTRUCT));
+		memcpy(&seed.seed4, pv(lparam), sizeof(MOUSEHOOKSTRUCT));
 
 		seed_collect(pv(&seed), sizeof(seed));
 

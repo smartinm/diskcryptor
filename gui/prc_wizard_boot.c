@@ -120,7 +120,7 @@ int _init_boot_config(
 	}
 
 	d_tab = malloc(sizeof(_tab_data));
-	zeroauto( d_tab, sizeof(_tab_data) );
+	memset( d_tab, 0, sizeof(_tab_data) );
 	
 	wnd_set_long(hwnd, GWL_USERDATA, d_tab);
 
@@ -333,7 +333,7 @@ int _save_boot_config(
 				int   keysize;
 				byte *keyfile;
 
-				zeroauto( conf->emb_key, sizeof(conf->emb_key) );
+				memset( conf->emb_key, 0, sizeof(conf->emb_key) );
 				set_flag( conf->logon_type, LT_EMBED_KEY, 0 );
 
 				if ( load_file(_first_keyfile(KEYLIST_EMBEDDED)->path, &keyfile, &keysize) != ST_OK )
@@ -342,14 +342,14 @@ int _save_boot_config(
 					rlt = ST_ERROR;
 				} else 
 				{
-					autocpy( &conf->emb_key, keyfile, sizeof(conf->emb_key) );
+					memcpy( &conf->emb_key, keyfile, sizeof(conf->emb_key) );
 					set_flag( conf->logon_type, LT_EMBED_KEY, 1 );
 				}				
-				zeromem(keyfile, keysize);
+				burn(keyfile, keysize);
 				free(keyfile);							
 			}
 		} else {
-			zeroauto(conf->emb_key, sizeof(conf->emb_key));
+			memset(conf->emb_key, 0, sizeof(conf->emb_key));
 		}
 	}
 	///////////////////////////////////////////////////////////////

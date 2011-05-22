@@ -48,7 +48,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -73,7 +73,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
 				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
 				AdditionalLibraryDirectories="..\lib\i386"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
@@ -139,7 +138,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
 				BasicRuntimeChecks="3"
@@ -166,7 +165,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
 				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
 				AdditionalLibraryDirectories="..\lib\amd64"
 				ManifestFile="$(OutDir)\obj\$(ProjectName)\$(TargetFileName).intermediate.manifest"
@@ -231,7 +229,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
 				RuntimeLibrary="2"
@@ -257,7 +255,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
 				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\lib\i386"
@@ -323,7 +320,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="1"
-				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;DCAPI_DLL;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0600;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
 				RuntimeLibrary="2"
@@ -350,7 +347,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				LinkLibraryDependencies="false"
 				AdditionalOptions="user32.lib psapi.lib advapi32.lib kernel32.lib"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\lib\amd64"
@@ -427,462 +423,6 @@
 				RelativePath=".\rand.c"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\aes_key.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\crc32.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\pkcs5.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\serpent.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\sha512.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\twofish.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\xts_fast.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\xts_serpent_sse2.c"
-					>
-					<FileConfiguration
-						Name="Debug|Win32"
-						ExcludedFromBuild="true"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Debug|x64"
-						ExcludedFromBuild="true"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release|Win32"
-						ExcludedFromBuild="true"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release|x64"
-						ExcludedFromBuild="true"
-						>
-						<Tool
-							Name="VCCLCompilerTool"
-						/>
-					</FileConfiguration>
-				</File>
-				<Filter
-					Name="i386"
-					>
-					<File
-						RelativePath="..\crypto\i386\aes_i386.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\aes_padlock_i386.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\twofish_i386.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\xts_aes_ni_i386.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\i386\xts_serpent_sse2_i386.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
-				<Filter
-					Name="amd64"
-					>
-					<File
-						RelativePath="..\crypto\amd64\aes_amd64.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\amd64\aes_padlock_amd64.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\amd64\twofish_amd64.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\amd64\xts_aes_ni_amd64.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;&#x0D;&#x0A;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="..\crypto\amd64\xts_serpent_sse2_amd64.asm"
-						>
-						<FileConfiguration
-							Name="Debug|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Debug|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|Win32"
-							ExcludedFromBuild="true"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-							/>
-						</FileConfiguration>
-						<FileConfiguration
-							Name="Release|x64"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -m amd64 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
-			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -948,54 +488,6 @@
 				RelativePath="..\include\version.h"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\aes_asm.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\aes_key.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\aes_padlock.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\crc32.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\pkcs5.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\serpent.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\sha512.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\twofish.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\xts_aes_ni.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\xts_fast.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\xts_serpent_sse2.h"
-					>
-				</File>
-			</Filter>
 		</Filter>
 		<Filter
 			Name="Resource Files"

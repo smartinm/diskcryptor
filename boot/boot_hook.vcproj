@@ -48,7 +48,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories="..\include;..\include\boot;..\crypto\small"
+				AdditionalIncludeDirectories="..\include;..\include\boot;..\crypto\crypto_small"
 				PreprocessorDefinitions="BOOT_LDR"
 				StringPooling="true"
 				RuntimeLibrary="2"
@@ -134,43 +134,6 @@
 				RelativePath=".\hdd_io.c"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\small\aes_small.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\serpent_small.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\twofish_small.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\xts_small.c"
-					>
-				</File>
-				<Filter
-					Name="i386"
-					>
-					<File
-						RelativePath="..\crypto\small\aes_padlock_small.asm"
-						>
-						<FileConfiguration
-							Name="Release|Win32"
-							>
-							<Tool
-								Name="VCCustomBuildTool"
-								CommandLine="yasm -Xvc -f win32 -o &quot;$(OutDir)\obj\$(ProjectName)\$(InputName).obj&quot; &quot;$(InputPath)&quot;"
-								Outputs="$(OutDir)\obj\$(ProjectName)\$(InputName).obj"
-							/>
-						</FileConfiguration>
-					</File>
-				</Filter>
-			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -197,30 +160,6 @@
 				RelativePath="..\include\boot\hdd_io.h"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\small\aes_padlock_small.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\aes_small.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\serpent_small.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\twofish_small.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\xts_small.h"
-					>
-				</File>
-			</Filter>
 		</Filter>
 	</Files>
 	<Globals>

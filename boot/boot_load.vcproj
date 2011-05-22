@@ -49,7 +49,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories="..\include;..\include\boot;..\crypto\small"
+				AdditionalIncludeDirectories="..\include;..\include\boot;..\crypto\crypto_small"
 				PreprocessorDefinitions="BOOT_LDR"
 				StringPooling="true"
 				RuntimeLibrary="2"
@@ -147,18 +147,6 @@
 				RelativePath=".\misc.c"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\small\pkcs5_small.c"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\sha512_small.c"
-					>
-				</File>
-			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -201,18 +189,6 @@
 				RelativePath="..\include\boot\misc.h"
 				>
 			</File>
-			<Filter
-				Name="crypto"
-				>
-				<File
-					RelativePath="..\crypto\small\pkcs5_small.h"
-					>
-				</File>
-				<File
-					RelativePath="..\crypto\small\sha512_small.h"
-					>
-				</File>
-			</Filter>
 		</Filter>
 	</Files>
 	<Globals>

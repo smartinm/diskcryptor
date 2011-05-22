@@ -18,20 +18,19 @@ int dc_decrypt_header(xts_key *hdr_key, dc_header *header, dc_pass *password)
 	{
 		btab->p_xts_set_key(dk, i, hdr_key);
 
-		btab->p_xts_decrypt(
-			pv(header), pv(&hcopy), sizeof(dc_header), 0, hdr_key);
+		btab->p_xts_decrypt(pv(header), pv(&hcopy), sizeof(dc_header), 0, hdr_key);
 
 		/* Magic 'DCRP' */
 		if (hcopy.sign != DC_VOLM_SIGN) {
 			continue;
 		}
 		/* copy decrypted part to output */
-		autocpy(&header->sign, &hcopy.sign, DC_ENCRYPTEDDATASIZE);
+		mincpy(&header->sign, &hcopy.sign, DC_ENCRYPTEDDATASIZE);
 		succs = 1; break;
 	}
 	/* prevent leaks */
-	zeroauto(dk, sizeof(dk));
-	zeroauto(&hcopy, sizeof(dc_header));
+	burn(dk, sizeof(dk));
+	burn(&hcopy, sizeof(dc_header));
 
 	return succs;
 }

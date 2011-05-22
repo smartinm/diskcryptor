@@ -1,7 +1,11 @@
 #ifndef _BOOT_VTAB_H_
 #define _BOOT_VTAB_H_
 
+#ifdef AES_ONLY
+#include "xts_small_aes.h"
+#else
 #include "xts_small.h"
+#endif
 #include "bios.h"
 #include "boot_hook.h"
 #include "hdd.h"

@@ -127,7 +127,7 @@ _main_dialog_proc(
 				HWND       h_tab    = GetDlgItem(hwnd, IDT_INFO);
 				_tab_data *d_tab    = malloc(sizeof(_tab_data));
 
-				zeroauto( d_tab, sizeof(_tab_data) );
+				memset( d_tab, 0, sizeof(_tab_data) );
 				d_tab->curr_tab = 1;
 
 				wnd_set_long( hwnd, GWL_USERDATA, d_tab );

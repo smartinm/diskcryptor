@@ -580,7 +580,7 @@ dc_pass* dc_load_pass_and_keyfiles(
 		plen       = wcslen(cmde) * sizeof(wchar_t);
 		pass->size = d32(min(plen, MAX_PASSWORD * sizeof(wchar_t)));
 		mincpy(&pass->pass, cmde, pass->size);
-		zeromem(cmde, plen); clean = 1;
+		memset(cmde, 0, plen); clean = 1;
 	} else 
 	{
 		wprintf(gp_msg);
@@ -598,7 +598,7 @@ dc_pass* dc_load_pass_and_keyfiles(
 			printf("Keyfiles not loaded, error %d\n", resl);
 			secure_free(pass); pass = NULL;
 		}
-		zeromem(cmde, wcslen(cmde) * sizeof(wchar_t)); 
+		burn(cmde, wcslen(cmde) * sizeof(wchar_t)); 
 		clean = 1;
 	}
 
@@ -1279,33 +1279,23 @@ int wmain(int argc, wchar_t *argv[])
 
 		if ( (argc >= 2) && (wcscmp(argv[1], L"-benchmark") == 0) ) 
 		{
-			dc_bench   info;
-			crypt_info crypt;
-			bench_item bench[CF_CIPHERS_NUM];
-			int        i, n = 0;			
+			dc_bench_info info;
+			bench_item    bench[CF_CIPHERS_NUM];
+			int           i;			
 
-			for (i = 0; i < CF_CIPHERS_NUM; i++)
-			{
-				crypt.cipher_id = i;
-
-				if (dc_benchmark(&crypt, &info) != ST_OK) {
-					break;
-				}
-
-				bench[n].alg   = dc_get_cipher_name(i);
-				bench[n].speed = (double)info.data_size / 
-						( (double)info.enc_time / (double)info.cpu_freq) / 1024 / 1024;
-				n++;
+			for (i = 0; i < CF_CIPHERS_NUM; i++) {
+				if (dc_benchmark(i, &info) != ST_OK) break;
+				bench[i].alg   = dc_get_cipher_name(i);
+				bench[i].speed = (double)info.datalen / ( (double)info.enctime / (double)info.cpufreq) / 1024 / 1024;
 			}
-
-			qsort(&bench, n, sizeof(bench[0]), dc_bench_cmp);
+			qsort(&bench, CF_CIPHERS_NUM, sizeof(bench[0]), dc_bench_cmp);
 
 			wprintf(
 				L"---------------------+--------------\n"
 				L"        cipher       |     speed\n"
 				L"---------------------+--------------\n");			
 
-			for (i = 0; i < n; i++) {
+			for (i = 0; i < CF_CIPHERS_NUM; i++) {
 				wprintf(L" %-19s | %-.2f mb/s\n", bench[i].alg, bench[i].speed);
 			}
 			resl = ST_OK; break;
@@ -1382,7 +1372,7 @@ int wmain(int argc, wchar_t *argv[])
 
 			/* prevent leaks */
 			if (backup != NULL) {
-				zeroauto(backup, DC_AREA_SIZE);
+				burn(backup, DC_AREA_SIZE);
 				free(backup);
 			}
 
@@ -1473,7 +1463,7 @@ int wmain(int argc, wchar_t *argv[])
 			}
 			resl = save_file(argv[2], kf, sizeof(kf));
 			/* prevent leaks */
-			zeroauto(kf, sizeof(kf));
+			burn(kf, sizeof(kf));
 		}
 
 		if ( (argc >= 2) && (wcscmp(argv[1], L"-bsod") == 0) ) 

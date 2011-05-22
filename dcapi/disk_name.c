@@ -159,8 +159,8 @@ static int get_hdd_name_sqery(HANDLE hdisk, char *name)
 	 int                        succs;
 	 char                      *pn;
 	 
-	 zeromem(&query, sizeof(query));
-	 zeromem(&buff, sizeof(buff));
+	 memset(&query, 0, sizeof(query));
+	 memset(&buff, 0, sizeof(buff));
 
 	 query.PropertyId = StorageDeviceProperty;
 	 query.QueryType  = PropertyStandardQuery;
@@ -207,8 +207,8 @@ static int get_hdd_name_ata(HANDLE hdisk, int dsk_num, char *name)
 		}
 
 		id_cmd = (verp.bIDEDeviceMap >> dsk_num & 0x10) ? IDE_ATAPI_IDENTIFY : IDE_ATA_IDENTIFY;
-		zeroauto(&scip, sizeof(scip));
-        zeroauto(buff, sizeof(buff));
+		memset(&scip, 0, sizeof(scip));
+        memset(buff, 0, sizeof(buff));
 
 		scip.cBufferSize = IDENTIFY_BUFFER_SIZE;
 		scip.irDriveRegs.bSectorCountReg  = 1;

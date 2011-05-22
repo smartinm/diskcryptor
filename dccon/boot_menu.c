@@ -111,7 +111,7 @@ static void menu_0_1(ldr_config *conf)
 
 			wprintf(L"Please enter path to keyfile: ");
 
-			zeroauto(&conf->emb_key, sizeof(conf->emb_key));
+			memset(&conf->emb_key, 0, sizeof(conf->emb_key));
 			conf->logon_type &= ~LT_EMBED_KEY;
 			conf->logon_type |= LT_GET_PASS;
 			
@@ -135,10 +135,10 @@ static void menu_0_1(ldr_config *conf)
 							conf->logon_type &= ~LT_GET_PASS;
 						}
 
-						autocpy(&conf->emb_key, keyfile, sizeof(conf->emb_key));
+						memcpy(&conf->emb_key, keyfile, sizeof(conf->emb_key));
 						conf->logon_type |= LT_EMBED_KEY;
 					}
-					zeromem(keyfile, keysize);
+					burn(keyfile, keysize);
 					free(keyfile);
 				}
 			}

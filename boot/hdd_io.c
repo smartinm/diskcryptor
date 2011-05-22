@@ -19,7 +19,7 @@ int hdd_io(int hdd_n, void *buff, u16 sectors, u64 start, int read)
 	if (hdd->flags & HDD_LBA)
 	{
 		/* save old buffer */
-		autocpy(sbuf, lba, sizeof(sbuf));
+		mincpy(sbuf, lba, sizeof(sbuf));
 
 		/* setup LBA block */
 		lba->size    = sizeof(lba_p);
@@ -42,7 +42,7 @@ int hdd_io(int hdd_n, void *buff, u16 sectors, u64 start, int read)
 		succs = bios_call(0x13, &ctx);
 
 		/* restore saved buffer */
-		autocpy(lba, sbuf, sizeof(sbuf));
+		mincpy(lba, sbuf, sizeof(sbuf));
 	} else
 	{
 		head = d32(start) / hdd->max_sect;		

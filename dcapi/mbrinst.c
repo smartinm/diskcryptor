@@ -208,9 +208,9 @@ int dc_make_iso(wchar_t *file, int small_boot)
 		ie->sector_count[0] = 1;
 		ie->load_rba[0] = 26; /* sector number */
 		/* copy boot sector */
-		autocpy(isobuf + 0xD000, boot, SECTOR_SIZE);
+		memcpy(isobuf + 0xD000, boot, SECTOR_SIZE);
 		/* copy bootloader */
-		mincpy(isobuf + 0xD200, loader, ldrsz);
+		memcpy(isobuf + 0xD200, loader, ldrsz);
 
 		/* write image to file */
 		resl = save_file(file, isobuf, DC_ISO_SIZE);
@@ -311,8 +311,8 @@ static int dc_format_media_and_set_boot(
 		if ( (mbr_sec = malloc(dg->BytesPerSector)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-		zerofast(mbr_sec, dg->BytesPerSector);
-		zeroauto(buff, sizeof(buff));
+		memset(mbr_sec, 0, dg->BytesPerSector);
+		memset(buff, 0, sizeof(buff));
 
 		WriteFile(h_device, mbr_sec, dg->BytesPerSector, &bytes, NULL);
 		
@@ -493,7 +493,7 @@ static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 		}
 
 		if (data = dc_extract_rsrc(&size, IDR_MBR)) {
-			autocpy(&mbr, data, sizeof(mbr));
+			memcpy(&mbr, data, sizeof(mbr));
 		} else {
 			resl = ST_ERROR; break;
 		}
@@ -515,8 +515,8 @@ static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 			resl = ST_NOMEM; break;
 		}
 
-		zeromem(n_data, n_size);
-		mincpy(n_data, data, size);
+		memset(n_data, 0, n_size);
+		memcpy(n_data, data, size);
 
 		if ( (conf = dc_find_conf(n_data, n_size)) == NULL ) {
 			resl = ST_ERROR; break;
@@ -572,10 +572,10 @@ static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 			conf->options |= OP_SMALL_BOOT;
 		}
 		/* save old MBR */
-		autocpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
+		memcpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
 
 		/* prepare new MBR */
-		autocpy(mbr.data2, old_mbr.data2, sizeof(mbr.data2));
+		memcpy(mbr.data2, old_mbr.data2, sizeof(mbr.data2));
 
 		mbr.set.sector = ldr_off / SECTOR_SIZE;
 		mbr.set.numb   = n_size / SECTOR_SIZE;
@@ -733,7 +733,7 @@ int dc_get_mbr_config(
 		if ( (cnf = dc_find_conf(data, size)) == NULL ) {
 			resl = ST_BLDR_NO_CONF; break;
 		}
-		autocpy(conf, cnf, sizeof(ldr_config));		
+		memcpy(conf, cnf, sizeof(ldr_config));		
 		resl = ST_OK;
 	} while (0);
 
@@ -816,11 +816,11 @@ int dc_set_mbr_config_i(
 		}
 
 		/* save old mbr */
-		autocpy(old_mbr, cnf->save_mbr, sizeof(old_mbr));
+		memcpy(old_mbr, cnf->save_mbr, sizeof(old_mbr));
 		/* copy new values to config */
-		autocpy(cnf, conf, sizeof(ldr_config));
+		memcpy(cnf, conf, sizeof(ldr_config));
 		/* restore old mbr */
-		autocpy(cnf->save_mbr, old_mbr, sizeof(old_mbr));
+		memcpy(cnf->save_mbr, old_mbr, sizeof(old_mbr));
 		/* set unchangeable fields to default */
 		cnf->sign1 = CFG_SIGN1; cnf->sign2 = CFG_SIGN2;
 		cnf->ldr_ver = DC_BOOT_VER;
@@ -972,13 +972,13 @@ static int dc_unset_mbr_i(int dsk_num)
 			resl = ST_BLDR_NO_CONF; break;
 		}
 		/* copy saved old MBR */
-		autocpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
+		memcpy(&old_mbr, conf->save_mbr, sizeof(old_mbr));
 
 		/* copy new partition table to old MBR */
-		autocpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
+		memcpy(old_mbr.data2, mbr.data2, sizeof(mbr.data2));
 
 		/* zero bootloader sectors */
-		zeroauto(&mbr, sizeof(mbr));
+		memset(&mbr, 0, sizeof(mbr));
 			
 		for (; size; size -= SECTOR_SIZE, offs += SECTOR_SIZE) {
 			dc_disk_write(dp, &mbr, sizeof(mbr), offs);
@@ -1060,7 +1060,7 @@ int dc_get_drive_info(wchar_t *w32_name, drive_inf *info)
 	int                      succs;
 	HANDLE                   hdisk;
 
-	zeroauto(info, sizeof(drive_inf));
+	memset(info, 0, sizeof(drive_inf));
 	
 	do
 	{

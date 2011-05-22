@@ -555,8 +555,8 @@ _password_dlg_proc(
 			_wipe_pass_control(hwnd, IDE_PASS);
 			_keyfiles_wipe(KEYLIST_CURRENT);
 
-			zeroauto(&rc_right, sizeof(rc_right));
-			zeroauto(&rc_left, sizeof(rc_left));
+			memset(&rc_right, 0, sizeof(rc_right));
+			memset(&rc_left, 0, sizeof(rc_left));
 
 			cut = 0;
 			return 0L;

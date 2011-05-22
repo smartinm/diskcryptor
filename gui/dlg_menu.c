@@ -204,25 +204,17 @@ int _benchmark(
 		bench_item *bench	
 	)
 {
-	dc_bench   info;
-	crypt_info crypt;
-	int        i, n = 0;			
+	dc_bench_info info;
+	int           i;
 
 	for ( i = 0; i < CF_CIPHERS_NUM; i++ )
 	{
-		crypt.cipher_id = i;
-		
-		if ( dc_benchmark(&crypt, &info) != ST_OK ) 
-		{
-			break;
-		}
-		bench[n].alg   = dc_get_cipher_name(i);
-		bench[n].speed = (double)info.data_size / ( (double)info.enc_time / (double)info.cpu_freq) / 1024 / 1024;
-
-		n++;
+		if ( dc_benchmark(i, &info) != ST_OK ) break;
+		bench[i].alg   = dc_get_cipher_name(i);
+		bench[i].speed = (double)info.datalen / ( (double)info.enctime / (double)info.cpufreq) / 1024 / 1024;
 	}
-	qsort( bench, n, sizeof(bench[0]), _bench_cmp );
-	return n;
+	qsort( bench, CF_CIPHERS_NUM, sizeof(bench[0]), _bench_cmp );
+	return CF_CIPHERS_NUM;
 }
 
 
@@ -451,7 +443,7 @@ int _set_boot_loader(
 void _menu_encrypt_cd(  )
 {
 	_dnode *node = pv( malloc(sizeof(_dnode)) );		
-	zeroauto( node, sizeof(_dnode) );
+	memset( node, 0, sizeof(_dnode) );
 	
 	wcscpy( node->mnt.info.device, L"Encrypt iso-file" );
 	node->dlg.act_type = ACT_ENCRYPT_CD;

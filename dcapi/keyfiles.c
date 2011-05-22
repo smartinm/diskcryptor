@@ -75,8 +75,7 @@ int dc_add_single_kf(dc_pass *pass, wchar_t *path)
 		sha512_done(&k_ctx->sha, k_ctx->hash);
 
 		/* zero unused password buffer bytes */
-		zeromem(
-			p8(pass->pass) + pass->size, (MAX_PASSWORD*2) - pass->size);
+		memset(p8(pass->pass) + pass->size, 0, (MAX_PASSWORD*2) - pass->size);
 
 		/* mix the keyfile hash and password */
 		for (i = 0; i < (SHA512_DIGEST_SIZE / sizeof(u32)); i++) {
@@ -133,8 +132,8 @@ int dc_add_keyfiles(dc_pass *pass, wchar_t *path)
 	}
 
 	/* prevent leaks */
-	zeroauto(&find, sizeof(find));
-	zeroauto(&name, sizeof(name));
+	burn(&find, sizeof(find));
+	burn(&name, sizeof(name));
 
 	return resl;
 }

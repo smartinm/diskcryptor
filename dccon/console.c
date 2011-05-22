@@ -78,8 +78,8 @@ void clean_cmd_line()
 {
 	wchar_t *cmd_w = GetCommandLineW();
 	char    *cmd_a = GetCommandLineA();
-	zeromem(cmd_w, wcslen(cmd_w) * sizeof(wchar_t));
-	zeromem(cmd_a, strlen(cmd_a) * sizeof(char));	
+	burn(cmd_w, wcslen(cmd_w) * sizeof(wchar_t));
+	burn(cmd_a, strlen(cmd_a) * sizeof(char));	
 }
 
 /*

@@ -28,7 +28,7 @@
 static void naked bios_jump_rm()
 {
 	/* zero configuration area to prevent leaks */
-	zeromem(&conf, sizeof(conf));
+	burn(&conf, sizeof(conf));
 
 	__asm
 	{
@@ -43,11 +43,9 @@ static void naked bios_jump_rm()
 
 void bios_jump_boot(int hdd_n, int n_mount)
 {
-	if (n_mount != 0) 
-	{
+	if (n_mount != 0) {
 		/* setup backup data block */
-		autocpy(
-			addof(bdat->bd_base, bdat->bd_size - 384), bdat, offsetof(bd_data, ret_32));
+		mincpy(addof(bdat->bd_base, bdat->bd_size - 384), bdat, offsetof(bd_data, ret_32));
 	} else {
 		/* clear boot data block signature */
 		bdat->sign1 = 0; bdat->sign2 = 0;
@@ -71,7 +69,7 @@ void bios_reboot()
 static void add_smap(e820entry *map) 
 {
 	if ( (bdat->mem_map.n_map < E820MAX) && (map->size != 0) ) {
-		autocpy(&bdat->mem_map.map[bdat->mem_map.n_map++], map, sizeof(e820entry));
+		mincpy(&bdat->mem_map.map[bdat->mem_map.n_map++], map, sizeof(e820entry));
 	}
 }
 

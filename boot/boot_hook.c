@@ -31,7 +31,7 @@ io_db      iodb;
 void set_ctx(u16 ax, rm_ctx *ctx)
 {
 	/* zero all registers */
-	zeroauto(ctx, sizeof(rm_ctx));
+	minset(ctx, 0, sizeof(rm_ctx));
 	/* set initial segments */
 	ctx->ds = rm_seg(bdat->bd_base);
 	ctx->es = ctx->ds;
@@ -43,7 +43,7 @@ int bios_call(int num, rm_ctx *ctx)
 {
 	/* copy initial context to real mode buffer */
 	if (ctx != NULL) {
-		autocpy(&bdat->rmc, ctx, sizeof(rm_ctx));
+		mincpy(&bdat->rmc, ctx, sizeof(rm_ctx));
 	}
 	/* get interrupt seg/off */
 	if ( (num == 0x13) && (bdat->old_int13 != 0) ) {
@@ -57,7 +57,7 @@ int bios_call(int num, rm_ctx *ctx)
 	
 	/* copy changed context */
 	if (ctx != NULL) {
-		autocpy(ctx, &bdat->rmc, sizeof(rm_ctx));
+		mincpy(ctx, &bdat->rmc, sizeof(rm_ctx));
 	}
 	return (bdat->rmc.efl & FL_CF) == 0;
 }
@@ -80,7 +80,7 @@ static void int13_callback()
 		bdat->rmc.dl = 0x80;
 	}
 	/* copy context to temporary buffer */
-	autocpy(&ctx, &bdat->rmc, sizeof(rm_ctx));
+	mincpy(&ctx, &bdat->rmc, sizeof(rm_ctx));
 
 	if ( ((hdd_n = dos2hdd(ctx.dl)) >= 0) && (hdd_n < iodb.n_hdd) ) {
 		hdd = &iodb.p_hdd[hdd_n];
@@ -121,7 +121,7 @@ static void int13_callback()
 			ctx.efl |= FL_CF;
 		}		
 		/* setup new context */
-		autocpy(&bdat->rmc, &ctx, sizeof(rm_ctx));
+		mincpy(&bdat->rmc, &ctx, sizeof(rm_ctx));
 	} else 
 	{
 		/* interrupt is not processed, call original handler */

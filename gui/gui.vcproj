@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="dcrypt"
 	ProjectGUID="{A38C04C7-B172-4897-8471-E3478903035E}"
 	RootNamespace="dcrypt"
@@ -46,7 +46,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -132,7 +132,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -221,7 +221,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500;_CRT_NON_CONFORMING_SWPRINTFS"
 				StringPooling="true"
 				RuntimeLibrary="2"
@@ -313,7 +313,7 @@
 				InlineFunctionExpansion="2"
 				EnableIntrinsicFunctions="true"
 				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto"
+				AdditionalIncludeDirectories="..\include;..\include\gui;..\include\dcapi;..\crypto\crypto_fast"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CRT_SECURE_NO_WARNINGS;_WIN32_WINNT=0x0500"
 				StringPooling="true"
 				RuntimeLibrary="2"

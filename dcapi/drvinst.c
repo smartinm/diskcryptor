@@ -64,7 +64,7 @@ int dc_load_conf(dc_conf_data *conf)
 		cb = sizeof(conf->hotkeys);
 
 		if (RegQueryValueEx(h_key, L"Hotkeys", NULL, NULL, pv(&conf->hotkeys), &cb) != 0) {
-			zeroauto(&conf->hotkeys, sizeof(conf->hotkeys));
+			memset(&conf->hotkeys, 0, sizeof(conf->hotkeys));
 		}
 
 		if (dc_get_conf_flags(&d_conf) == ST_OK) {
@@ -413,7 +413,7 @@ int dc_install_driver()
 		/* add CDROM class filter */
 		dc_add_filter(cdr_key, drv_dc, 1);
 		/* setup default config */
-		zeroauto(&conf, sizeof(conf));
+		memset(&conf, 0, sizeof(conf));
 		conf.conf_flags = CONF_HW_CRYPTO | CONF_AUTOMOUNT_BOOT | CONF_ENABLE_SSD_OPT;
 		
 		resl = dc_save_conf(&conf);

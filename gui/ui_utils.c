@@ -139,7 +139,7 @@ _wnd_data *_sub_class(
 	if ( hwnd ) 
 	{
 		data = malloc(sizeof(_wnd_data));
-		zeroauto( data, sizeof(_wnd_data) );
+		memset( data, 0, sizeof(_wnd_data) );
 	}
 	if ( data ) 
 	{

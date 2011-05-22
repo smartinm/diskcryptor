@@ -93,7 +93,7 @@ _options_dlg_proc(
 				HWND_NULL
 				);
 
-			zeroauto(d_tab, sizeof(_tab_data));
+			memset(d_tab, 0, sizeof(_tab_data));
 
 			d_tab->active = wnd->dlg[0];
 			wnd_set_long(hwnd, GWL_USERDATA, d_tab);
@@ -265,7 +265,7 @@ _options_dlg_proc(
 							autorun_set(_flags & CONF_AUTO_START);
 						}
 						__config.conf_flags = _flags;
-						autocpy(&__config.hotkeys, &_hotkeys, sizeof(DWORD)*HOTKEYS);
+						memcpy(&__config.hotkeys, &_hotkeys, sizeof(DWORD)*HOTKEYS);
 
 						dc_save_conf(&__config);						
 

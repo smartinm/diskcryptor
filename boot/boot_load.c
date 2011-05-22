@@ -32,8 +32,8 @@ int        n_parts;
 static void die(char *msg)
 {
 	/* zero configuration area and password buffer to prevent leaks */
-	zeroauto(&conf, sizeof(conf));
-	zeroauto(&bdat->password, sizeof(dc_pass));
+	burn(&conf, sizeof(conf));
+	burn(&bdat->password, sizeof(dc_pass));
 	/* print message and halt */
 	puts(msg); __halt();
 }
@@ -110,7 +110,7 @@ ep_exit:;
 
 	/* clear BIOS keyboard buffer to prevent password leakage */
 	/* see http://www.ouah.org/Bios_Information_Leakage.txt for more details */
-	zeroauto(pv(0x41E), 32);
+	burn(0x41E, 32);
 
 	return (pos != 0);
 }
@@ -120,7 +120,7 @@ static void boot_from_sector(int hdd_n, u64 sector, int n_mount)
 	if ( (sector == 0) && 
 		!(conf.options & OP_EXTERNAL) && (hdd2dos(hdd_n) == bdat->boot_dsk) )
 	{
-		autocpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
+		mincpy(pv(0x7C00), conf.save_mbr, SECTOR_SIZE);
 	} else
 	{
 		if (btab->p_dc_io(hdd_n, pv(0x7C00), 1, sector, 1) == 0) {
@@ -152,7 +152,7 @@ static void dc_password_error(partition *active, int boot_d)
 	}
 	if (conf.error_type & ET_EXIT_TO_BIOS) {
 		/* zero configuration area to prevent leaks */
-		zeroauto(&conf, sizeof(conf));
+		burn(&conf, sizeof(conf));
 		/* exit to BIOS */
 		btab->p_bios_call(0x18, NULL);
 	}
@@ -202,12 +202,12 @@ static int dc_mount_parts()
 		
 		mount->d_key      = &btab->p_iodb->p_key[btab->p_iodb->n_key++];
 		mount->d_key->alg = header.alg_1;
-		autocpy(mount->d_key->key, header.key_1, PKCS_DERIVE_MAX);
+		mincpy(mount->d_key->key, header.key_1, PKCS_DERIVE_MAX);
 		
 		if (header.flags & VF_REENCRYPT) {
 			mount->o_key      = &btab->p_iodb->p_key[btab->p_iodb->n_key++];
 			mount->o_key->alg = header.alg_2;
-			autocpy(mount->o_key->key, header.key_2, PKCS_DERIVE_MAX);
+			mincpy(mount->o_key->key, header.key_2, PKCS_DERIVE_MAX);
 		}
 		if (part->flags & PT_EXTENDED) {
 			mount->flags |= VF_EXTENDED;
@@ -215,8 +215,8 @@ static int dc_mount_parts()
 		btab->p_iodb->n_mount++;
 	}
 	/* prevent leaks */
-	zeroauto(&header,  sizeof(dc_header));
-	zeroauto(&hdr_key, sizeof(xts_key));
+	burn(&header,  sizeof(dc_header));
+	burn(&hdr_key, sizeof(xts_key));
 
 	return btab->p_iodb->n_mount;
 }
@@ -236,7 +236,7 @@ void boot_load_main(bd_data *db, boot_vtab *vt)
 	/* init crypto */
 	vt->p_xts_init(conf.options & OP_HW_CRYPTO);
 	/* prepare MBR copy buffer */
-	autocpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
+	mincpy(conf.save_mbr + 432, p8(0x7C00) + 432, 80);
 	/* hook BIOS interrupts */
 	bios_hook_ints();
 
@@ -295,14 +295,14 @@ retry_auth:;
 		db->password.size = max(db->password.size, SHA512_DIGEST_SIZE);
 
 		/* prevent leaks */
-		zeroauto(hash, sizeof(hash));
-		zeroauto(&sha, sizeof(sha));
+		burn(hash, sizeof(hash));
+		burn(&sha, sizeof(sha));
 	}
 	if (db->password.size != 0) 
 	{
 		if ( (n_mount = dc_mount_parts()) == 0 ) {
 			/* zero password buffer to prevent leaks */
-			zeroauto(&db->password, sizeof(dc_pass));
+			burn(&db->password, sizeof(dc_pass));
 		}
 	}
 

@@ -2,7 +2,7 @@
 #define _DRV_IOCTL_
 
 #include "dcapi.h"
-#include "..\sys\driver.h"
+#include "..\driver\include\driver.h"
 #include "dcconst.h"
 
 typedef struct _vol_info {
@@ -51,7 +51,7 @@ int dc_api dc_get_device_status(wchar_t *device, dc_status *status);
 int dc_api dc_add_seed(void *data, int size);
 int dc_api dc_get_random(void *data, int size);
 
-int dc_api dc_benchmark(crypt_info *crypt, dc_bench *info);
+int dc_api dc_benchmark(int cipher, dc_bench_info *info);
 
 int dc_api dc_get_conf_flags(dc_conf *conf);
 int dc_api dc_set_conf_flags(dc_conf *conf);

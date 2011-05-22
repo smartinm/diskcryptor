@@ -9,6 +9,8 @@ del    *.dll /S /Q
 del    *.pdb /S /Q
 del    *.sys  /S /Q
 del    *.exe  /S /Q
+del    debug\*.lib  /S /Q
+del    release\*.lib  /S /Q
 del    *.log  /S /Q
 del    *.obj  /S /Q
 del    *.aps  /S /Q
