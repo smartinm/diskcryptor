@@ -133,7 +133,7 @@ _benchmark_dlg_proc(
 						_list_insert_item( __lists[HBENCHMARK], lvcount, 0, bench[k].alg, 0 );
 						_list_set_item( __lists[HBENCHMARK], lvcount, 1, STR_EMPTY );
 
-						_snwprintf( s_speed, sizeof_w(s_speed), L"%-.2f mb/s", bench[k].speed );
+						_snwprintf( s_speed, countof(s_speed), L"%-.2f mb/s", bench[k].speed );
 						_list_set_item( __lists[HBENCHMARK], lvcount++, 2, s_speed );
 					}
 				}
@@ -227,7 +227,7 @@ _about_dlg_proc(
 			{
 				EndDialog(hwnd, 0);
 			}
-			for ( k = 0; k < array_num(ctl_links); k++ )
+			for ( k = 0; k < countof(ctl_links); k++ )
 			{
 				if ( id == ctl_links[k].id )
 				{
@@ -263,7 +263,7 @@ _about_dlg_proc(
 				HWND h_title = GetDlgItem( hwnd, IDC_ABOUT1 );
 
 				_snwprintf(
-					s_display, sizeof_w(s_display), L"%s %S", DC_NAME, DC_FILE_VER
+					s_display, countof(s_display), L"%s %S", DC_NAME, DC_FILE_VER
 					);
 
 				SetWindowText( h_title, s_display );
@@ -295,7 +295,7 @@ _about_dlg_proc(
 				);
 
 				SendMessage( h_title, WM_SETFONT, (WPARAM)__font_bold, 0 );
-				for ( k = 0; k < array_num(ctl_links); k++ )
+				for ( k = 0; k < countof(ctl_links); k++ )
 				{
 					HWND h_ctl = GetDlgItem(hwnd, ctl_links[k].id);
 
@@ -334,7 +334,7 @@ _about_dlg_proc(
 							if ( conf.load_flags & DST_INTEL_NI ) s_inset = L"Intel® AES Instructions Set (AES-NI)";
 							if ( conf.load_flags & DST_VIA_PADLOCK ) s_inset = L"The VIA PadLock Advanced Cryptography Engine (ACE)";
 						}
-						_snwprintf( s_display, sizeof_w(s_display), 
+						_snwprintf( s_display, countof(s_display), 
 							L"Hardware Cryptography: %s\r\n"
 							L"Instruction Set: %s",
 							s_using, s_inset
@@ -415,17 +415,17 @@ dc_cd_callback(
 		wchar_t s_elapsed[MAX_PATH]   = { STR_EMPTY };
 		wchar_t s_estimated[MAX_PATH] = { STR_EMPTY };
 
-		int speed   = _speed_stat_event( s_speed, sizeof_w(s_speed), &node->dlg.iso.speed, enc_sz, TRUE );
+		int speed   = _speed_stat_event( s_speed, countof(s_speed), &node->dlg.iso.speed, enc_sz, TRUE );
 		int new_pos = (int)( enc_sz / ( iso_sz / PRG_STEP ) );
 
 		if ( speed != 0 )
 		{
 			_get_time_period( ( ( iso_sz - enc_sz ) / 1024 / 1024 ) / speed, s_estimated, TRUE );					
 		}
-		dc_format_byte_size( s_enc_size, sizeof_w(s_enc_size), enc_sz );
-		dc_format_byte_size( s_ttl_size, sizeof_w(s_ttl_size), iso_sz );
+		dc_format_byte_size( s_enc_size, countof(s_enc_size), enc_sz );
+		dc_format_byte_size( s_ttl_size, countof(s_ttl_size), iso_sz );
 
-		_snwprintf( s_done, sizeof_w(s_done), L"%s / %s", s_enc_size, s_ttl_size );
+		_snwprintf( s_done, countof(s_done), L"%s / %s", s_enc_size, s_ttl_size );
 
 		_get_time_period( node->dlg.iso.speed.t_begin.QuadPart, s_elapsed, FALSE );
 
@@ -440,7 +440,7 @@ dc_cd_callback(
 			);
 
 		_snwprintf(
-			s_percent, sizeof_w(s_percent), L"%.2f %%", (double)(enc_sz) / (double)(iso_sz) * 100 
+			s_percent, countof(s_percent), L"%.2f %%", (double)(enc_sz) / (double)(iso_sz) * 100 
 			);
 
 		SetWindowText( GetDlgItem(node->dlg.h_page, IDC_STATUS_PROGRESS), s_percent);
@@ -514,7 +514,7 @@ void _is_breaking_action( )
 	{
 		if (k % 2 == 0)
 		{
-			memset(s_vol, 0, sizeof_w(s_vol)); // WTF?
+			memset(s_vol, 0, countof(s_vol)); // WTF?
 			count = 0;
 			resume = FALSE;
 		}

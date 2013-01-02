@@ -37,9 +37,8 @@ typedef align16 struct _dev_hook
 	KEVENT         paging_count_event;
 	LONG           paging_count;
 	
-	u32            chg_count;    /* media changes counter */
+	ULONG          chg_count;    // media changes counter
 	u32            chg_mount;    /* mount changes counter */
-	u32            chg_last_v;   /* changes counter at last IOCTL_STORAGE_CHECK_VERIFY */
 	u32            io_depth;     /* depth of the I/O queue   */
 	u64            expect_off;   /* expected next I/O offset */
 

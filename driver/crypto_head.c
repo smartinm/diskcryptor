@@ -45,7 +45,7 @@ int cp_decrypt_header(xts_key *hdr_key, dc_header *header, dc_pass *password)
 			pv(header), pv(hcopy), sizeof(dc_header), 0, hdr_key);
 
 		/* Magic 'DCRP' */
-		if (hcopy->sign != DC_VOLM_SIGN) {
+		if (hcopy->sign != DC_VOLUME_SIGN) {
 			continue;
 		}
 		/* Check CRC of header */

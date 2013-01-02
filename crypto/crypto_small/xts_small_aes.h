@@ -1,6 +1,7 @@
-#ifndef _XTS_SMALL_AES_H_
+﻿#ifndef _XTS_SMALL_AES_H_
 #define _XTS_SMALL_AES_H_
 
+#include <memory.h>
 #include "aes_small.h"
 #include "aes_padlock_small.h"
 
@@ -15,18 +16,18 @@
 #define MAX_CIPHER_KEY  (sizeof(aes256_key))
 #define XTS_FULL_KEY    (XTS_KEY_SIZE*2)
 
-typedef align16 struct _xts_key {
+typedef __declspec(align(16)) struct _xts_key {
 	aes256_key crypt_k;
 	aes256_key tweak_k;
 } xts_key;
 
 void xts_aes_set_key(const unsigned char *key, int alg, xts_key *skey);
-void xts_aes_encrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key);
-void xts_aes_decrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key);
+void xts_aes_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key);
+void xts_aes_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key);
 void xts_aes_init(int hw_crypt);
 
 typedef void (*xts_setkey_proc)(const unsigned char *key, int alg, xts_key *skey);
-typedef void (*xts_crypt_proc) (const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key);
+typedef void (*xts_crypt_proc) (const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key);
 typedef void (*xts_init_proc)  (int hw_crypt);
 
 #define xts_set_key xts_aes_set_key

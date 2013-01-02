@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * Copyright (c) 2007-2010 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
@@ -21,46 +21,42 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
-#include "defines.h"
+#include <intrin.h>
 #include "aes_small.h"
 
-static u32 Te0[256];
-static u32 Td0[256];
-static u8  Te4[256];
-static u8  Td4[256];
+static unsigned long Te0[256];
+static unsigned long Td0[256];
+static unsigned char Te4[256];
+static unsigned char Td4[256];
 
 #define Td0(x) (Td0[x])
-#define Td1(x) ROR32(Td0(x), 24)
-#define Td2(x) ROR32(Td0(x), 16)
-#define Td3(x) ROR32(Td0(x), 8) 
+#define Td1(x) _rotr(Td0(x), 24)
+#define Td2(x) _rotr(Td0(x), 16)
+#define Td3(x) _rotr(Td0(x), 8) 
 #define Td4(x) Td4[x]
 
 #define Te0(x) (Te0[x])
-#define Te1(x) ROR32(Te0(x), 24)
-#define Te2(x) ROR32(Te0(x), 16)
-#define Te3(x) ROR32(Te0(x), 8) 
+#define Te1(x) _rotr(Te0(x), 24)
+#define Te2(x) _rotr(Te0(x), 16)
+#define Te3(x) _rotr(Te0(x), 8) 
 #define Te4(x) Te4[x]
 #define WPOLY  0x11b
 
 #define lfsr2(x) ((x & 0x80) ? x<<1 ^ WPOLY: x<<1)
  
-static u32 key_mix(u32 temp)
+static unsigned long key_mix(unsigned long temp)
 {
-	return (Te4[d8(temp >> 8 )]) << 0  ^ (Te4[d8(temp >> 16)]) << 8  ^
-		   (Te4[d8(temp >> 24)]) << 16 ^ (Te4[d8(temp >> 0 )]) << 24;
+	return (Te4[(unsigned char)(temp >> 8 )]) << 0  ^ (Te4[(unsigned char)(temp >> 16)]) << 8  ^
+		   (Te4[(unsigned char)(temp >> 24)]) << 16 ^ (Te4[(unsigned char)(temp >> 0 )]) << 24;
 }
 
 void aes256_set_key(const unsigned char *key, aes256_key *skey)
 {
-	u32 *ek, *dk;
+	unsigned long *ek, *dk;
    	int  j, i, k;
-	u32  t, rcon, d;
+	unsigned long  t, rcon, d;
 
-	ek = skey->enc_key;
-	
-	memcpy(ek, key, AES_KEY_SIZE);
-	
+	__movsb((unsigned char*)(ek = skey->enc_key), key, AES_KEY_SIZE);
 	i = 7; rcon = 1;
 	do 
 	{
@@ -69,7 +65,7 @@ void aes256_set_key(const unsigned char *key, aes256_key *skey)
 		}        
 		if (--i == 0) break;		
 		
-		for (t = key_mix(ROR32(ek[11], 24)), j = 4; j < 8; j++) {
+		for (t = key_mix(_rotr(ek[11], 24)), j = 4; j < 8; j++) {
 			t ^= ek[j]; ek[8 + j] = t;
 		}
         ek += 8; rcon <<= 1;
@@ -89,7 +85,7 @@ void aes256_set_key(const unsigned char *key, aes256_key *skey)
 		t = dk[i + 4], d = 0;
 
 		for (j = 32; j; j -= 8) {
-			d ^= ROR32(Td0(Te4[d8(t)]), j); t >>= 8;
+			d ^= _rotr(Td0(Te4[(unsigned char)t]), j); t >>= 8;
 		}
 		dk[i + 4] = d;
 	}
@@ -97,22 +93,22 @@ void aes256_set_key(const unsigned char *key, aes256_key *skey)
 
 void aes256_encrypt(const unsigned char *in, unsigned char *out, aes256_key *key)
 {
-	u32  s[4];
-	u32  t[4];
-	u32 *rk, x;
-	u32  r, n;
+	unsigned long  s[4];
+	unsigned long  t[4];
+	unsigned long *rk, x;
+	unsigned long  r, n;
 
 	rk   = key->enc_key;
-	s[0] = p32(in)[0] ^ *rk++; s[1] = p32(in)[1] ^ *rk++;
-    s[2] = p32(in)[2] ^ *rk++; s[3] = p32(in)[3] ^ *rk++;
+	s[0] = ((unsigned long*)in)[0] ^ *rk++; s[1] = ((unsigned long*)in)[1] ^ *rk++;
+    s[2] = ((unsigned long*)in)[2] ^ *rk++; s[3] = ((unsigned long*)in)[3] ^ *rk++;
 	r    = ROUNDS-1;
 
 	do
 	{
 		for (n = 0; n < 4; n++)
 		{
-			t[n] = (Te0(d8(s[0] >> 0 ))) ^ (Te1(d8(s[1] >> 8 ))) ^
-				   (Te2(d8(s[2] >> 16))) ^ (Te3(d8(s[3] >> 24))) ^ *rk++;
+			t[n] = (Te0((unsigned char)(s[0] >> 0 ))) ^ (Te1((unsigned char)(s[1] >> 8 ))) ^
+				   (Te2((unsigned char)(s[2] >> 16))) ^ (Te3((unsigned char)(s[3] >> 24))) ^ *rk++;
 
 			x = s[0]; s[0] = s[1]; s[1] = s[2]; s[2] = s[3]; s[3] = x;
 		}
@@ -121,32 +117,32 @@ void aes256_encrypt(const unsigned char *in, unsigned char *out, aes256_key *key
   
 	for (n = 0; n < 4; n++)
 	{
-		s[n] = (Te4(d8(t[0] >> 0 )) << 0 ) ^ (Te4(d8(t[1] >> 8 )) << 8 ) ^
-			   (Te4(d8(t[2] >> 16)) << 16) ^ (Te4(d8(t[3] >> 24)) << 24) ^ *rk++;
+		s[n] = (Te4((unsigned char)(t[0] >> 0 )) << 0 ) ^ (Te4((unsigned char)(t[1] >> 8 )) << 8 ) ^
+			   (Te4((unsigned char)(t[2] >> 16)) << 16) ^ (Te4((unsigned char)(t[3] >> 24)) << 24) ^ *rk++;
 		
 		x = t[0]; t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = x;
 	}	
-	memcpy(out, s, AES_BLOCK_SIZE);
+	__movsb(out, (const unsigned char*)&s, AES_BLOCK_SIZE);
 }
 
 void aes256_decrypt(const unsigned char *in, unsigned char *out, aes256_key *key)
 {
-	u32  s[4];
-	u32  t[4];
-	u32 *rk, x;
-	u32  r, n;
+	unsigned long  s[4];
+	unsigned long  t[4];
+	unsigned long *rk, x;
+	unsigned long  r, n;
 	
 	rk   = key->dec_key;
-    s[0] = p32(in)[0] ^ *rk++; s[1] = p32(in)[1] ^ *rk++;
-    s[2] = p32(in)[2] ^ *rk++; s[3] = p32(in)[3] ^ *rk++;
+    s[0] = ((unsigned long*)in)[0] ^ *rk++; s[1] = ((unsigned long*)in)[1] ^ *rk++;
+    s[2] = ((unsigned long*)in)[2] ^ *rk++; s[3] = ((unsigned long*)in)[3] ^ *rk++;
 	r    = ROUNDS-1;
 
 	do
 	{
 		for (n = 0; n < 4; n++)
 		{
-			t[n] = (Td0(d8(s[0] >> 0 ))) ^ (Td1(d8(s[3] >> 8 ))) ^
-				   (Td2(d8(s[2] >> 16))) ^ (Td3(d8(s[1] >> 24))) ^ *rk++;
+			t[n] = (Td0((unsigned char)(s[0] >> 0 ))) ^ (Td1((unsigned char)(s[3] >> 8 ))) ^
+				   (Td2((unsigned char)(s[2] >> 16))) ^ (Td3((unsigned char)(s[1] >> 24))) ^ *rk++;
 
 			x = s[0]; s[0] = s[1]; s[1] = s[2]; s[2] = s[3]; s[3] = x;
 		}		
@@ -155,18 +151,18 @@ void aes256_decrypt(const unsigned char *in, unsigned char *out, aes256_key *key
 
 	for (n = 0; n < 4; n++)
 	{
-		s[n] = (Td4(d8(t[0] >> 0 )) << 0 ) ^ (Td4(d8(t[3] >> 8 )) << 8 ) ^
-			   (Td4(d8(t[2] >> 16)) << 16) ^ (Td4(d8(t[1] >> 24)) << 24) ^ *rk++;
+		s[n] = (Td4((unsigned char)(t[0] >> 0 )) << 0 ) ^ (Td4((unsigned char)(t[3] >> 8 )) << 8 ) ^
+			   (Td4((unsigned char)(t[2] >> 16)) << 16) ^ (Td4((unsigned char)(t[1] >> 24)) << 24) ^ *rk++;
 		
 		x = t[0]; t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = x;
 	}
-	memcpy(out, s, AES_BLOCK_SIZE);
+	__movsb(out, (const unsigned char*)&s, AES_BLOCK_SIZE);
 }
 
 void aes256_gentab()
 {
-	u8 pow[256], log[256];
-	u8 i, w;
+	unsigned char pow[256], log[256];
+	unsigned char i, w;
 		
 	i = 0; w = 1; 
 	do
@@ -189,9 +185,9 @@ void aes256_gentab()
 	i = 0;
     do
     {
-		u8 f = Te4[i]; 
-		u8 r = Td4[i];
-		u8 x = lfsr2(f);		
+		unsigned char f = Te4[i]; 
+		unsigned char r = Td4[i];
+		unsigned char x = lfsr2(f);		
 
         Te0[i] = (f ^ x) << 24 | f << 16 | f << 8 | x;
 		Td0[i] = ! r ? r :

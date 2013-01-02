@@ -126,7 +126,7 @@ void _draw_pass_rating(
 	if ( kb_layout != -1 )
 	{
 		pass_gr_ctls[5].color = GetSysColor(COLOR_GRAYTEXT);
-		if ( kb_layout != KB_QWERTY )
+		if ( kb_layout != LDR_KB_QWERTY )
 		{
 			pass_gr_ctls[4].color = pass_gr_ctls[5].color;
 		}
@@ -245,8 +245,8 @@ BOOL _input_verify(
 	*msg_idx = ST_PASS_CORRRECT;
 	if ( info.length )
 	{		
-		if ( (kb_layout == KB_QWERTY && info.flags & P_NCHAR) || 
-			 ((kb_layout == KB_QWERTZ || kb_layout == KB_AZERTY) && 
+		if ( (kb_layout == LDR_KB_QWERTY && info.flags & P_NCHAR) || 
+			 ((kb_layout == LDR_KB_QWERTZ || kb_layout == LDR_KB_AZERTY) && 
 			 (info.flags & P_NCHAR || info.flags & P_SPCH))) 
 		{
 				 

@@ -1,4 +1,4 @@
-#if !defined(_AES_PADLOCK_SMALL_H_) && defined(_M_IX86)
+﻿#if !defined(_AES_PADLOCK_SMALL_H_) && defined(_M_IX86)
 #define _AES_PADLOCK_SMALL_H_
 
 #include "aes_small.h"

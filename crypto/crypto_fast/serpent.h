@@ -1,4 +1,4 @@
-#ifndef _SERPENT_H_
+﻿#ifndef _SERPENT_H_
 #define _SERPENT_H_
 
 #define SERPENT_KEY_SIZE	 32

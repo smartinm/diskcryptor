@@ -19,9 +19,10 @@
 */
 
 #include <ntifs.h>
+#include <stddef.h>
 #include "driver.h"
 #include "defines.h"
-#include "boot\boot.h"
+#include "bootloader.h"
 #include "boot_pass.h"
 #include "mount.h"
 #include "debug.h"

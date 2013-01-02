@@ -223,7 +223,7 @@ _key_proc(
 		resolve = _key_name( wparam, shift, key );
 		if ( _keyup(msg) && !resolve ) 
 		{
-			GetWindowText( hwnd, text, sizeof_w(text) );				
+			GetWindowText( hwnd, text, countof(text) );				
 			if ( text[wcslen(text) - 2] == L'+' )
 			{
 				SetWindowText(hwnd, STR_NULL);
@@ -408,7 +408,7 @@ _enum_proc(
 	data = wnd_get_long( hwnd, GWL_USERDATA );
 	if ( data )
 	{
-		GetWindowText( hwnd, caption, sizeof_w(caption) );
+		GetWindowText( hwnd, caption, countof(caption) );
 		if ( wcscmp(caption, DC_NAME) == 0 )
 		{
 			*(HWND *)lparam = hwnd;
@@ -461,7 +461,7 @@ int _get_combo_val(
 	int count = 0;
 	wchar_t text[MAX_PATH];
 
-	GetWindowText( hwnd, text, sizeof_w(text) );
+	GetWindowText( hwnd, text, countof(text) );
 	while ( wcslen(list[count].display) )
 	{
 		if ( !wcscmp(list[count].display, text) )
@@ -746,7 +746,7 @@ BOOL _is_icon_show(
 	if (idx != -1)
 	{
 		_get_header_text( 
-			h_list, idx, s_header, sizeof_w(s_header) 
+			h_list, idx, s_header, countof(s_header) 
 			);
 	}
 

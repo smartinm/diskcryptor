@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008
@@ -137,7 +137,7 @@ static BOOL CALLBACK rnd_enum_proc(HWND hwnd,  LPARAM lParam)
 	GetWindowInfo(hwnd, &seed.seed7);
 	GetGUIThreadInfo(seed.seed5, &seed.seed8);
 
-	if (size = GetWindowText(hwnd, text, sizeof_w(text))) {
+	if (size = GetWindowText(hwnd, text, countof(text))) {
 		seed_collect(pv(text), size * sizeof(wchar_t));
 	}
 	

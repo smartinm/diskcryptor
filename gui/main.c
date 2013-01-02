@@ -153,7 +153,7 @@ int _drv_action(
 			wchar_t up_atom[MAX_PATH];
 
 			_snwprintf(
-				up_atom, sizeof_w(up_atom), L"DC_UPD_%d", version);
+				up_atom, countof(up_atom), L"DC_UPD_%d", version);
 
 			if (GlobalFindAtom(up_atom) != 0)
 			{

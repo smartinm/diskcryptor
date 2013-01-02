@@ -86,7 +86,7 @@ _thread_format_proc(
 		}
 	} while (1);
 
-	if ( rlt != ST_FINISHED )
+	if ( rlt == ST_FINISHED )
 	{
 		_finish_formating( node );
 	}

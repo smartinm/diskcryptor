@@ -1,4 +1,4 @@
-#include '..\include\version.h'
+#include '..\_include_\version.h'
 
 [Setup]
 AppName=DiskCryptor
@@ -16,7 +16,7 @@ AllowNoIcons=yes
 AllowUNCPath=no
 LicenseFile=..\license.txt
 PrivilegesRequired=admin
-OutputDir=..\release
+OutputDir=..\Bin
 OutputBaseFilename=dcrypt_setup
 VersionInfoVersion={#DC_FILE_VER}
 VersionInfoCompany=http://diskcryptor.net/
@@ -36,15 +36,15 @@ Name: modifypath; Description: "&Add application directory to system path"; Flag
 
 [Files]
 ; x86 files
-Source: "..\release\i386\*.exe"; DestDir: "{app}"; Check: not Is64BitInstallMode
-Source: "..\release\i386\*.sys"; DestDir: "{app}"; Check: not Is64BitInstallMode
-Source: "..\release\i386\*.dll"; DestDir: "{app}"; Check: not Is64BitInstallMode
-Source: "..\release\i386\*.pdb"; DestDir: "{app}"; Check: not Is64BitInstallMode
+Source: "..\Bin\Release_i386\*.exe"; DestDir: "{app}"; Check: not Is64BitInstallMode
+Source: "..\Bin\Release_i386\*.sys"; DestDir: "{app}"; Check: not Is64BitInstallMode
+Source: "..\Bin\Release_i386\*.dll"; DestDir: "{app}"; Check: not Is64BitInstallMode
+Source: "..\Bin\Release_i386\*.pdb"; DestDir: "{app}"; Check: not Is64BitInstallMode
 ; x64 files
-Source: "..\release\amd64\*.exe"; DestDir: "{app}"; Check: Is64BitInstallMode
-Source: "..\release\amd64\*.sys"; DestDir: "{app}"; Check: Is64BitInstallMode
-Source: "..\release\amd64\*.dll"; DestDir: "{app}"; Check: Is64BitInstallMode
-Source: "..\release\amd64\*.pdb"; DestDir: "{app}"; Check: Is64BitInstallMode
+Source: "..\Bin\Release_amd64\*.exe"; DestDir: "{app}"; Check: Is64BitInstallMode
+Source: "..\Bin\Release_amd64\*.sys"; DestDir: "{app}"; Check: Is64BitInstallMode
+Source: "..\Bin\Release_amd64\*.dll"; DestDir: "{app}"; Check: Is64BitInstallMode
+Source: "..\Bin\Release_amd64\*.pdb"; DestDir: "{app}"; Check: Is64BitInstallMode
 ; misc files
 Source: "..\license.txt"; DestDir: "{app}"
 Source: "..\changes.txt"; DestDir: "{app}"

@@ -50,45 +50,31 @@ typedef char    s8;
 #define pv(_x)   ((void*)(_x))
 #define ppv(_x)  ((void**)(_x)) 
 
-#define in_reg(a,base,size)     ( (a >= base) && (a < base+size)  )
-#define is_intersect(start1, size1, start2, size2) ( max(start1, start2) < min(start1 + size1, start2 + size2) )
-#define addof(a,o)              ( pv(p8(a)+o) )
-#ifndef offsetof
-#define offsetof(type,field)    ( d32(&(((type *)0)->field)) )
-#endif
+#define in_reg(_a, _base, _size) \
+    ( (_a) >= (_base) && (_a) < (_base)+(_size) )
+
+#define is_intersect(_start1, _size1, _start2, _size2) \
+    ( max(_start1, _start2) < min(_start1 + _size1, _start2 + _size2) )
+
+#define addof(_a, _o)         ( pv(p8(_a) + (ptrdiff_t)(_o)) )
+#define countof(_array)       ( sizeof(_array) / sizeof((_array)[0]) )
+#define _align(_size, _align) ( ((_size) + ((_align) - 1)) & ~((_align) - 1) )
 
 #ifdef BOOT_LDR
  #pragma warning(disable:4142)
  typedef unsigned long size_t;
  #pragma warning(default:4142)
-#endif
 
-#ifndef max
- #define max(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef min
  #define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef _align
- #define _align(size, align) (((size) + ((align) - 1)) & ~((align) - 1))
+ #define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef PAGE_SIZE
  #define PAGE_SIZE 0x1000
 #endif
-
-#ifndef NULL
- #define NULL pv(0)
-#endif
-
 #ifndef MAX_PATH
  #define MAX_PATH 260
 #endif
-
-#define sizeof_w(x)  ( sizeof(x) / sizeof(wchar_t) ) /* return number of wide characters in array */
-#define array_num(x) ( sizeof(x) / sizeof((x)[0]) )  /* return number of elements in array */
 
 /* zero memory secure (prevent compiler optimization) */
 #if defined(BOOT_LDR)

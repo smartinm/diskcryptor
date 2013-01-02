@@ -69,7 +69,7 @@ _tab_proc(
 
 				if ( msg_hdr->code == LVN_ITEMACTIVATE )
 				{
-					_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 2, tmpb, sizeof_w(tmpb) );
+					_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 2, tmpb, countof(tmpb) );
 
 					if ( wcscmp(tmpb, L"installed") == 0 )
 					{
@@ -83,7 +83,7 @@ _tab_proc(
 						int type = _get_combo_val( GetDlgItem(hwnd, IDC_COMBO_LOADER_TYPE), loader_type );
 						int is_small = _get_check( hwnd, IDC_USE_SMALL_BOOT );
 
-						_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 0, vol, sizeof_w(vol) );
+						_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 0, vol, countof(vol) );
 						dsk_num = _ext_disk_num( __lists[HBOT_WIZARD_BOOT_DEVS] );
 
 						_menu_set_loader_vol( hwnd, vol, dsk_num, type, is_small );
@@ -118,12 +118,12 @@ _tab_proc(
 
 					wchar_t vol[MAX_PATH];					
 
-					_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 0, vol, sizeof_w(vol) );
+					_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 0, vol, countof(vol) );
 					dsk_num = _ext_disk_num( __lists[HBOT_WIZARD_BOOT_DEVS] );
 
 					if ( ListView_GetSelectedCount( __lists[HBOT_WIZARD_BOOT_DEVS] ) )
 					{
-						_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 2, tmpb, sizeof_w(tmpb) );
+						_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], msg_info->iItem, 2, tmpb, countof(tmpb) );
 
 						if ( !wcscmp(tmpb, L"installed") )
 						{
@@ -262,7 +262,7 @@ _tab_proc(
 					wchar_t text[MAX_PATH];
 					int     keylist;
 
-					GetWindowText( GetDlgItem(hwnd, IDC_USE_KEYFILES), text, sizeof_w(text) );
+					GetWindowText( GetDlgItem(hwnd, IDC_USE_KEYFILES), text, countof(text) );
 					keylist = wcscmp(text, IDS_USE_KEYFILE) == 0 ? KEYLIST_EMBEDDED : KEYLIST_CURRENT;
 
 					_dlg_keyfiles( hwnd, keylist );
@@ -307,7 +307,7 @@ _tab_proc(
 					wchar_t s_file[MAX_PATH];					
 					wcscpy( s_file, boot_type == CTL_LDR_ISO ? L"loader.iso" : L"loader.img" );
 
-					if ( _save_file_dialog(hwnd, s_file, sizeof_w(s_file), L"Save Bootloader File As") ) 
+					if ( _save_file_dialog(hwnd, s_file, countof(s_file), L"Save Bootloader File As") ) 
 					{
 						SetWindowText( GetDlgItem(hwnd, IDE_BOOT_PATH), s_file );
 					}
@@ -318,7 +318,7 @@ _tab_proc(
 				{
 					wchar_t s_file[MAX_PATH] = { 0 };
 
-					if ( _open_file_dialog(hwnd, s_file, sizeof_w(s_file), L"Open iso-file to encrypt") ) 
+					if ( _open_file_dialog(hwnd, s_file, countof(s_file), L"Open iso-file to encrypt") ) 
 					{
 						SetWindowText(GetDlgItem(hwnd, IDE_ISO_SRC_PATH), s_file);
 					}
@@ -332,12 +332,12 @@ _tab_proc(
 
 					wchar_t *s_name;
 
-					GetWindowText( GetDlgItem(hwnd, IDE_ISO_SRC_PATH), s_src_file, sizeof_w(s_src_file ));
+					GetWindowText( GetDlgItem(hwnd, IDE_ISO_SRC_PATH), s_src_file, countof(s_src_file ));
 
 					s_name = _extract_name(s_src_file);
-					wcsncat(s_dst_file, (s_name != NULL) ? s_name : L"iso", sizeof_w(s_dst_file) - wcslen(s_src_file));
+					wcsncat(s_dst_file, (s_name != NULL) ? s_name : L"iso", countof(s_dst_file) - wcslen(s_src_file));
 
-					if ( _save_file_dialog(hwnd, s_dst_file, sizeof_w(s_dst_file), L"Save encrypted iso-file to...") ) 
+					if ( _save_file_dialog(hwnd, s_dst_file, countof(s_dst_file), L"Save encrypted iso-file to...") ) 
 					{						
 						SetWindowText(GetDlgItem(hwnd, IDE_ISO_DST_PATH), s_dst_file);
 					}
@@ -353,8 +353,8 @@ _tab_proc(
 					{
 						case IDC_COMBO_AUTH_TYPE :
 						{
-							BOOL b_pass   = _get_combo_val( (HWND)lparam, auth_type ) & LT_GET_PASS;
-							BOOL b_keyfie = _get_combo_val( (HWND)lparam, auth_type ) & LT_EMBED_KEY;
+							BOOL b_pass   = _get_combo_val( (HWND)lparam, auth_type ) & LDR_LT_GET_PASS;
+							BOOL b_keyfie = _get_combo_val( (HWND)lparam, auth_type ) & LDR_LT_EMBED_KEY;
 
 							_enb_but_this( hwnd, IDC_COMBO_AUTH_TYPE, b_pass );
 
@@ -391,8 +391,8 @@ _tab_proc(
 							wchar_t text[MAX_PATH];
 							BOOL enable;
 
-							_get_item_text( __lists[HBOT_PART_LIST_BY_ID], 0, 0, text, sizeof_w(text) );
-							enable = _get_combo_val((HWND)lparam, boot_type_ext) == BT_DISK_ID && !wcsstr(text, L"not found");
+							_get_item_text( __lists[HBOT_PART_LIST_BY_ID], 0, 0, text, countof(text) );
+							enable = _get_combo_val((HWND)lparam, boot_type_ext) == LDR_BT_DISK_ID && !wcsstr(text, L"not found");
 
 							EnableWindow( GetDlgItem(hwnd, IDC_STATIC_SELECT_PART), enable );
 							EnableWindow( __lists[HBOT_PART_LIST_BY_ID], enable );
@@ -410,7 +410,7 @@ _tab_proc(
 							};
 
 							int type = (int)SendMessage( GetDlgItem(hwnd, IDC_COMBO_LOADER_TYPE), CB_GETCURSEL, 0, 0 );
-							for ( k = 0; k < array_num(ctl_enb); k++ )
+							for ( k = 0; k < countof(ctl_enb); k++ )
 							{
 								EnableWindow(
 									GetDlgItem( hwnd, ctl_enb[k] ), ( type < 2 && k < 2 ) || ( type > 1 && k > 1 )
@@ -494,8 +494,8 @@ _tab_proc(
 
 							if ( h_wiz_parent != NULL && h_ctl_parent != NULL )
 							{
-								GetWindowText( GetDlgItem(h_ctl_parent, IDE_ISO_SRC_PATH), s_src_path, sizeof_w(s_src_path) );
-								GetWindowText( GetDlgItem(h_ctl_parent, IDE_ISO_DST_PATH), s_dst_path, sizeof_w(s_dst_path) );
+								GetWindowText( GetDlgItem(h_ctl_parent, IDE_ISO_SRC_PATH), s_src_path, countof(s_src_path) );
+								GetWindowText( GetDlgItem(h_ctl_parent, IDE_ISO_DST_PATH), s_dst_path, countof(s_dst_path) );
 
 								EnableWindow(
 									GetDlgItem(h_wiz_parent, IDOK), ( PathFileExists(s_src_path) && (s_dst_path[0] != 0) )
@@ -507,7 +507,7 @@ _tab_proc(
 						case IDE_BOOT_PATH :
 						{
 							wchar_t s_path[MAX_PATH] = { 0 };
-							GetWindowText( (HWND)lparam, s_path, sizeof_w(s_path) );
+							GetWindowText( (HWND)lparam, s_path, countof(s_path) );
 
 							EnableWindow( GetDlgItem(GetParent(GetParent(hwnd)), IDC_BTN_INSTALL), s_path[0] != 0 );
 							EnableWindow( GetDlgItem(GetParent(GetParent(hwnd)), IDC_BTN_CHANGE_CONF), PathFileExists(s_path) );

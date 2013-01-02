@@ -1,14 +1,13 @@
-#include <windows.h>
-#include "defines.h"
+﻿#include <windows.h>
 #ifdef SMALL_CODE
- #include "sha512_small.h"
+	#include "sha512_small.h"
 #else
- #include "sha512.h"
+	#include "sha512.h"
 #endif
 
 static const struct {
   const char *msg;
-  const char  hash[64];
+  const char  hash[SHA512_DIGEST_SIZE + 1];
 } sha512_vectors[] = {
 	/* Test vectors from FIPS 180-2: appendix C.1.  */
 	{ "abc",
@@ -70,33 +69,29 @@ static const char c3_hash[] =
 
 int test_sha512()
 {
-	sha512_ctx ctx;
-	char       buff[100];
-	u8         hash[SHA512_DIGEST_SIZE];
-	int        i;
+	sha512_ctx    ctx;
+	unsigned char buff[100];
+	unsigned char hash[SHA512_DIGEST_SIZE];
+	int           i;
 
-	for (i = 0; i < array_num(sha512_vectors); i++) 
+	for (i = 0; i < _countof(sha512_vectors); i++) 
 	{
 		sha512_init(&ctx);
-		sha512_hash(&ctx, sha512_vectors[i].msg, strlen(sha512_vectors[i].msg));
+		sha512_hash(&ctx, (const unsigned char*)sha512_vectors[i].msg, strlen(sha512_vectors[i].msg));
 		sha512_done(&ctx, hash);
 
-		if (memcmp(hash, sha512_vectors[i].hash, sizeof(hash)) != 0) {
-			return 0;
-		}
+		if (memcmp(hash, sha512_vectors[i].hash, sizeof(hash)) != 0) return 0;
 	}
-	/* long message test from FIPS 180-2: appendix C.3. */
+	// long message test from FIPS 180-2: appendix C.3.
 	memset(buff, 'a', sizeof(buff));
 
 	sha512_init(&ctx);
 
-	for (i = 0; i < 1000000 / sizeof(buff); i++) {
-		sha512_hash(&ctx, buff, sizeof(buff));
-	}
+	for (i = 0; i < 1000000 / sizeof(buff); i++) sha512_hash(&ctx, buff, sizeof(buff));
 	sha512_done(&ctx, hash);
 
-	if (memcmp(hash, c3_hash, sizeof(hash)) != 0) {
-		return 0;
-	}
+	if (memcmp(hash, c3_hash, sizeof(hash)) != 0) return 0;
+
+	// all tests passed
 	return 1;
 }

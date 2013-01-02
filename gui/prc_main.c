@@ -48,7 +48,7 @@ void _init_main_dlg(
 	wchar_t      display[MAX_PATH];
 
 	_snwprintf(
-		display, sizeof_w(display), L"%s %S", DC_NAME, DC_FILE_VER
+		display, countof(display), L"%s %S", DC_NAME, DC_FILE_VER
 		);
 
 	SetWindowText( hwnd, display );
@@ -114,7 +114,7 @@ _main_dialog_proc(
 	{
 		case WM_INITDIALOG :
 		{
-			memset( __lists, HWND_NULL, sizeof(__lists) );
+			memset( __lists, 0, sizeof(__lists) );
 
 			__lists[HMAIN_DRIVES] = GetDlgItem( hwnd, IDC_DISKDRIVES );
 			__dlg = hwnd;
@@ -153,7 +153,7 @@ _main_dialog_proc(
 						) k++;
 
 					_set_header_text( 
-						__lists[HMAIN_INFO], 0, STR_HEAD_NO_ICONS, sizeof_w(STR_HEAD_NO_ICONS) 
+						__lists[HMAIN_INFO], 0, STR_HEAD_NO_ICONS, countof(STR_HEAD_NO_ICONS) 
 						);
 
 					_list_insert_col( __lists[HMAIN_ACT], 90 );
@@ -289,7 +289,7 @@ _main_dialog_proc(
 			{
 				return 0L;
 			}
-			for ( k = 0; k < array_num(_resize); k++ )
+			for ( k = 0; k < countof(_resize); k++ )
 			{
 				_resize_ctl(
 					GetDlgItem(hwnd, _resize[k].id), height - _dlg_height, 0, _resize[k].val
@@ -297,7 +297,7 @@ _main_dialog_proc(
 			}
 			_dlg_height = height;
 
-			for ( k = 0; k < array_num(_move); k++ )
+			for ( k = 0; k < countof(_move); k++ )
 			{
 				_relative_move(
 					GetDlgItem( hwnd, _move[k].anchor ), GetDlgItem( hwnd, _move[k].id ), _move[k].dy, _move[k].dy, _move[k].val
@@ -713,7 +713,7 @@ _main_dialog_proc(
 			COLORREF cl_button = GetSysColor( COLOR_BTNFACE );
 
 			int k;
-			for ( k = 0; k < array_num(__lists); k++ )
+			for ( k = 0; k < countof(__lists); k++ )
 			{
 				if ( ( __lists[k] != HWND_NULL ) && ( __lists[k] != NULL ) )
 				{

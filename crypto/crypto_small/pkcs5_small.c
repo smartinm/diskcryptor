@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
     * Copyright (c) 2010
@@ -17,94 +17,89 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "defines.h"
+#include <intrin.h>
 #include "sha512_small.h"
 #include "pkcs5_small.h"
 
-void sha512_hmac(const char *k, size_t k_len, const char *d, size_t d_len, char *out)
+void sha512_hmac(const void *k, size_t k_len, const void *d, size_t d_len, char *out)
 {
-	sha512_ctx ctx;
-	u8         buf[SHA512_BLOCK_SIZE];
-	u8         hval[SHA512_DIGEST_SIZE];
-	size_t     i;
+	sha512_ctx    ctx;
+	unsigned char buf[SHA512_BLOCK_SIZE];
+	unsigned char hval[SHA512_DIGEST_SIZE];
+	unsigned long i;
 
-	/* zero key buffer */
-	minset(buf, 0, sizeof(buf));
+	// zero key buffer
+	__stosb(buf, 0, sizeof(buf));
 
-	/* compress hmac key */
+	// compress hmac key
 	if (k_len > SHA512_BLOCK_SIZE) {
 		sha512_init(&ctx);
-		sha512_hash(&ctx, k, k_len);
+		sha512_hash(&ctx, (const unsigned char*)k, k_len);
 		sha512_done(&ctx, buf);
 	} else {
-		mincpy(buf, k, k_len);
+		__movsb(buf, (const unsigned char*)k, k_len);
 	}
 
-	/* create the hash initial vector */ 
+	// create the hash initial vector
 	for (i = 0; i < SHA512_BLOCK_SIZE; i++) {
 		buf[i] ^= 0x36;
 	}
 
-	/* hash key and data */
+	// hash key and data
 	sha512_init(&ctx);
 	sha512_hash(&ctx, buf, SHA512_BLOCK_SIZE);
-	sha512_hash(&ctx, d, d_len);
+	sha512_hash(&ctx, (const unsigned char*)d, d_len);
 	sha512_done(&ctx, hval);
 
-	/* create the second HMAC vector */
+	// create the second HMAC vector
 	for (i = 0; i < SHA512_BLOCK_SIZE; i++) {
-        buf[i] ^= 0x6A;
-    } 
+		buf[i] ^= 0x6A;
+	} 
 
-	/* calculate "outer" hash */
+	// calculate "outer" hash
 	sha512_init(&ctx);
 	sha512_hash(&ctx, buf, SHA512_BLOCK_SIZE);
 	sha512_hash(&ctx, hval, SHA512_DIGEST_SIZE);
-	sha512_done(&ctx, out);	
+	sha512_done(&ctx, (unsigned char*)out);
 
-	/* prevent leaks */
-	burn(buf,  sizeof(buf));
-	burn(hval, sizeof(hval));
-	burn(&ctx, sizeof(ctx));
+	// prevent leaks
+	__stosb(buf, 0, sizeof(buf));
+	__stosb(hval, 0, sizeof(hval));
+	__stosb((unsigned char*)&ctx, 0, sizeof(ctx));
 }
 
-void sha512_pkcs5_2(
-	   int i_count,
-	   const void *pwd,  size_t pwd_len, 
-	   const char *salt, size_t salt_len,
-	   char *dk,   size_t dklen
-	   )
+void sha512_pkcs5_2(int i_count, const void *pwd, size_t pwd_len, const char *salt, size_t salt_len, char *dk, size_t dklen)
 {
-	u8       buff[128];
-	u8       blk[SHA512_DIGEST_SIZE];
-	u8       hmac[SHA512_DIGEST_SIZE];
-	u32      block = 1;
-	size_t   c_len, j;
-	int      i;
+	unsigned char buff[128];
+	unsigned char blk[SHA512_DIGEST_SIZE];
+	unsigned char hmac[SHA512_DIGEST_SIZE];
+	unsigned long block = 1;
+	size_t c_len;
+	int    j, i;
 
 	while (dklen != 0)
 	{
-		/* first interation */
-		mincpy(buff, salt, salt_len);
-		p32(buff + salt_len)[0] = BE32(block);
-		sha512_hmac(pwd, pwd_len, buff, salt_len + 4, hmac);
-		mincpy(blk, hmac, SHA512_DIGEST_SIZE);
+		// first interation
+		__movsb(buff, (const unsigned char*)salt, salt_len);
+		((unsigned long*)(buff + salt_len))[0] = _byteswap_ulong(block);
+		sha512_hmac(pwd, pwd_len, buff, salt_len + 4, (char*)hmac);
+		__movsb(blk, hmac, SHA512_DIGEST_SIZE);
 
-		/* next interations */
+		// next interations
 		for (i = 1; i < i_count; i++) 
 		{
-			sha512_hmac(pwd, pwd_len, hmac, SHA512_DIGEST_SIZE, hmac);
+			sha512_hmac(pwd, pwd_len, hmac, SHA512_DIGEST_SIZE, (char*)hmac);
 
 			for (j = 0; j < SHA512_DIGEST_SIZE; j++) {
 				blk[j] ^= hmac[j];
 			}
 		}
-		c_len = min(dklen, SHA512_DIGEST_SIZE);
-		mincpy(dk, blk, c_len);
+		__movsb((unsigned char*)dk, blk, (c_len = dklen < SHA512_DIGEST_SIZE ? dklen : SHA512_DIGEST_SIZE));
 		dk += c_len; dklen -= c_len; block++;
 	}
-	/* prevent leaks */
-	burn(buff, sizeof(buff));
-	burn(blk,  sizeof(blk));
-	burn(hmac, sizeof(hmac));
+	
+	// prevent leaks
+	__stosb(buff, 0, sizeof(buff));
+	__stosb(blk, 0, sizeof(blk));
+	__stosb(hmac, 0, sizeof(hmac));
 }

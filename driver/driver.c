@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2010 
+    * Copyright (c) 2007-2012 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -22,8 +22,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "defines.h"
-#include "pkcs5.h"
-#include "crc32.h"
 #include "driver.h"
 #include "prng.h"
 #include "misc.h"
@@ -39,10 +37,9 @@
 #include "mem_lock.h"
 #include "fast_crypt.h"
 #include "debug.h"
-#include "xts_aes_ni.h"
-#include "aes_padlock.h"
 #include "misc_mem.h"
 #include "minifilter.h"
+#include "crypto_functions.h"
 
 /* function types declaration */
 DRIVER_INITIALIZE DriverEntry;
@@ -60,7 +57,7 @@ int            dc_cpu_count;  /* CPU's count */
 
 typedef NTSTATUS (*dc_dispatch)(dev_hook *hook, PIRP irp);
 
-static dc_dispatch hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
+static const dc_dispatch hookdev_procs[IRP_MJ_MAXIMUM_FUNCTION + 1] = {
 	dc_forward_irp,    /* IRP_MJ_CREATE */
 	dc_forward_irp,    /* IRP_MJ_CREATE_NAMED_PIPE */
 	dc_forward_irp,    /* IRP_MJ_CLOSE */
@@ -262,20 +259,12 @@ NTSTATUS
 #endif
 	DbgMsg("dcrypt.sys started\n");
 
-	if (aes256_padlock_available() != 0) {
-		dc_load_flags |= DST_VIA_PADLOCK;
-	}
-	if (xts_aes_ni_available() != 0) {
-		dc_load_flags |= DST_INTEL_NI;
-	}
-	DbgMsg("dc_load_flags is %08x\n", dc_load_flags);
-
-	/* get number of processors in system */
+	// get number of processors in system
 	dc_cpu_count = dc_get_cpu_count();
 	DbgMsg("%d processors detected\n", dc_cpu_count);
 
 	dc_load_config(RegistryPath);
-	xts_init(dc_conf_flags & CONF_HW_CRYPTO);
+	dc_init_encryption();
 	dc_init_devhook(); 
 	dc_init_mount();
 	mm_init(); 
@@ -283,8 +272,10 @@ NTSTATUS
 	io_init();
 	dc_get_boot_pass();
 	dc_check_base_mem();
+
+	DbgMsg("dc_load_flags is %08x\n", dc_load_flags);
 	
-	/* setup IRP handlers */
+	// setup IRP handlers
 	for (num = 0; num <= IRP_MJ_MAXIMUM_FUNCTION; num++) {
 		DriverObject->MajorFunction[num] = dc_dispatch_irp;
 	}
@@ -292,23 +283,24 @@ NTSTATUS
 
 	do
 	{
-		/* init random number generator */
+		// init random number generator
 		if (cp_rand_init() != ST_OK) break;
-		/* initialize crashdump port driver hooking */
+		// initialize crashdump port driver hooking
 		if (dump_hook_init(DriverObject) == 0) break;
-		/* initialize multithreaded encryption */
+		// initialize multithreaded encryption
 		if (cp_init_fast_crypt() != ST_OK) break;
-		/* initialize dcrypt device */
+		// initialize dcrypt device
 		if (dc_create_control_device(DriverObject) != ST_OK) break;
-		/* all initialized OK */
+		// all initialized OK
 		status = STATUS_SUCCESS;
-		/* register reinit routine for complete automounting and clear cached passwords */
+		// register reinit routine for complete automounting and clear cached passwords
 		IoRegisterDriverReinitialization(DriverObject, dc_reinit_routine, NULL);
 	} while (0);
 
-	/* secondary reseed PRNG after all operations */
+	// secondary reseed PRNG after all operations
 	cp_rand_reseed();
-	/* free resources if initialization failed */
+	
+	// free resources if initialization failed
 	if (NT_SUCCESS(status) == FALSE) 
 	{
 		cp_free_fast_crypt();

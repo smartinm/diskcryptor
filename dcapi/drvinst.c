@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2007-2008
@@ -202,7 +202,7 @@ static void dc_get_driver_path(wchar_t *path, wchar_t *d_name)
 {
 	wchar_t tmpb[MAX_PATH];
 
-	GetSystemDirectory(tmpb, sizeof_w(tmpb));
+	GetSystemDirectory(tmpb, countof(tmpb));
 
 	_snwprintf(
 		path, MAX_PATH, L"%s\\drivers\\%s.sys", tmpb, d_name);
@@ -221,7 +221,7 @@ static int dc_save_drv_file(wchar_t *d_name)
 	{
 		dc_get_driver_path(dest, d_name);
 
-		if (dc_get_prog_path(path, sizeof_w(path) - 10) == 0) {
+		if (dc_get_prog_path(path, countof(path) - 10) == 0) {
 			resl = ST_ERROR; break;
 		}
 
@@ -492,7 +492,7 @@ int dc_update_driver()
 	if (resl == ST_OK) 
 	{
 		_snwprintf(
-			buff, sizeof_w(buff), L"DC_UPD_%d", dc_get_version());
+			buff, countof(buff), L"DC_UPD_%d", dc_get_version());
 
 		GlobalAddAtom(buff);			
 	}

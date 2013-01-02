@@ -1,6 +1,7 @@
-#ifndef _XTS_FAST_H_
+﻿#ifndef _XTS_FAST_H_
 #define _XTS_FAST_H_
 
+#include <memory.h>
 #include "aes_key.h"
 #include "twofish.h"
 #include "serpent.h"
@@ -21,9 +22,9 @@
 #define XTS_KEY_SIZE   32
 #define XTS_FULL_KEY   (XTS_KEY_SIZE*3*2)
 
-typedef void (_stdcall *xts_proc)(const unsigned char *in, unsigned char *out, size_t len, u64 offset, struct _xts_key *key);
+typedef void (_stdcall *xts_proc)(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, struct _xts_key *key);
 
-typedef align16 struct _xts_key {
+typedef __declspec(align(16)) struct _xts_key {
 	struct {
 		aes256_key     aes;
 		twofish256_key twofish;
@@ -41,13 +42,14 @@ typedef align16 struct _xts_key {
 
 void _stdcall xts_init(int hw_crypt);
 void _stdcall xts_set_key(const unsigned char *key, int alg, xts_key *skey);
+int  _stdcall xts_aes_ni_available();
 
 #define xts_encrypt(_in, _out, _len, _offset, _key) ( (_key)->encrypt(_in, _out, _len, _offset, _key) )
 #define xts_decrypt(_in, _out, _len, _offset, _key) ( (_key)->decrypt(_in, _out, _len, _offset, _key) )
 
 #ifdef _M_IX86
-extern long _stdcall save_fpu_state(unsigned char state[32]);
-extern void _stdcall load_fpu_state(unsigned char state[32]);
+	extern long _stdcall save_fpu_state(unsigned char state[32]);
+	extern void _stdcall load_fpu_state(unsigned char state[32]);
 #endif
 
 #endif

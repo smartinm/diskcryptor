@@ -164,7 +164,7 @@ char _check_hotkeys(
 			if ( k != j && hotkeys[k] && hotkeys[k] == hotkeys[j] )
 			{
 				_key_name( HIWORD(hotkeys[k]), LOWORD(hotkeys[k]), key );
-				_snwprintf( display, sizeof_w(display), L"Duplicated Hotkey: \"%s\"", key );
+				_snwprintf( display, countof(display), L"Duplicated Hotkey: \"%s\"", key );
 
 				MessageBox( hwnd, display, L"Error", MB_OK | MB_ICONERROR );
 				return FALSE;

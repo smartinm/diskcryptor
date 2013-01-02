@@ -1,11 +1,10 @@
-#include <windows.h>
-#include "defines.h"
+﻿#include <windows.h>
 #ifdef SMALL_CODE
- #include "pkcs5_small.h"
- #include "sha512_small.h"
+	#include "pkcs5_small.h"
+	#include "sha512_small.h"
 #else
- #include "pkcs5.h"
- #include "sha512.h"
+	#include "pkcs5.h"
+	#include "sha512.h"
 #endif
 
 static const struct {
@@ -100,36 +99,32 @@ static const struct {
 int test_pkcs5()
 {
 	const char *p_key, *data;
-	u8          hmac[SHA512_DIGEST_SIZE];
+	char        hmac[SHA512_DIGEST_SIZE];
 	const char *pass, *salt;
 	int         i, dklen;	
-	u8          dk[144];
+	char        dk[144];
 
-	/* test HMAC-SHA-512 */
-	for (i = 0; i < array_num(sha512_hmac_vectors); i++) 
+	// test HMAC-SHA-512 
+	for (i = 0; i < _countof(sha512_hmac_vectors); i++) 
 	{
 		p_key = sha512_hmac_vectors[i].key;
 		data  = sha512_hmac_vectors[i].data;
 
 		sha512_hmac(p_key, strlen(p_key), data, strlen(data), hmac);
-
-		if (memcmp(hmac, sha512_hmac_vectors[i].hmac, sizeof(hmac)) != 0) {
-			return 0;
-		}
+		if (memcmp(hmac, sha512_hmac_vectors[i].hmac, sizeof(hmac)) != 0) return 0;
 	}
-	/* test PKDBF2 */
-	for (i = 0; i < array_num(pkcs5_vectors); i++)
+
+	// test PKDBF2
+	for (i = 0; i < _countof(pkcs5_vectors); i++)
 	{
 		pass  = pkcs5_vectors[i].password;
 		salt  = pkcs5_vectors[i].salt;
 		dklen = pkcs5_vectors[i].dklen;
 
-		sha512_pkcs5_2(
-			pkcs5_vectors[i].i_count, pass, strlen(pass), salt, strlen(salt), dk, dklen);
+		sha512_pkcs5_2(pkcs5_vectors[i].i_count, pass, strlen(pass), salt, strlen(salt), dk, dklen);
+		if (memcmp(dk, pkcs5_vectors[i].key, dklen) != 0) return 0;
+	}
 
-		if (memcmp(dk, pkcs5_vectors[i].key, dklen) != 0) {
-			return 0;
-		}
-	}	
+	// all tests passed
 	return 1;
 }

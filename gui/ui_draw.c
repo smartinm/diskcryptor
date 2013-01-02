@@ -98,7 +98,7 @@ void _draw_listview(
 	int            icon;
 	BOOL           is_root;
 	int            col_cnt     = Header_GetItemCount( ListView_GetHeader( itst->hwndItem ) );
-	LVITEM         lvitem      = { LVIF_TEXT | LVIF_PARAM, itst->itemID, 0, 0, 0, s_text, sizeof_w(s_text) };
+	LVITEM         lvitem      = { LVIF_TEXT | LVIF_PARAM, itst->itemID, 0, 0, 0, s_text, countof(s_text) };
 	COLORREF       bgcolor     = ListView_GetBkColor( itst->hwndItem );
 
 	ListView_GetItem( itst->hwndItem, &lvitem );

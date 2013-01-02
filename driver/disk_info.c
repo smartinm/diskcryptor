@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2010
+    * Copyright (c) 2010-2012
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -30,62 +30,43 @@
 #include "device_io.h"
 #include "debug.h"
 
-int dc_verify_device(dev_hook *hook)
+static ULONG dc_get_device_mtl(dev_hook *hook)
 {
-	u32 chg_count;
-
-	if (io_hook_ioctl(hook, IOCTL_DISK_CHECK_VERIFY, NULL, 0, &chg_count, sizeof(chg_count)) == ST_OK)
-	{
-		if (lock_xchg(&hook->chg_count, chg_count) != chg_count) {
-			return ST_MEDIA_CHANGED;
-		} else {
-			return ST_OK;
-		}
-	} else {
-		return ST_NO_MEDIA;
-	}
-}
-
-static u32 dc_get_device_mtl(dev_hook *hook)
-{
-	STORAGE_ADAPTER_DESCRIPTOR sd;
-	STORAGE_PROPERTY_QUERY     sq;
+	STORAGE_PROPERTY_QUERY     sq = { StorageAdapterProperty, PropertyStandardQuery, };
 	IO_SCSI_CAPABILITIES       sc;
-	u32                        max_chunk = 0;
+	STORAGE_ADAPTER_DESCRIPTOR sd;
+	ULONG                      max_chunk;
 
-	sq.PropertyId = StorageAdapterProperty;
-	sq.QueryType  = PropertyStandardQuery;
-	
-	if (io_hook_ioctl(hook, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd)) == ST_OK) {
-		max_chunk = min(sd.MaximumTransferLength, sd.MaximumPhysicalPages * PAGE_SIZE);
+	if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd))) ) {
+		max_chunk = min(sd.MaximumTransferLength, sd.MaximumPhysicalPages ? (sd.MaximumPhysicalPages - 1) * PAGE_SIZE : 0);
+	} else if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &sc, sizeof(sc))) ) {
+		max_chunk = min(sc.MaximumTransferLength, sc.MaximumPhysicalPages ? (sc.MaximumPhysicalPages - 1) * PAGE_SIZE : 0);
+	} else {
+		// 64k safe for removable devices, 128k safe for internal devices
+		max_chunk = ((hook->flags & F_REMOVABLE) ? 64 : 128) * 1024;
 	}
-	if (max_chunk == 0)
-	{
-		if (io_hook_ioctl(hook, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &sc, sizeof(sc)) == ST_OK) {
-			max_chunk = min(sc.MaximumTransferLength, sc.MaximumPhysicalPages * PAGE_SIZE);
-		}
-	}
-	if (max_chunk < 1024) {
-		max_chunk = 32768; /* safe value */
-	}
+	// MaximumTransferLength must be >= 32k and PAGE_SIZE aligned
+	max_chunk = max(max_chunk & ~(PAGE_SIZE - 1), 32*1024);
+	DbgMsg("device %ws MaximumTransferLength=%dK\n", hook->dev_name, max_chunk / 1024);
 	return max_chunk;
 }
 
-static int dc_is_this_ssd(dev_hook *hook)
+static BOOLEAN dc_is_this_ssd(dev_hook *hook)
 {
-	STORAGE_PROPERTY_QUERY         query = { StorageDeviceSeekPenaltyProperty,  PropertyStandardQuery };
-	DEVICE_SEEK_PENALTY_DESCRIPTOR seek  = {0};
-	char                           buff[sizeof(ATA_PASS_THROUGH_EX) + sizeof(IDENTIFY_DEVICE_DATA)] = {0};
-    PATA_PASS_THROUGH_EX           pata = pv(buff);
-	PIDENTIFY_DEVICE_DATA          idat = pv(buff + sizeof(ATA_PASS_THROUGH_EX));
-	int                            resl;
+	STORAGE_PROPERTY_QUERY         query = { StorageDeviceSeekPenaltyProperty,  PropertyStandardQuery, };
+	DEVICE_SEEK_PENALTY_DESCRIPTOR seek  = { 0 };
+	char                           buff[sizeof(ATA_PASS_THROUGH_EX) + sizeof(IDENTIFY_DEVICE_DATA)] = { 0 };
+    PATA_PASS_THROUGH_EX           pata = (PATA_PASS_THROUGH_EX)buff;
+	PIDENTIFY_DEVICE_DATA          idat = (PIDENTIFY_DEVICE_DATA)(buff + sizeof(ATA_PASS_THROUGH_EX));
 
-	resl = io_hook_ioctl(hook, IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &seek, sizeof(seek));
+	if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &seek, sizeof(seek))) )
+	{
+		if (seek.Version >= sizeof(DEVICE_SEEK_PENALTY_DESCRIPTOR) && seek.Size >= sizeof(DEVICE_SEEK_PENALTY_DESCRIPTOR)) {
+			DbgMsg("device %ws IncursSeekPenalty=%d\n", hook->dev_name, seek.IncursSeekPenalty);
+			return seek.IncursSeekPenalty == FALSE;
+		}
+	}	
 
-	if ( (resl == ST_OK) && (seek.Version >= sizeof(seek)) && (seek.Size >= sizeof(seek)) ) {
-		DbgMsg("seek.IncursSeekPenalty %d\n", seek.IncursSeekPenalty);
-		return seek.IncursSeekPenalty == FALSE;
-	}
 	pata->Length             = sizeof(ATA_PASS_THROUGH_EX);
 	pata->DataBufferOffset   = sizeof(ATA_PASS_THROUGH_EX);
 	pata->DataTransferLength = sizeof(IDENTIFY_DEVICE_DATA);
@@ -93,62 +74,80 @@ static int dc_is_this_ssd(dev_hook *hook)
 	pata->TimeOutValue       = 2;
 	pata->CurrentTaskFile[6] = IDE_COMMAND_IDENTIFY;
 
-	if (io_hook_ioctl(hook, IOCTL_ATA_PASS_THROUGH, buff, sizeof(buff), buff, sizeof(buff)) != ST_OK) {
-		return 0;
-	} else {
-		DbgMsg("idat->NominalMediaRotationRate %d\n", idat->NominalMediaRotationRate);
+	if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_ATA_PASS_THROUGH, buff, sizeof(buff), buff, sizeof(buff))) )
+	{
+		DbgMsg("device %ws NominalMediaRotationRate=%d\n", hook->dev_name, idat->NominalMediaRotationRate);
+		return idat->NominalMediaRotationRate == 1;
 	}
-	return idat->NominalMediaRotationRate == 1;
+	return FALSE;
 }
 
-int dc_fill_disk_info(dev_hook *hook)
+NTSTATUS dc_fill_device_info(dev_hook *hook)
 {
-	PARTITION_INFORMATION    pti;
-	PARTITION_INFORMATION_EX ptix;
-	DISK_GEOMETRY_EX         dgx;
-	DISK_GEOMETRY            dg;
-	u64                      d_size;
-
+	DISK_GEOMETRY_EX dgx;
+	DISK_GEOMETRY    dg;
+	ULONGLONG        dev_length;
+	NTSTATUS         status;
+	
 	if (hook->pnp_state != Started) {
-		return ST_RW_ERR;
+		DbgMsg("device not started, dev=%ws, pnp_state=%d\n", hook->dev_name, hook->pnp_state);
+		return STATUS_INVALID_DEVICE_STATE;
 	}
+
+	// check media in removable device
+	if (hook->flags & F_REMOVABLE)
+	{
+		if ( !NT_SUCCESS(status = io_device_control(hook->orig_dev,
+			                                        IOCTL_STORAGE_CHECK_VERIFY, NULL, 0, &hook->chg_count, sizeof(hook->chg_count))) )
+		{
+			DbgMsg("removable device has no media, dev=%ws, status=%0.8x\n", hook->dev_name, status);
+			return status;
+		}
+	}
+	
+	// get device length in bytes
 	if (hook->flags & F_CDROM)
 	{
-		if (io_hook_ioctl(hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg)) != ST_OK) {
-			return ST_RW_ERR;
-		}
-		if (io_hook_ioctl(hook, IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX, NULL, 0, &dgx, sizeof(dgx)) == ST_OK) {
-			d_size = dgx.DiskSize.QuadPart;
-		} else {
-			d_size = d64(dg.Cylinders.QuadPart) * d64(dg.TracksPerCylinder) * 
-				     d64(dg.SectorsPerTrack) * d64(dg.BytesPerSector);
+		if ( NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX, NULL, 0, &dgx, sizeof(dgx))) ) {
+			dev_length = dgx.DiskSize.QuadPart;
+			dg.BytesPerSector = dgx.Geometry.BytesPerSector;
+		} else if ( NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_CDROM_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg))) ) {
+			dev_length = dg.Cylinders.QuadPart * (ULONGLONG)(dg.TracksPerCylinder * dg.SectorsPerTrack * dg.BytesPerSector);
 		}
 	} else
 	{
-		if (io_hook_ioctl(hook, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg)) != ST_OK) {
-			return ST_RW_ERR;
-		}
-		if (io_hook_ioctl(hook, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix)) != ST_OK)
-		{
-			if (io_hook_ioctl(hook, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti)) != ST_OK) {
-				return ST_RW_ERR;
-			}
-			d_size = pti.PartitionLength.QuadPart;
-		} else {
-			d_size = ptix.PartitionLength.QuadPart;
-		}
-	}
-	if ( (hook->flags & F_REMOVABLE) && (dc_verify_device(hook) == ST_NO_MEDIA) ) {
-		return ST_NO_MEDIA;
-	}
-	hook->dsk_size   = d_size;
-	hook->bps        = dg.BytesPerSector;
-	hook->chg_last_v = hook->chg_count;
-	hook->max_chunk  = dc_get_device_mtl(hook);
-	hook->head_len   = max(sizeof(dc_header), hook->bps);
+		PARTITION_INFORMATION    pti;
+		PARTITION_INFORMATION_EX ptix;
 
-	if ( (hook->flags & (F_REMOVABLE | F_CDROM)) == 0 ) {
-		if (dc_is_this_ssd(hook) != 0) hook->flags |= F_SSD;
-	}	
-	return ST_OK;
+		if ( !NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &dg, sizeof(dg))) )
+		{
+			DbgMsg("can not get drive geometry, dev=%ws, status=%0.8x\n", hook->dev_name, status);
+			return status;
+		}
+
+		if ( NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_DISK_GET_PARTITION_INFO_EX, NULL, 0, &ptix, sizeof(ptix))) ) {
+			dev_length = ptix.PartitionLength.QuadPart;
+		} else if ( NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti))) ) {
+			dev_length = pti.PartitionLength.QuadPart;
+		} else if ( !NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &dev_length, sizeof(dev_length))) ) {
+			dev_length = dg.Cylinders.QuadPart * (ULONGLONG)(dg.TracksPerCylinder * dg.SectorsPerTrack * dg.BytesPerSector);
+			status = STATUS_SUCCESS;
+		}
+	}
+	if ( !NT_SUCCESS(status) ) {
+		DbgMsg("can not get drive size, dev=%ws, status=%0.8x\n", hook->dev_name, status);
+		return status;
+	} else {
+		DbgMsg("device %ws size = %uMB\n", hook->dev_name, (ULONG)(dev_length / 1024 / 1024));
+	}
+
+	hook->dsk_size  = dev_length;
+	hook->bps       = dg.BytesPerSector;
+	hook->max_chunk = dc_get_device_mtl(hook);
+	hook->head_len  = max(sizeof(dc_header), hook->bps);
+
+	if ( (hook->flags & (F_REMOVABLE | F_CDROM | F_SSD)) == 0 ) {
+		if ( dc_is_this_ssd(hook) ) hook->flags |= F_SSD;
+	}
+	return STATUS_SUCCESS;
 }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Cryptographic API.
  *
  * Serpent Cipher Algorithm.
@@ -15,8 +15,8 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  */
-
-#include "defines.h"
+#include <memory.h>
+#include <intrin.h>
 #include "serpent.h"
 
 /* Key is padded to the maximum of 256 bits before round key generation.
@@ -26,7 +26,7 @@
 #define PHI 0x9e3779b9UL
 
 #define keyiter(a,b,c,d,i,j) \
-        b ^= d; b ^= c; b ^= a; b ^= PHI ^ i; b = ROL32(b,11); k[j] = b;
+        b ^= d; b ^= c; b ^= a; b ^= PHI ^ i; b = _rotl(b,11); k[j] = b;
 
 #define loadkeys(x0,x1,x2,x3,i) \
 	x0=k[i]; x1=k[i+1]; x2=k[i+2]; x3=k[i+3];
@@ -39,24 +39,24 @@
 	x1 ^= k[4*(i)+1];        x0 ^= k[4*(i)+0];
 
 #define LK(x0,x1,x2,x3,x4,i)				\
-					x0=ROL32(x0,13);\
-	x2=ROL32(x2,3);	x1 ^= x0;	x4  = x0 << 3;	\
+					x0=_rotl(x0,13);\
+	x2=_rotl(x2,3);	x1 ^= x0;	x4  = x0 << 3;	\
 	x3 ^= x2;	x1 ^= x2;			\
-	x1=ROL32(x1,1);	x3 ^= x4;			\
-	x3=ROL32(x3,7);	x4  = x1;			\
+	x1=_rotl(x1,1);	x3 ^= x4;			\
+	x3=_rotl(x3,7);	x4  = x1;			\
 	x0 ^= x1;	x4 <<= 7;	x2 ^= x3;	\
 	x0 ^= x3;	x2 ^= x4;	x3 ^= k[4*i+3];	\
-	x1 ^= k[4*i+1];	x0=ROL32(x0,5);	x2=ROL32(x2,22);\
+	x1 ^= k[4*i+1];	x0=_rotl(x0,5);	x2=_rotl(x2,22);\
 	x0 ^= k[4*i+0];	x2 ^= k[4*i+2];
 
 #define KL(x0,x1,x2,x3,x4,i)				\
 	x0 ^= k[4*i+0];	x1 ^= k[4*i+1];	x2 ^= k[4*i+2];	\
-	x3 ^= k[4*i+3];	x0=ROR32(x0,5);	x2=ROR32(x2,22);\
+	x3 ^= k[4*i+3];	x0=_rotr(x0,5);	x2=_rotr(x2,22);\
 	x4 =  x1;	x2 ^= x3;	x0 ^= x3;	\
-	x4 <<= 7;	x0 ^= x1;	x1=ROR32(x1,1);	\
-	x2 ^= x4;	x3=ROR32(x3,7);	x4 = x0 << 3;	\
-	x1 ^= x0;	x3 ^= x4;	x0=ROR32(x0,13);\
-	x1 ^= x2;	x3 ^= x2;	x2=ROR32(x2,3);
+	x4 <<= 7;	x0 ^= x1;	x1=_rotr(x1,1);	\
+	x2 ^= x4;	x3=_rotr(x3,7);	x4 = x0 << 3;	\
+	x1 ^= x0;	x3 ^= x4;	x0=_rotr(x0,13);\
+	x1 ^= x2;	x3 ^= x2;	x2=_rotr(x2,3);
 
 #define S0(x0,x1,x2,x3,x4)				\
 					x4  = x3;	\
@@ -204,8 +204,8 @@
 
 void _stdcall serpent256_set_key(const unsigned char *key, serpent256_key *skey)
 {
-	u32 *k = skey->expkey;
-	u32  r0,r1,r2,r3,r4;	
+	unsigned long *k = skey->expkey;
+	unsigned long  r0,r1,r2,r3,r4;	
 
 	/* Copy key, add padding */
 	memcpy(k, key, SERPENT_KEY_SIZE);
@@ -333,11 +333,11 @@ void _stdcall serpent256_set_key(const unsigned char *key, serpent256_key *skey)
 
 void _stdcall serpent256_encrypt(const unsigned char *in, unsigned char *out, serpent256_key *key)
 {
-	u32 *k = key->expkey;
-	u32  r0, r1, r2, r3, r4;
+	unsigned long *k = key->expkey;
+	unsigned long  r0, r1, r2, r3, r4;
 
-	r0 = p32(in)[0]; r1 = p32(in)[1];
-	r2 = p32(in)[2]; r3 = p32(in)[3];
+	r0 = ((unsigned long*)in)[0]; r1 = ((unsigned long*)in)[1];
+	r2 = ((unsigned long*)in)[2]; r3 = ((unsigned long*)in)[3];
 
 	K(r0,r1,r2,r3,0);
 	S0(r0,r1,r2,r3,r4);	LK(r2,r1,r3,r0,r4,1);
@@ -373,17 +373,17 @@ void _stdcall serpent256_encrypt(const unsigned char *in, unsigned char *out, se
 	S6(r0,r1,r3,r2,r4);	LK(r3,r4,r1,r2,r0,31);
 	S7(r3,r4,r1,r2,r0);	 K(r0,r1,r2,r3,32);
 
-	p32(out)[0] = r0; p32(out)[1] = r1;
-	p32(out)[2] = r2; p32(out)[3] = r3;
+	((unsigned long*)out)[0] = r0; ((unsigned long*)out)[1] = r1;
+	((unsigned long*)out)[2] = r2; ((unsigned long*)out)[3] = r3;
 }
 
 void _stdcall serpent256_decrypt(const unsigned char *in, unsigned char *out, serpent256_key *key)
 {
-	u32 *k = key->expkey;
-	u32	 r0, r1, r2, r3, r4;
+	unsigned long *k = key->expkey;
+	unsigned long  r0, r1, r2, r3, r4;
 
-	r0 = p32(in)[0]; r1 = p32(in)[1];
-	r2 = p32(in)[2]; r3 = p32(in)[3];
+	r0 = ((unsigned long*)in)[0]; r1 = ((unsigned long*)in)[1];
+	r2 = ((unsigned long*)in)[2]; r3 = ((unsigned long*)in)[3];
 
 	K(r0,r1,r2,r3,32);
 	SI7(r0,r1,r2,r3,r4); KL(r1,r3,r0,r4,r2,31);
@@ -419,6 +419,6 @@ void _stdcall serpent256_decrypt(const unsigned char *in, unsigned char *out, se
 	SI1(r3,r1,r2,r0,r4); KL(r4,r1,r2,r0,r3,1);
 	SI0(r4,r1,r2,r0,r3); K(r2,r3,r1,r4,0);
 
-	p32(out)[0] = r2; p32(out)[1] = r3;
-	p32(out)[2] = r1; p32(out)[3] = r4;
+	((unsigned long*)out)[0] = r2; ((unsigned long*)out)[1] = r3;
+	((unsigned long*)out)[2] = r1; ((unsigned long*)out)[3] = r4;
 }

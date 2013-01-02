@@ -58,8 +58,11 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 			resl = ST_NOMEM; break;
 		}
 		/* get device params */
-		if (hook->dsk_size == 0) {
-			if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) break;
+		if (hook->dsk_size == 0)
+		{
+			if ( !NT_SUCCESS(dc_fill_device_info(hook)) ) {
+				resl = ST_IO_ERROR; break;
+			}
 		}
 		if ( (resl = io_read_header(hook, &header, NULL, password)) != ST_OK ) {
 			break;
@@ -110,8 +113,11 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 			resl = ST_ERROR; break;
 		}
 		/* get device params */
-		if (hook->dsk_size == 0) {
-			if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) break;
+		if (hook->dsk_size == 0)
+		{
+			if ( !NT_SUCCESS(dc_fill_device_info(hook)) ) {
+				resl = ST_IO_ERROR; break;
+			}
 		}
 		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
 			resl = ST_NOMEM; break;
@@ -173,8 +179,8 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 
 		/* get device params */
-		if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) {
-			break;
+		if ( !NT_SUCCESS(dc_fill_device_info(hook)) ) {
+			resl = ST_IO_ERROR; break;
 		}
 
 		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
@@ -230,7 +236,7 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		cp_rand_bytes(pv(&header->disk_id), sizeof(u32));
 		cp_rand_bytes(pv(header->key_1),    DISKKEY_SIZE);
 
-		header->sign    = DC_VOLM_SIGN;
+		header->sign    = DC_VOLUME_SIGN;
 		header->version = DC_HDR_VERSION;
 		header->alg_1   = crypt->cipher_id;		
 
@@ -457,8 +463,9 @@ void dc_update_volume(dev_hook *hook)
 	}
 	if (io_hook_ioctl(hook, IOCTL_VOLUME_UPDATE_PROPERTIES, NULL, 0, NULL, 0) != ST_OK) {
 		goto exit;
-	}	
-	if ( (dc_fill_disk_info(hook) != ST_OK) || (hook->dsk_size == old_sz) ) {
+	}
+
+	if ( !NT_SUCCESS(dc_fill_device_info(hook)) || hook->dsk_size == old_sz ) {
 		goto exit;
 	} else {
 		hook->use_size += hook->dsk_size - old_sz;

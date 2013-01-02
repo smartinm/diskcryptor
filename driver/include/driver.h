@@ -3,7 +3,7 @@
 
 #include "defines.h"
 #include "version.h"
-#include "volume.h"
+#include "volume_header.h"
 #include "dcconst.h"
 
 #define DC_GET_VERSION       CTL_CODE(FILE_DEVICE_UNKNOWN, 0,  METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -136,6 +136,7 @@ typedef struct _dc_conf {
 
 #define DC_MEM_RETRY_TIME    10
 #define DC_MEM_RETRY_TIMEOUT (1000 * 30)
+#define ENC_BLOCK_SIZE (1280 * 1024)
 
 #ifdef IS_DRIVER
  extern PDEVICE_OBJECT dc_device;
@@ -145,7 +146,7 @@ typedef struct _dc_conf {
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;
  extern u32            dc_boot_kbs;
- extern int            dc_cpu_count; 
+ extern int            dc_cpu_count;
 #endif
 
 

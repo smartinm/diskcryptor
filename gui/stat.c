@@ -239,19 +239,19 @@ void _update_act_info(
 	{
 		done = status->tmp_size;
 	}
-	dc_format_byte_size( s_done, sizeof_w(s_done), done );
+	dc_format_byte_size( s_done, countof(s_done), done );
 		
 	_get_time_period( act->speed.t_begin.QuadPart, s_elapsed, FALSE );
 
-	speed = _speed_stat_timer( s_speed, sizeof_w(s_speed), &act->speed, status->tmp_size, act->status == ACT_RUNNING );
+	speed = _speed_stat_timer( s_speed, countof(s_speed), &act->speed, status->tmp_size, act->status == ACT_RUNNING );
 					
 	if ( speed != 0 )
 	{
 		_get_time_period( ( ( status->dsk_size - done ) / 1024 / 1024 ) / speed, s_estimated, TRUE );					
 	}
 
-	j = _snwprintf( s_sectors, sizeof_w(s_sectors), L"Sector: %I64d\t\t", sectors );
-	j = _snwprintf( s_sectors+j, sizeof_w(s_sectors)-j, L"Total Sectors: %I64d", status->dsk_size / 512 );
+	j = _snwprintf( s_sectors, countof(s_sectors), L"Sector: %I64d\t\t", sectors );
+	j = _snwprintf( s_sectors+j, countof(s_sectors)-j, L"Total Sectors: %I64d", status->dsk_size / 512 );
 
 	_list_set_item_text( __lists[HMAIN_ACT], 0, 1, _wcslwr(s_done) );
 	_list_set_item_text( __lists[HMAIN_ACT], 1, 1, ACT_RUNNING == act->status ? s_speed : STR_EMPTY );
@@ -261,7 +261,7 @@ void _update_act_info(
 		_list_set_item_text( __lists[HMAIN_ACT], 0, 3, s_estimated );
 		_list_set_item_text( __lists[HMAIN_ACT], 1, 3, s_elapsed );
 	}
-	GetWindowText( h_sector, s_old, sizeof_w(s_old) );
+	GetWindowText( h_sector, s_old, countof(s_old) );
 
 	if ( wcscmp( s_old, s_sectors ) ) 
 	{

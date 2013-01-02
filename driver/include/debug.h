@@ -1,7 +1,7 @@
 #ifndef _DEBUG_
 #define _DEBUG_
 
-//#define DBG_MSG
+#define DBG_MSG
 //#define DBG_COM
 //#define DBG_HAL_DISPLAY
 
@@ -15,8 +15,8 @@
 #ifdef DBG_HAL_DISPLAY
   void hal_print(char *format, ...);
   #define DbgMsg hal_print
-#else 
-  #define DbgMsg DbgPrint
+#else
+  #define DbgMsg(_msg, ...) DbgPrintEx(DPFLTR_DEFAULT_ID, DPFLTR_INFO_LEVEL, "dcrypt: "##_msg, ##__VA_ARGS__)
 #endif /* DBG_HAL_DISPLAY */
 #endif /* DBG_COM */
 

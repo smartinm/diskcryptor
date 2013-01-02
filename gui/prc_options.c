@@ -98,12 +98,12 @@ _options_dlg_proc(
 			d_tab->active = wnd->dlg[0];
 			wnd_set_long(hwnd, GWL_USERDATA, d_tab);
 			{
-				for ( k = 0; k < array_num(ctl_chk_general); k++ )
+				for ( k = 0; k < countof(ctl_chk_general); k++ )
 				{
 					_sub_class( GetDlgItem( wnd->dlg[0], ctl_chk_general[k].id ), SUB_STATIC_PROC, HWND_NULL );
 					_set_check( wnd->dlg[0], ctl_chk_general[k].id, __config.conf_flags & ctl_chk_general[k].val );
 				}
-				for ( k = 0; k < array_num(ctl_chk_extended); k++ )
+				for ( k = 0; k < countof(ctl_chk_extended); k++ )
 				{
 					_sub_class( GetDlgItem( wnd->dlg[1], ctl_chk_extended[k].id ), SUB_STATIC_PROC, HWND_NULL );
 					_set_check( wnd->dlg[1], ctl_chk_extended[k].id, __config.conf_flags & ctl_chk_extended[k].val );
@@ -115,17 +115,17 @@ _options_dlg_proc(
 					HWND h_check = GetDlgItem( wnd->dlg[1], IDC_HARD_CRYPTO_SUPPORT );
 					EnableWindow( h_check, FALSE );
 
-					GetWindowText( h_check, s_ch_label, sizeof_w(s_ch_label) );
+					GetWindowText( h_check, s_ch_label, countof(s_ch_label) );
 					wcscat( s_ch_label, L" (not supported)" );
 
 					SetWindowText( h_check, s_ch_label );
 				}
-				for ( k = 0; k < array_num(static_head_general); k++ )
+				for ( k = 0; k < countof(static_head_general); k++ )
 				{
 					SetWindowText(GetDlgItem(wnd->dlg[0], static_head_general[k].id), static_head_general[k].display);
 					SendMessage(GetDlgItem(wnd->dlg[0], static_head_general[k].id), (UINT)WM_SETFONT, (WPARAM)__font_bold, 0);
 				}
-				for ( k = 0; k < array_num(static_head_extended); k++ )
+				for ( k = 0; k < countof(static_head_extended); k++ )
 				{
 					SetWindowText(GetDlgItem(wnd->dlg[1], static_head_extended[k].id), static_head_extended[k].display);
 					SendMessage(GetDlgItem(wnd->dlg[1], static_head_extended[k].id), (UINT)WM_SETFONT, (WPARAM)__font_bold, 0);
@@ -225,11 +225,11 @@ _options_dlg_proc(
 				wnd = wnd_get_long( GetDlgItem(hwnd, IDT_TAB), GWL_USERDATA );
 				if ( wnd ) 
 				{
-					for ( k = 0; k < array_num(ctl_chk_general); k++ )
+					for ( k = 0; k < countof(ctl_chk_general); k++ )
 					{	
 						_flags |= _get_check(wnd->dlg[0], ctl_chk_general[k].id) ? ctl_chk_general[k].val : FALSE;
 					}
-					for ( k = 0; k < array_num(ctl_chk_extended); k++ )
+					for ( k = 0; k < countof(ctl_chk_extended); k++ )
 					{	
 						_flags |= _get_check(wnd->dlg[1], ctl_chk_extended[k].id) ? ctl_chk_extended[k].val : FALSE;
 					}
@@ -287,11 +287,11 @@ _options_dlg_proc(
 			wnd = wnd_get_long( GetDlgItem(hwnd, IDT_TAB), GWL_USERDATA );
 			if ( wnd )
 			{
-				for ( k = 0; k < array_num(ctl_chk_general); k++ )
+				for ( k = 0; k < countof(ctl_chk_general); k++ )
 				{
 					__unsub_class(GetDlgItem(wnd->dlg[0], ctl_chk_general[k].id));
 				}
-				for ( k = 0; k < array_num(ctl_chk_extended); k++ )
+				for ( k = 0; k < countof(ctl_chk_extended); k++ )
 				{
 					__unsub_class(GetDlgItem(wnd->dlg[1], ctl_chk_extended[k].id));
 				}

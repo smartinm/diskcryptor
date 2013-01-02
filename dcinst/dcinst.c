@@ -18,9 +18,9 @@
 */
 #include <windows.h>
 #include "defines.h"
-#include "dcapi/drv_ioctl.h"
-#include "dcapi/drvinst.h"
-#include "dcapi/mbrinst.h"
+#include "drv_ioctl.h"
+#include "drvinst.h"
+#include "mbrinst.h"
 
 /*
     -setup  - install or update driver (update bootloader when needed)

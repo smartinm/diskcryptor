@@ -1,7 +1,5 @@
-#ifndef _TWOFISH_H_
+﻿#ifndef _TWOFISH_H_
 #define _TWOFISH_H_
-
-#include "defines.h"
 
 /* Structure for an expanded Twofish key.  s contains the key-dependent
  * S-boxes composed with the MDS matrix; w contains the eight "whitening"
@@ -9,7 +7,7 @@
  * that k[i] corresponds to what the Twofish paper calls K[i+8]. */
 
 typedef struct _twofish256_key {
-	u32 s[4][256], w[8], k[32];
+	unsigned long s[4][256], w[8], k[32];
 } twofish256_key;
 
 #define TWOFISH_KEY_SIZE   32

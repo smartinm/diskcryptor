@@ -1,7 +1,7 @@
 
 ; ---------------------------------------------------------------------------
 ; Copyright (c) 1998-2008, Brian Gladman, Worcester, UK. All rights reserved.
-; Copyright (c) 2010, ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+; Copyright (c) 2010, ntldr <ntldr@diskcryptor.net> PGP key ID - 0x1B6A24550F33E44A
 ;
 ; LICENSE TERMS
 ;

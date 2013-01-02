@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008-2009
@@ -25,27 +25,24 @@
 #include "misc.h"
 #include "dcapi.h"
 
-int dc_open_device( )
+int dc_open_device()
 {
 	HANDLE h_device;
 
-	h_device = CreateFile(
-		DC_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
+	h_device = CreateFile(DC_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
 
 	if (h_device != INVALID_HANDLE_VALUE) {
 		TlsSetValue(h_tls_idx, h_device);
 		return ST_OK;
-	} else {
-		return ST_ERROR;
 	}
+    return ST_ERROR;
 }
 
-int dc_is_old_runned( )
+int dc_is_old_runned()
 {
 	HANDLE h_device;
 
-	h_device = CreateFile(
-		DC_OLD_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
+	h_device = CreateFile(DC_OLD_WIN32_NAME, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
 
 	if (h_device != INVALID_HANDLE_VALUE) {
 		CloseHandle(h_device);
@@ -54,10 +51,9 @@ int dc_is_old_runned( )
 	return 0;
 }
 
-void dc_close_device( )
+void dc_close_device()
 {
-	CloseHandle(
-		TlsGetValue(h_tls_idx));
+	CloseHandle(TlsGetValue(h_tls_idx));
 }
 
 static int dc_get_vol_info(wchar_t *name, vol_inf *info)
@@ -74,7 +70,7 @@ static int dc_get_vol_info(wchar_t *name, vol_inf *info)
 		wcscpy(info->w32_device, name);
 
 		_snwprintf(
-			dctl.device, sizeof_w(dctl.device), L"\\??\\Volume%s", wcschr(name, '{'));
+			dctl.device, countof(dctl.device), L"\\??\\Volume%s", wcschr(name, '{'));
 
 		succs = DeviceIoControl(
 			h_device, DC_CTL_RESOLVE,
@@ -131,7 +127,7 @@ int dc_first_volume(vol_inf *info)
 {
 	wchar_t name[MAX_PATH];
 	
-	info->find = FindFirstVolume(name, sizeof_w(name));
+	info->find = FindFirstVolume(name, countof(name));
 
 	if (info->find != INVALID_HANDLE_VALUE) 
 	{
@@ -150,7 +146,7 @@ int dc_next_volume(vol_inf *info)
 	wchar_t name[MAX_PATH];
 
 	FindNextVolume(
-		info->find, name, sizeof_w(name));
+		info->find, name, countof(name));
 
 	if (GetLastError() != ERROR_NO_MORE_FILES) 
 	{
@@ -308,7 +304,7 @@ int dc_unmount_volume(wchar_t *device, int flags)
 		if ( (flags & MF_DELMP) || (status.mnt_flags & MF_DELMP) ) 
 		{
 			_snwprintf(
-				mnt_p, sizeof_w(mnt_p), L"%s\\", status.mnt_point);
+				mnt_p, countof(mnt_p), L"%s\\", status.mnt_point);
 
 			DeleteVolumeMountPoint(mnt_p);
 		}

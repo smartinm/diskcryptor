@@ -54,7 +54,7 @@ int _update_layout(
 	BOOL boot_dev = _is_boot_device( &node->mnt.info );
 	ldr_config conf;
 
-	int kbd_layout = KB_QWERTY;
+	int kbd_layout = LDR_KB_QWERTY;
 	int rlt = ST_OK;
 
 	if ( new_layout != -1 )
@@ -80,7 +80,7 @@ int _update_layout(
 
 		if ( old_layout )
 		{
-			*old_layout = result ? conf.kbd_layout : KB_QWERTY;
+			*old_layout = result ? conf.kbd_layout : LDR_KB_QWERTY;
 		}
 		return result;
 	}
@@ -140,7 +140,7 @@ void _run_wizard_action(
 			secure_free( dlg_info.pass );
 			if ( mnt_point[0] != 0 )
 			{
-				_snwprintf( vol, sizeof_w(vol), L"%s\\", node->mnt.info.w32_device );
+				_snwprintf( vol, countof(vol), L"%s\\", node->mnt.info.w32_device );
 				_set_trailing_slash( mnt_point );
 
 				if ( SetVolumeMountPoint(mnt_point, vol) == 0 )
@@ -168,8 +168,8 @@ void _run_wizard_action(
 				wchar_t s_src_path[MAX_PATH] = { 0 };
 				wchar_t s_dst_path[MAX_PATH] = { 0 };
 
-				GetWindowText( GetDlgItem(sheets[WPAGE_ENC_ISO].hwnd, IDE_ISO_SRC_PATH), s_src_path, sizeof_w(s_src_path) );
-				GetWindowText( GetDlgItem(sheets[WPAGE_ENC_ISO].hwnd, IDE_ISO_DST_PATH), s_dst_path, sizeof_w(s_dst_path) );
+				GetWindowText( GetDlgItem(sheets[WPAGE_ENC_ISO].hwnd, IDE_ISO_SRC_PATH), s_src_path, countof(s_src_path) );
+				GetWindowText( GetDlgItem(sheets[WPAGE_ENC_ISO].hwnd, IDE_ISO_DST_PATH), s_dst_path, countof(s_dst_path) );
 
 				wcscpy( node->dlg.iso.s_iso_src, s_src_path );
 				wcscpy( node->dlg.iso.s_iso_dst, s_dst_path );
@@ -359,7 +359,7 @@ int _init_wizard_encrypt_pages(
 		_sub_class( GetDlgItem(hwnd, IDC_CHECK_QUICK_FORMAT), SUB_STATIC_PROC, HWND_NULL );
 		_set_check( hwnd, IDC_CHECK_QUICK_FORMAT, FALSE );
 
-		for ( k = 0; k < array_num(fs_names); k++ )
+		for ( k = 0; k < countof(fs_names); k++ )
 		{
 			SendMessage( h_fs, (UINT)CB_ADDSTRING, 0, (LPARAM)fs_names[k] );
 		}
@@ -392,7 +392,7 @@ int _init_wizard_encrypt_pages(
 				L"you can only use AES to encrypt the boot partition!"
 			);
 		}
-		for ( k = 0; k < array_num(combo_sel); k++ )
+		for ( k = 0; k < countof(combo_sel); k++ )
 		{
 			SendMessage( GetDlgItem(hwnd, combo_sel[k]), CB_SETCURSEL, 0, 0 );
 		}	

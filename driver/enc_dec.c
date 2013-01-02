@@ -641,9 +641,9 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			resl = ST_ERROR; break;
 		}
 
-		/* get device params */
-		if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) {
-			break;
+		// get device params
+		if ( !NT_SUCCESS(dc_fill_device_info(hook)) ) {
+			resl = ST_IO_ERROR; break;
 		}
 		
 		/* create redirection storage */
@@ -663,7 +663,7 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		cp_rand_bytes(pv(&header->disk_id), sizeof(u32));
 		cp_rand_bytes(pv(header->key_1),    DISKKEY_SIZE);
 
-		header->sign     = DC_VOLM_SIGN;
+		header->sign     = DC_VOLUME_SIGN;
 		header->version  = DC_HDR_VERSION;
 		header->flags    = VF_TMP_MODE | VF_STORAGE_FILE;
 		header->alg_1    = crypt->cipher_id;

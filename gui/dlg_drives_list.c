@@ -52,9 +52,9 @@ void _set_device_item(
 	ListView_InsertItem( h_list, &lvitem );
 			
 	size = dc_dsk_get_size( num, 0 );
-	dc_format_byte_size( s_size, sizeof_w(s_size), size );
+	dc_format_byte_size( s_size, countof(s_size), size );
 
-	_snwprintf( s_hdd, sizeof_w(s_hdd), L"HardDisk %d", num );
+	_snwprintf( s_hdd, countof(s_hdd), L"HardDisk %d", num );
 
 	ListView_SetItemText( h_list, lvcount, lvsub++, fixed ? s_hdd : mnt_point );
 	ListView_SetItemText( h_list, lvcount, lvsub++, s_size );
@@ -139,7 +139,7 @@ void _load_diskdrives(
 			if ( wcsstr( mnt->mnt.info.status.mnt_point, L"\\\\?\\" ) == 0 )
 			{
 				_snwprintf(
-					s_display, sizeof_w(s_display), L"&%s", mnt->mnt.info.status.mnt_point
+					s_display, countof(s_display), L"&%s", mnt->mnt.info.status.mnt_point
 					);
 			} else 
 			{
@@ -149,7 +149,7 @@ void _load_diskdrives(
 
 				if ( (int)vol_name > 1 )
 				{
-					_snwprintf( s_display, sizeof_w(s_display), L"&%s", vol_name );
+					_snwprintf( s_display, countof(s_display), L"&%s", vol_name );
 				}
 			}
 			if (! count )
@@ -163,13 +163,13 @@ void _load_diskdrives(
 			}
 			_list_set_item_text( __lists[HMAIN_DRIVES], item, 0, s_display );
 
-			dc_format_byte_size( s_display, sizeof_w(s_display), mnt->mnt.info.status.dsk_size );
+			dc_format_byte_size( s_display, countof(s_display), mnt->mnt.info.status.dsk_size );
 			_list_set_item_text( __lists[HMAIN_DRIVES], item, subitem++, s_display );
 
 			_list_set_item_text( __lists[HMAIN_DRIVES], item, subitem++, mnt->mnt.label );
 			_list_set_item_text( __lists[HMAIN_DRIVES], item, subitem++, mnt->mnt.fs );
 
-			_get_status_text( mnt, s_display, sizeof_w(s_display) );
+			_get_status_text( mnt, s_display, countof(s_display) );
 			_list_set_item_text( __lists[HMAIN_DRIVES], item, subitem++, s_display );
 
 			if ( mnt->mnt.info.status.flags & F_SYNC ) 
@@ -326,10 +326,10 @@ BOOL _list_part_by_disk_id(
 			if ( (status->flags & F_ENABLED) && (status->disk_id) )
 			{							
 				dc_format_byte_size(
-					s_size, sizeof_w(s_size), status->dsk_size
+					s_size, countof(s_size), status->dsk_size
 					);
 
-				_snwprintf( s_id, sizeof_w(s_id), L"%.08X", status->disk_id );
+				_snwprintf( s_id, countof(s_id), L"%.08X", status->disk_id );
 
 				_list_insert_item(
 					hwnd, count, 0, status->mnt_point, status->disk_id == disk_id ? LVIS_SELECTED : FALSE

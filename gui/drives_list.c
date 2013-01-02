@@ -56,8 +56,8 @@ _add_drive_node(
 	mnt->exists = TRUE;
 	memcpy( &mnt->mnt.info, vol, sizeof(vol_inf) );
 
-	_snwprintf( path, sizeof_w(path), L"%s\\", vol->status.mnt_point );
-	GetVolumeInformation( path, label, sizeof_w(label), 0, 0, 0, fs, sizeof_w(fs) );
+	_snwprintf( path, countof(path), L"%s\\", vol->status.mnt_point );
+	GetVolumeInformation( path, label, countof(label), 0, 0, 0, fs, countof(fs) );
 
 	wcscpy( mnt->mnt.label, label );
 	wcscpy( mnt->mnt.fs, fs );
@@ -65,7 +65,7 @@ _add_drive_node(
 	if (! exist_node )
 	{
 		dc_get_hw_name(
-			disk_number, vol->status.flags & F_CDROM, drvname, sizeof_w(drvname)
+			disk_number, vol->status.flags & F_CDROM, drvname, countof(drvname)
 			);
 
 		if (! ( vol->status.flags & F_CDROM ) )

@@ -41,11 +41,11 @@ int autorun_set(
 	u32      cb;
 	
 	GetModuleFileName(
-		NULL, name, sizeof_w(name)
+		NULL, name, countof(name)
 		);
 
 	_snwprintf(
-		path, sizeof_w(path), L"\"%s\" -h", name
+		path, countof(path), L"\"%s\" -h", name
 		);	
 
 	if ( is_win_vista( ) != 0 )
@@ -187,7 +187,7 @@ int on_app_start(
 	_log( L"func:app start; module file name == %s", name );
 #endif
 					_snwprintf(
-						path, sizeof_w(path), L"\"%s\" -p%u", name, (u32)(pbi.InheritedFromUniqueProcessId)
+						path, countof(path), L"\"%s\" -p%u", name, (u32)(pbi.InheritedFromUniqueProcessId)
 						);
 
 					memset( &si, 0, sizeof(si) );

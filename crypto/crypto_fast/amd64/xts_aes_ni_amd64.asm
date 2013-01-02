@@ -1,7 +1,7 @@
 ;
 ;   *
 ;   * Copyright (c) 2010
-;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0x1B6A24550F33E44A
 ;   *
 ;   This program is free software: you can redistribute it and/or modify
 ;   it under the terms of the GNU General Public License version 3 as
@@ -225,24 +225,9 @@ align 16
 %define enc_key 0
 %define dec_key 4*15*4
 
-global xts_aes_ni_available
 global xts_aes_ni_encrypt
 global xts_aes_ni_decrypt
 
-align 16
-xts_aes_ni_available:
- push	    rbx
- ; test for CPUID.01H:ECX.AES[bit 25] = 1
- xor	    eax, eax
- inc	    eax
- cpuid
- test	    ecx, (1 << 25)
- setnz	    al
- movzx	    rax, al
- pop	    rbx
- ret
-
-align 16
 xts_aes_ni_encrypt:
  aes_xts_process aes_encrypt_4, enc_key
 

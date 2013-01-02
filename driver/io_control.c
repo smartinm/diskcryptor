@@ -38,6 +38,7 @@
 #include "misc_mem.h"
 #include "device_io.h"
 #include "disk_info.h"
+#include "crypto_functions.h"
 
 #define IS_VERIFY_IOCTL(ioctl) ( \
 	(ioctl == IOCTL_DISK_CHECK_VERIFY) || (ioctl == IOCTL_CDROM_CHECK_VERIFY) || (ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
@@ -311,7 +312,7 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
 						dc_clean_pass_cache();
 					}
-					xts_init(dc_conf_flags & CONF_HW_CRYPTO);
+					dc_init_encryption();
 				}
 			}
 		break;
@@ -451,7 +452,7 @@ static NTSTATUS dc_ioctl_complete(PDEVICE_OBJECT dev_obj, PIRP irp, void *param)
 		change = NT_SUCCESS(status) == FALSE;
 		
 		if (irp->IoStatus.Information == sizeof(u32)) {
-			change |= lock_xchg(&hook->chg_last_v, *chg_c) != *chg_c;
+			change |= lock_xchg(&hook->chg_count, *chg_c) != *chg_c;
 			*chg_c += hook->chg_mount;
 		}
 

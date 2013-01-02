@@ -1,7 +1,7 @@
-/*
+﻿/*
     *
     * Copyright (c) 2010-2011
-    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+    * ntldr <ntldr@diskcryptor.net> PGP key ID - 0x1B6A24550F33E44A
     *
 
     This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 #if defined(USE_AVX) && !defined(__INTEL_COMPILER)
  #error Please use Intel C++ Compoler
 #endif
-#include "defines.h"
+#include <intrin.h>
 #include "serpent.h"
 #include "xts_fast.h"
 #ifdef USE_AVX
@@ -581,9 +581,9 @@
 }
 
 #ifdef USE_AVX
-void _stdcall xts_serpent_avx_encrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+void _stdcall xts_serpent_avx_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
 #else
-void _stdcall xts_serpent_sse2_encrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+void _stdcall xts_serpent_sse2_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
 #endif
 {
 	__m128i t0, t1, t2, t3;
@@ -591,45 +591,45 @@ void _stdcall xts_serpent_sse2_encrypt(const unsigned char *in, unsigned char *o
 	__m128i idx;
 	int     i;
 	
-	p64(&idx)[0] = offset / XTS_SECTOR_SIZE;
-	p64(&idx)[1] = 0;
+	((unsigned __int64*)&idx)[0] = offset / XTS_SECTOR_SIZE;
+	((unsigned __int64*)&idx)[1] = 0;
 	do
 	{
-		/* update tweak unit index */
-		p64(&idx)[0]++;
-		/* derive first tweak value */
-		serpent256_encrypt(pv(&idx), pv(&t0), &key->tweak_k.serpent);
+		// update tweak unit index
+		((unsigned __int64*)&idx)[0]++;
+		// derive first tweak value
+		serpent256_encrypt((unsigned char*)&idx, (unsigned char*)&t0, &key->tweak_k.serpent);
 		
 		for (i = 0; i < XTS_BLOCKS_IN_SECTOR / 4; i++)
 		{
-			/* derive t1-t3 */
+			// derive t1-t3
 			sse2_next_tweak(t1, t0);
 			sse2_next_tweak(t2, t1);
 			sse2_next_tweak(t3, t2);
-			/* load and tweak 4 blocks */
-			b0 = _mm_xor_si128(_mm_loadu_si128(p128(in + 0 )), t0);
-			b1 = _mm_xor_si128(_mm_loadu_si128(p128(in + 16)), t1);
-			b2 = _mm_xor_si128(_mm_loadu_si128(p128(in + 32)), t2);
-			b3 = _mm_xor_si128(_mm_loadu_si128(p128(in + 48)), t3);
-			/* encrypt / decrypt */
+			// load and tweak 4 blocks
+			b0 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 0 )), t0);
+			b1 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 16)), t1);
+			b2 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 32)), t2);
+			b3 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 48)), t3);
+			// encrypt / decrypt
 			serpent256_sse2_encrypt(b0, b1, b2, b3, &key->crypt_k.serpent);
-			/* tweak and store 4 blocks */			
-			_mm_storeu_si128(p128(out + 0 ), _mm_xor_si128(b0, t0));
-			_mm_storeu_si128(p128(out + 16), _mm_xor_si128(b1, t1));
-			_mm_storeu_si128(p128(out + 32), _mm_xor_si128(b2, t2));
-			_mm_storeu_si128(p128(out + 48), _mm_xor_si128(b3, t3));
-			/* derive next t0 */
+			// tweak and store 4 blocks
+			_mm_storeu_si128((__m128i*)(out + 0 ), _mm_xor_si128(b0, t0));
+			_mm_storeu_si128((__m128i*)(out + 16), _mm_xor_si128(b1, t1));
+			_mm_storeu_si128((__m128i*)(out + 32), _mm_xor_si128(b2, t2));
+			_mm_storeu_si128((__m128i*)(out + 48), _mm_xor_si128(b3, t3));
+			// derive next t0
 			sse2_next_tweak(t0, t3);
-			/* update pointers */
-			in += XTS_BLOCK_SIZE*4; out += XTS_BLOCK_SIZE*4;			
+			// update pointers
+			in += XTS_BLOCK_SIZE*4; out += XTS_BLOCK_SIZE*4;
 		}
 	} while (len -= XTS_SECTOR_SIZE);
 }
 
 #ifdef USE_AVX
-void _stdcall xts_serpent_avx_decrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+void _stdcall xts_serpent_avx_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
 #else
-void _stdcall xts_serpent_sse2_decrypt(const unsigned char *in, unsigned char *out, size_t len, u64 offset, xts_key *key)
+void _stdcall xts_serpent_sse2_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
 #endif
 {
 	__m128i t0, t1, t2, t3;
@@ -637,37 +637,37 @@ void _stdcall xts_serpent_sse2_decrypt(const unsigned char *in, unsigned char *o
 	__m128i idx;
 	int     i;
 	
-	p64(&idx)[0] = offset / XTS_SECTOR_SIZE;
-	p64(&idx)[1] = 0;
+	((unsigned __int64*)&idx)[0] = offset / XTS_SECTOR_SIZE;
+	((unsigned __int64*)&idx)[1] = 0;
 	do
 	{
-		/* update tweak unit index */
-		p64(&idx)[0]++;
-		/* derive first tweak value */
-		serpent256_encrypt(pv(&idx), pv(&t0), &key->tweak_k.serpent);
+		// update tweak unit index
+		((unsigned __int64*)&idx)[0]++;
+		// derive first tweak value
+		serpent256_encrypt((unsigned char*)&idx, (unsigned char*)&t0, &key->tweak_k.serpent);
 		
 		for (i = 0; i < XTS_BLOCKS_IN_SECTOR / 4; i++)
 		{
-			/* derive t1-t3 */
+			// derive t1-t3
 			sse2_next_tweak(t1, t0);
 			sse2_next_tweak(t2, t1);
 			sse2_next_tweak(t3, t2);
-			/* load and tweak 4 blocks */
-			b0 = _mm_xor_si128(_mm_loadu_si128(p128(in + 0 )), t0);
-			b1 = _mm_xor_si128(_mm_loadu_si128(p128(in + 16)), t1);
-			b2 = _mm_xor_si128(_mm_loadu_si128(p128(in + 32)), t2);
-			b3 = _mm_xor_si128(_mm_loadu_si128(p128(in + 48)), t3);
-			/* encrypt / decrypt */
+			// load and tweak 4 blocks
+			b0 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 0 )), t0);
+			b1 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 16)), t1);
+			b2 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 32)), t2);
+			b3 = _mm_xor_si128(_mm_loadu_si128((const __m128i*)(in + 48)), t3);
+			// encrypt / decrypt
 			serpent256_sse2_decrypt(b0, b1, b2, b3, &key->crypt_k.serpent);
-			/* tweak and store 4 blocks */			
-			_mm_storeu_si128(p128(out + 0 ), _mm_xor_si128(b0, t0));
-			_mm_storeu_si128(p128(out + 16), _mm_xor_si128(b1, t1));
-			_mm_storeu_si128(p128(out + 32), _mm_xor_si128(b2, t2));
-			_mm_storeu_si128(p128(out + 48), _mm_xor_si128(b3, t3));
-			/* derive next t0 */
+			// tweak and store 4 blocks
+			_mm_storeu_si128((__m128i*)(out + 0 ), _mm_xor_si128(b0, t0));
+			_mm_storeu_si128((__m128i*)(out + 16), _mm_xor_si128(b1, t1));
+			_mm_storeu_si128((__m128i*)(out + 32), _mm_xor_si128(b2, t2));
+			_mm_storeu_si128((__m128i*)(out + 48), _mm_xor_si128(b3, t3));
+			// derive next t0
 			sse2_next_tweak(t0, t3);
-			/* update pointers */
-			in += XTS_BLOCK_SIZE*4; out += XTS_BLOCK_SIZE*4;			
+			// update pointers
+			in += XTS_BLOCK_SIZE*4; out += XTS_BLOCK_SIZE*4;
 		}
 	} while (len -= XTS_SECTOR_SIZE);
 }
@@ -680,13 +680,13 @@ int _stdcall xts_serpent_avx_available()
 	__asm {
 		mov eax, 1
 		cpuid
-		and ecx, 0x18000000 /* check 27 bit (OS uses XSAVE/XRSTOR) */
-		cmp ecx, 0x18000000 /* and 28 (AVX supported by CPU) */
+		and ecx, 0x18000000 // check 27 bit (OS uses XSAVE/XRSTOR)
+		cmp ecx, 0x18000000 // and 28 (AVX supported by CPU)
 		jne not_supported
-		xor ecx, ecx        /* XFEATURE_ENABLED_MASK/XCR0 register number = 0 */
-		xgetbv              /* XFEATURE_ENABLED_MASK register is in edx:eax */
+		xor ecx, ecx        // XFEATURE_ENABLED_MASK/XCR0 register number = 0
+		xgetbv              // XFEATURE_ENABLED_MASK register is in edx:eax
 		and eax, 6
-		cmp eax, 6          /* check the AVX registers restore at context switch */
+		cmp eax, 6          // check the AVX registers restore at context switch
 		jne not_supported
 		mov [succs], 1
 not_supported:

@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008 
@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include "misc.h"
 #include "keyfiles.h"
-#include "volume.h"
+#include "volume_header.h"
 #include "sha512.h"
 #include "drv_ioctl.h"
 
@@ -104,7 +104,7 @@ int dc_add_keyfiles(dc_pass *pass, wchar_t *path)
 	int             resl;
 	
 	_snwprintf(
-		name, sizeof_w(name), L"%s\\*", path);
+		name, countof(name), L"%s\\*", path);
 
 	h_find = FindFirstFile(name, &find);
 
@@ -119,7 +119,7 @@ int dc_add_keyfiles(dc_pass *pass, wchar_t *path)
 			}
 
 			_snwprintf(
-				name, sizeof_w(name), L"%s\\%s", path, find.cFileName);
+				name, countof(name), L"%s\\%s", path, find.cFileName);
 
 			if ( (resl = dc_add_single_kf(pass, name)) != ST_OK ) {
 				break;

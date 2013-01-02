@@ -1,4 +1,15 @@
-[xx.xx.xxxx] - 1.0
+[03.01.2013] - 1.0.757.115
+  [+] Added workaround for AES-NI support on Hyper-V
+  [+] Added internal self-tests for PKDBF2 and XTS engines.
+  [*] Fixed bug with data loss with some cases on VIA-PadLock.
+  [*] Fixed regression with SSD detection on Windows XP.
+  [*] Fixed bug with no FS creation when formatting from GUI.
+
+[14.12.2012] - 1.0.744.115
+  [*] Project moved to Visual Studio 2010
+  [+] Improved 3tb+ disks detection.
+
+[23.05.2011] - 1.0.732.111
   - Removed compatibility with Windows 2000
   + Added new optimizations special for SSD and fast RAID's
   + Added TRIM support for SSD and "disable TRIM" option.
@@ -9,6 +20,8 @@
   + Added 'Deny access to unencrypted devices' option.
   + New command-line options.
   + More stable benchmark results.
+  + Internal architecture improvements.
+  + Small bugfixes.
 
 [05.04.2010] - 0.9
   + Added preventing system power state changes during the encryption process.

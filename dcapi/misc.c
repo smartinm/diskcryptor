@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2008-2011
@@ -299,10 +299,10 @@ dc_disk_p *dc_disk_open(int dsk_num, int is_cd)
 	if (is_cd == 0)
 	{
 		_snwprintf(
-			device, sizeof_w(device), L"\\\\.\\PhysicalDrive%d", dsk_num);
+			device, countof(device), L"\\\\.\\PhysicalDrive%d", dsk_num);
 	} else {
 		_snwprintf(
-			device, sizeof_w(device), L"\\\\.\\CdRom%d", dsk_num);
+			device, countof(device), L"\\\\.\\CdRom%d", dsk_num);
 	}
 
 	succs = 0;
@@ -493,7 +493,7 @@ void dc_format_byte_size(
 			wc_buf, wc_size, L"%d bytes", (u32)(num_bytes));
 	} else 
 	{
-		for (i = 0; i < array_num(b_formats); i++) 
+		for (i = 0; i < countof(b_formats); i++) 
 		{
 			if (num_bytes < b_formats[i].limit) {
 				break;
@@ -509,7 +509,7 @@ void dc_format_byte_size(
 		d_bytes = floor(d_bytes / b_formats[i].divisor) / b_formats[i].normaliser;
 
 		_snwprintf(
-			format, sizeof_w(format), L"%%-.%df %%cB", b_formats[i].decimals);
+			format, countof(format), L"%%-.%df %%cB", b_formats[i].decimals);
 		
 		_snwprintf(
 			wc_buf, wc_size, format, d_bytes, b_formats[i].prefix);		

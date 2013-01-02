@@ -1,4 +1,4 @@
-#ifndef _AES_PADLOCK_H_
+﻿#ifndef _AES_PADLOCK_H_
 #define _AES_PADLOCK_H_
 
 #include "aes_key.h"

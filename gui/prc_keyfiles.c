@@ -240,7 +240,7 @@ _keyfiles_dlg_proc(
 					int rlt;					
 
 					if ( _save_file_dialog(
-							hwnd, s_file, sizeof_w(s_file), L"Save 64 bytes random keyfile as.."
+							hwnd, s_file, countof(s_file), L"Save 64 bytes random keyfile as.."
 						) )
 					{
 						if ( (rlt = dc_get_random(keyfile, sizeof(keyfile))) == ST_OK ) 
@@ -303,7 +303,7 @@ _keyfiles_dlg_proc(
 				case IDB_ADD_FILE :
 				{
 					wchar_t s_path[MAX_PATH] = { 0 };
-					if ( _open_file_dialog(hwnd, s_path, sizeof_w(s_path), L"Select File..") )
+					if ( _open_file_dialog(hwnd, s_path, countof(s_path), L"Select File..") )
 					{					
 						if ( key_list == KEYLIST_EMBEDDED )
 						{
@@ -347,7 +347,7 @@ _keyfiles_dlg_proc(
 				for ( ; k < ListView_GetItemCount( h_list ); k ++ )
 				{
 					wchar_t item[MAX_PATH];
-					_get_item_text( h_list, k, 0, item, sizeof_w(item) );
+					_get_item_text( h_list, k, 0, item, countof(item) );
 
 					if ( wcscmp(item, IDS_EMPTY_LIST) != 0 )
 					{
@@ -359,7 +359,7 @@ _keyfiles_dlg_proc(
 							_keyfiles_wipe(key_list);
 							break;
 						}
-						wcsncpy(new_node->path, item, sizeof_w(new_node->path));
+						wcsncpy(new_node->path, item, countof(new_node->path));
 						_insert_tail_list(head, &new_node->next);
 					}
 				}

@@ -98,7 +98,7 @@ _password_change_dlg_proc(
 				MAKELONG(IDE_PASS_NEW, EN_CHANGE), (LPARAM)GetDlgItem(hwnd, IDE_PASS_NEW));
 
 			if (info->node) {
-				_snwprintf(display, sizeof_w(display), L"[%s] - %s", 
+				_snwprintf(display, countof(display), L"[%s] - %s", 
 					info->node->mnt.info.status.mnt_point, info->node->mnt.info.device);
 
 			} else {
@@ -395,7 +395,7 @@ _password_dlg_proc(
 			if ( info->node )
 			{
 				_snwprintf(
-					display, sizeof_w(display), L"[%s] - %s", 
+					display, countof(display), L"[%s] - %s", 
 					info->node->mnt.info.status.mnt_point, info->node->mnt.info.device
 					);
 			} else

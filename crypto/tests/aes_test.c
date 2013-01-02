@@ -1,18 +1,17 @@
-#include <windows.h>
-#include "defines.h"
+﻿#include <windows.h>
 #ifdef SMALL_CODE
- #include "aes_small.h"
- #include "aes_padlock_small.h"
+	#include "aes_small.h"
+	#include "aes_padlock_small.h"
 #else
- #include "aes_key.h"
- #include "aes_asm.h"
- #include "aes_padlock.h"
+	#include "aes_key.h"
+	#include "aes_asm.h"
+	#include "aes_padlock.h"
 #endif
 
 static const struct { /* see FIPS-197 */
-	const char key[32];
-	const char plaintext[16];
-	const char ciphertext[16];
+	const __declspec(align(16)) unsigned char key[32];
+	const __declspec(align(16)) unsigned char plaintext[16];
+	const __declspec(align(16)) unsigned char ciphertext[16];
 } aes256_vectors[] = {
 	{
 		{ 0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,
@@ -30,24 +29,23 @@ static const struct { /* see FIPS-197 */
 
 int test_aes256()
 {
-	char       tmp[16];
-	aes256_key skey;
-	int        i;
+	__declspec(align(16)) unsigned char tmp[16];
+	aes256_key                          skey;
+	int                                 i;
 #ifndef SMALL_CODE	
-	u32        old_p;
+	DWORD                               old_protect;
 #endif	
 
 #ifdef SMALL_CODE
-	/* initialize AES tables */
+	// initialize AES tables
 	aes256_gentab();
 #else
-	/* allow execute code from key buffer */
-	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_p) == 0) {
-		return 0;
-	}
+	// allow execute code from key buffer
+	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_protect) == FALSE) return 0;
 #endif
-	/* test basic assembler inmpementation */
-	for (i = 0; i < array_num(aes256_vectors); i++) 
+	
+	// test basic assembler inmpementation
+	for (i = 0; i < _countof(aes256_vectors); i++) 
 	{
 #ifdef SMALL_CODE
 		aes256_set_key(aes256_vectors[i].key, &skey);
@@ -56,39 +54,36 @@ int test_aes256()
 		aes256_asm_set_key(aes256_vectors[i].key, &skey);
 		aes256_asm_encrypt(aes256_vectors[i].plaintext, tmp, &skey);
 #endif
-		if (memcmp(aes256_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(aes256_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) return 0;
 #ifdef SMALL_CODE
 		aes256_decrypt(aes256_vectors[i].ciphertext, tmp, &skey);
 #else
 		aes256_asm_decrypt(aes256_vectors[i].ciphertext, tmp, &skey);
 #endif
-		if (memcmp(aes256_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(aes256_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) return 0;
+
+		// test AES with VIA Padlock API
 #if !defined(SMALL_CODE) || !defined(_M_X64)
-		/* test AES with VIA Padlock API */
 		if (aes256_padlock_available() != 0)
 		{
+			aes256_padlock_rekey();
 #ifdef SMALL_CODE
 			aes256_padlock_encrypt(aes256_vectors[i].plaintext, tmp, &skey);
 #else
 			aes256_padlock_encrypt(aes256_vectors[i].plaintext, tmp, 1, &skey);
 #endif
-			if (memcmp(aes256_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) {
-				return 0;
-			}
+			if (memcmp(aes256_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) return 0;
+
+			aes256_padlock_rekey();
 #ifdef SMALL_CODE
 			aes256_padlock_decrypt(aes256_vectors[i].ciphertext, tmp, &skey);
 #else
 			aes256_padlock_decrypt(aes256_vectors[i].ciphertext, tmp, 1, &skey);
 #endif
-			if (memcmp(aes256_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) {
-				return 0;
-			}
+			if (memcmp(aes256_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) return 0;
 		}
 #endif
 	}
+	// all tests passed
 	return 1;
 }

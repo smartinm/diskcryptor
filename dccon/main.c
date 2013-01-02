@@ -24,14 +24,14 @@
 #include "main.h"
 #include "version.h"
 #include "boot_menu.h"
-#include "dcapi/misc.h"
-#include "dcapi/mbrinst.h"
-#include "dcapi/drv_ioctl.h"
-#include "dcapi/drvinst.h"
-#include "dcapi/rand.h"
-#include "dcapi/keyfiles.h"
-#include "dcapi/cd_enc.h"
-#include "boot/boot.h"
+#include "misc.h"
+#include "mbrinst.h"
+#include "drv_ioctl.h"
+#include "drvinst.h"
+#include "rand.h"
+#include "keyfiles.h"
+#include "cd_enc.h"
+#include "bootloader.h"
 #include "console.h"
 
 typedef struct _bench_item {
@@ -179,7 +179,7 @@ static void print_devices()
 	for (i = 0; i < vol_cnt; i++)
 	{
 		dc_format_byte_size(
-			size, sizeof_w(size), volumes[i].status.dsk_size);
+			size, countof(size), volumes[i].status.dsk_size);
 
 		make_dev_status(&volumes[i], stat);
 
@@ -542,7 +542,7 @@ int dc_set_boot_interactive(int d_num, int small_boot)
 			if ( ((resl = dc_set_mbr(d_num, 1, small_boot)) == ST_OK) && 
 				 (dc_get_mbr_config(d_num, NULL, &conf) == ST_OK) )
 			{
-				conf.boot_type = BT_ACTIVE;
+				conf.boot_type = LDR_BT_ACTIVE;
 						
 				if ( (resl = dc_set_mbr_config(d_num, NULL, &conf)) != ST_OK ) {
 					dc_unset_mbr(d_num);
@@ -765,7 +765,7 @@ int wmain(int argc, wchar_t *argv[])
 			}
 
 			dc_format_byte_size(
-				size, sizeof_w(size), inf->status.dsk_size);
+				size, countof(size), inf->status.dsk_size);
 
 			make_dev_status(inf, stat);
 
@@ -844,9 +844,9 @@ int wmain(int argc, wchar_t *argv[])
 				} else 
 				{
 					_snwprintf(
-						vol_n, sizeof_w(vol_n), L"%s\\", inf->w32_device);
+						vol_n, countof(vol_n), L"%s\\", inf->w32_device);
 
-					wcsncpy(mnt_p, mp_c, sizeof_w(mnt_p));
+					wcsncpy(mnt_p, mp_c, countof(mnt_p));
 					if ( (s = wcslen(mnt_p)) && (mnt_p[s-1] != L'\\') ) {
 						mnt_p[s] = L'\\'; mnt_p[s+1] = 0;
 					}

@@ -215,8 +215,8 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 			resl = ST_ERROR; break;
 		}
 
-		if ( (resl = dc_fill_disk_info(hook)) != ST_OK ) {
-			break;
+		if ( !NT_SUCCESS(dc_fill_device_info(hook)) ) {
+			resl = ST_IO_ERROR; break;
 		}
 
 		if ( ( (hook->flags & F_CDROM) && (hook->bps != CD_SECTOR_SIZE) ) ||

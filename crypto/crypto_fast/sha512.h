@@ -1,13 +1,13 @@
-#ifndef _SHA512_H_
+﻿#ifndef _SHA512_H_
 #define _SHA512_H_
 
-#include "defines.h"
+#include <memory.h>
 
 typedef struct _sha512_ctx {
-    u64    hash[8];
-	u64    length;
-	size_t curlen;
-    u8     buf[128];
+    unsigned __int64 hash[8];
+	unsigned __int64 length;
+	unsigned long curlen;
+    unsigned char buf[128];
 
 } sha512_ctx;
 

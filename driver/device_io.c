@@ -23,6 +23,7 @@
 #include "devhook.h"
 #include "device_io.h"
 #include "misc.h"
+#include "debug.h"
 
 HANDLE io_open_device(wchar_t *dev_name)
 {
@@ -44,33 +45,42 @@ HANDLE io_open_device(wchar_t *dev_name)
 	return h_dev;
 }
 
-int io_hook_ioctl(dev_hook *hook, u32 code, void *p_in, u32 sz_in, void *p_out, u32 sz_out)
+NTSTATUS io_device_control(IN  PDEVICE_OBJECT DeviceObject,
+	                       IN  ULONG          IoControlCode,
+						   IN  PVOID          InputBuffer OPTIONAL,
+						   IN  ULONG          InputBufferLength,
+						   OUT PVOID          OutputBuffer OPTIONAL,
+						   IN  ULONG          OutputBufferLength
+						   )
 {
-	IO_STATUS_BLOCK iosb;
-	KEVENT          sync;	
+	IO_STATUS_BLOCK io_status;
+	KEVENT          completion_event;
 	NTSTATUS        status;
-	PIRP            irp;
+	PIRP            p_irp;
 
-	if (hook->pnp_state != Started) {
-		return ST_ERROR;
-	}
-	KeInitializeEvent(&sync, NotificationEvent, FALSE);
+	KeInitializeEvent(&completion_event, NotificationEvent, FALSE);
 
-	if (irp = IoBuildDeviceIoControlRequest(
-		      code, hook->orig_dev, p_in, sz_in, p_out, sz_out, FALSE, &sync, &iosb))
+	if ( (p_irp = IoBuildDeviceIoControlRequest(IoControlCode, DeviceObject, InputBuffer, InputBufferLength,
+		                                        OutputBuffer, OutputBufferLength, FALSE, &completion_event, &io_status)) == NULL )
 	{
-		status = IoCallDriver(hook->orig_dev, irp);
-
-		if (status == STATUS_PENDING) {
-			KeWaitForSingleObject(&sync, Executive, KernelMode, FALSE, NULL);
-			status = iosb.Status;
-		}
-	} else {
-		return ST_NOMEM;
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
-	return (NT_SUCCESS(status) != FALSE) ? ST_OK : ST_IO_ERROR;
+
+	if ( (status = IoCallDriver(DeviceObject, p_irp)) == STATUS_PENDING ) {
+		KeWaitForSingleObject(&completion_event, Executive, KernelMode, FALSE, NULL);
+		status = io_status.Status;
+	}
+	return status;
 }
 
+int io_hook_ioctl(dev_hook *hook, u32 code, void *p_in, u32 sz_in, void *p_out, u32 sz_out)
+{
+	if (hook->pnp_state != Started) {
+		DbgMsg("device not started, dev=%ws, pnp_state=%d\n", hook->dev_name, hook->pnp_state);
+		return ST_ERROR;
+	}
+	return NT_SUCCESS( io_device_control(hook->orig_dev, code, p_in, sz_in, p_out, sz_out) ) ? ST_OK : ST_IO_ERROR;
+}
 
 NTSTATUS io_device_rw(PDEVICE_OBJECT dev_obj, void *buff, u32 length, u64 offset, int is_read)
 {

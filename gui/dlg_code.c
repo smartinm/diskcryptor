@@ -123,24 +123,24 @@ _init_list wipe_modes[ ] =
 
 _init_list kb_layouts[ ] =
 {
-	{ KB_QWERTY, L"QWERTY" },
-	{ KB_QWERTZ, L"QWERTZ" },
-	{ KB_AZERTY, L"AZERTY" },
+	{ LDR_KB_QWERTY, L"QWERTY" },
+	{ LDR_KB_QWERTZ, L"QWERTZ" },
+	{ LDR_KB_AZERTY, L"AZERTY" },
 	{ 0, STR_NULL }
 };
 
 _init_list auth_type[ ] =
 {
-	{ LT_GET_PASS | LT_EMBED_KEY,	L"Password and bootauth keyfile"	},
-	{ LT_GET_PASS,					L"Password request"					},
-	{ LT_EMBED_KEY,					L"Embedded bootauth keyfile"		},
+	{ LDR_LT_GET_PASS | LDR_LT_EMBED_KEY,	L"Password and bootauth keyfile"	},
+	{ LDR_LT_GET_PASS,					L"Password request"					},
+	{ LDR_LT_EMBED_KEY,					L"Embedded bootauth keyfile"		},
 	{ 0, STR_NULL }
 };
 
 _init_list show_pass[ ] =
 {
 	{ TRUE,			L"Hide entered password"				},
-	{ LT_DSP_PASS,	L"Display entered password as \"*\""	},
+	{ LDR_LT_DSP_PASS,	L"Display entered password as \"*\""	},
 	{ 0, STR_NULL }
 };
 
@@ -161,30 +161,30 @@ _init_list auth_tmount[ ] =
 
 _init_list boot_type_ext[ ] =
 {
-	{ BT_MBR_FIRST,		L"First disk MBR"								},
-	{ BT_AP_PASSWORD,	L"First partition with appropriate password"	},
-	{ BT_DISK_ID,		L"Specified partition"							},
+	{ LDR_BT_MBR_FIRST,		L"First disk MBR"								},
+	{ LDR_BT_AP_PASSWORD,	L"First partition with appropriate password"	},
+	{ LDR_BT_DISK_ID,		L"Specified partition"							},
 	{ 0, STR_NULL }
 };
 
 _init_list boot_type_all[ ] =
 {
-	{ BT_MBR_FIRST,		L"First disk MBR"								},
-	{ BT_AP_PASSWORD,	L"First partition with appropriate password"	},
-	{ BT_DISK_ID,		L"Specified partition"							},
-	{ BT_MBR_BOOT,		L"Boot disk MBR"								},
-	{ BT_ACTIVE,		L"Active partition"								},
+	{ LDR_BT_MBR_FIRST,		L"First disk MBR"								},
+	{ LDR_BT_AP_PASSWORD,	L"First partition with appropriate password"	},
+	{ LDR_BT_DISK_ID,		L"Specified partition"							},
+	{ LDR_BT_MBR_BOOT,		L"Boot disk MBR"								},
+	{ LDR_BT_ACTIVE,		L"Active partition"								},
 	{ 0, STR_NULL }
 };
 
 _init_list bad_pass_act[ ] =
 {
 	{ FALSE,			L"Halt system"					},
-	{ ET_REBOOT,		L"Reboot system"				},
-	{ ET_BOOT_ACTIVE,	L"Boot from active partition"	},
-	{ ET_EXIT_TO_BIOS,	L"Exit to BIOS"					},
-	{ ET_RETRY,			L"Retry authentication"			},
-	{ ET_MBR_BOOT,		L"Load Boot Disk MBR"			},
+	{ LDR_ET_REBOOT,		L"Reboot system"				},
+	{ LDR_ET_BOOT_ACTIVE,	L"Boot from active partition"	},
+	{ LDR_ET_EXIT_TO_BIOS,	L"Exit to BIOS"					},
+	{ LDR_ET_RETRY,			L"Retry authentication"			},
+	{ LDR_ET_MBR_BOOT,		L"Load Boot Disk MBR"			},
 	{ 0, STR_NULL }
 };
 
@@ -283,7 +283,7 @@ void _list_set_item_text(
 	wchar_t curr[MAX_PATH];
 
 	LVITEM lvitem = { 
-		LVIF_TEXT, item, subitem, 0, 0, curr, sizeof_w(curr) 
+		LVIF_TEXT, item, subitem, 0, 0, curr, countof(curr) 
 	};
 
 	ListView_GetItem( h_list, &lvitem );
@@ -363,7 +363,7 @@ BOOL _is_duplicated_item(
 
 	for ( ; k < ListView_GetItemCount(h_list) ; k++ )
 	{
-		_get_item_text( h_list, k, 0, item, sizeof_w(item) );
+		_get_item_text( h_list, k, 0, item, countof(item) );
 		if ( wcscmp(item, s_item) == 0 )
 		{
 			return TRUE;
@@ -591,7 +591,7 @@ void _init_mount_points(
 	{
 		if ( !(drives & (1 << k)) )
 		{
-			_snwprintf( item, sizeof_w(item), L"%c:", 'A' + k );
+			_snwprintf( item, countof(item), L"%c:", 'A' + k );
 			SendMessage( hwnd, CB_ADDSTRING, 0, (LPARAM)item );
 		}
 	}

@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2007-2008 
@@ -21,7 +21,8 @@
 #include <windows.h>
 #include <stdio.h>
 #include "dcconst.h"
-#include "..\boot\boot.h"
+#include "volume_header.h"
+#include "bootloader.h"
 #include "mbrinst.h"
 #include "dcres.h"
 #include "misc.h"
@@ -404,9 +405,9 @@ int dc_set_boot(wchar_t *root, int format, int small_boot)
 	if (root[0] != L'\\') 
 	{
 		_snwprintf(
-			disk, sizeof_w(disk), L"\\\\.\\%c:", root[0]);
+			disk, countof(disk), L"\\\\.\\%c:", root[0]);
 	} else {
-		wcsncpy(disk, root, sizeof_w(disk));
+		wcsncpy(disk, root, countof(disk));
 	}
 
 	do
@@ -569,7 +570,7 @@ static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 		}
 		/* set OP_SMALL_BOOT if needed */
 		if (small_boot != 0) {
-			conf->options |= OP_SMALL_BOOT;
+			conf->options |= LDR_OP_SMALL_BOOT;
 		}
 		/* save old MBR */
 		memcpy(conf->save_mbr, &old_mbr, sizeof(old_mbr));
@@ -822,7 +823,7 @@ int dc_set_mbr_config_i(
 		/* restore old mbr */
 		memcpy(cnf->save_mbr, old_mbr, sizeof(old_mbr));
 		/* set unchangeable fields to default */
-		cnf->sign1 = CFG_SIGN1; cnf->sign2 = CFG_SIGN2;
+		cnf->sign1 = LDR_CFG_SIGN1; cnf->sign2 = LDR_CFG_SIGN2;
 		cnf->ldr_ver = DC_BOOT_VER;
 		
 		if (file != NULL) 
@@ -892,9 +893,9 @@ int dc_mbr_config_by_partition(
 	if (root[0] != L'\\')
 	{
 		_snwprintf(
-			name, sizeof_w(name), L"\\\\.\\%c:", root[0]);
+			name, countof(name), L"\\\\.\\%c:", root[0]);
 	} else {
-		wcsncpy(name, root, sizeof_w(name));
+		wcsncpy(name, root, countof(name));
 	}
 
 	info.dsk_num = 0;
@@ -1034,9 +1035,9 @@ int dc_update_boot(int dsk_num)
 			break;
 		}
 
-		if ( (resl = dc_set_mbr(dsk_num, 0, conf.options & OP_SMALL_BOOT)) != ST_OK )
+		if ( (resl = dc_set_mbr(dsk_num, 0, conf.options & LDR_OP_SMALL_BOOT)) != ST_OK )
 		{
-			if ( (resl = dc_set_mbr(dsk_num, 1, conf.options & OP_SMALL_BOOT)) != ST_OK ) {
+			if ( (resl = dc_set_mbr(dsk_num, 1, conf.options & LDR_OP_SMALL_BOOT)) != ST_OK ) {
 				break;
 			}
 		}
@@ -1084,20 +1085,19 @@ int dc_get_drive_info(wchar_t *w32_name, drive_inf *info)
 			info->par_size = ptix.PartitionLength.QuadPart;				
 		} else 
 		{
-			succs = DeviceIoControl(
-				hdisk, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti), &bytes, NULL);
+			succs = DeviceIoControl(hdisk, IOCTL_DISK_GET_PARTITION_INFO, NULL, 0, &pti, sizeof(pti), &bytes, NULL);
 
-			if (succs == 0) {
-				resl = ST_IO_ERROR; break;
-			}
-
-			info->use_gpt  = 0;
-			info->dsk_num  = pti.PartitionNumber;
-			info->par_size = pti.PartitionLength.QuadPart;
+			if (succs != 0) {
+				info->dsk_num  = pti.PartitionNumber;
+				info->par_size = pti.PartitionLength.QuadPart;				
+			} else {
+				info->dsk_num = 0;
+				succs = DeviceIoControl(hdisk, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &info->par_size, sizeof(info->par_size), &bytes, NULL);
+				if ( succs == 0 ) return ST_ERROR;
+			}			
 		}
 
-		succs = DeviceIoControl(
-			hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &dnum, sizeof(dnum), &bytes, NULL);
+		succs = DeviceIoControl(hdisk, IOCTL_STORAGE_GET_DEVICE_NUMBER, NULL, 0, &dnum, sizeof(dnum), &bytes, NULL);
 
 		if (succs != 0) {
 			info->dsk_num         = 1;
@@ -1107,8 +1107,7 @@ int dc_get_drive_info(wchar_t *w32_name, drive_inf *info)
 			info->disks[0].size   = dc_dsk_get_size(dnum.DeviceNumber, 0);
 		} else 
 		{
-			succs = DeviceIoControl(
-				hdisk, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, NULL, 0, ext, sizeof(buff), &bytes, NULL);
+			succs = DeviceIoControl(hdisk, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, NULL, 0, ext, sizeof(buff), &bytes, NULL);
 				
 			if (succs != 0) 
 			{

@@ -1,15 +1,14 @@
-#include <windows.h>
-#include "defines.h"
+﻿#include <windows.h>
 #ifdef SMALL_CODE
- #include "twofish_small.h"
+	#include "twofish_small.h"
 #else
- #include "twofish.h"
+	#include "twofish.h"
 #endif
 
 static const struct { /* see http://www.schneier.com/twofish.html */
-	const char key[32];
-	const char plaintext[16];
-	const char ciphertext[16];
+	const unsigned char key[32];
+	const unsigned char plaintext[16];
+	const unsigned char ciphertext[16];
 } twofish_vectors[] = {
 	{ 
 		{ 0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,0xfe,0xdc,0xba,0x98,0x76,0x54,0x32,0x10, 
@@ -28,24 +27,18 @@ static const struct { /* see http://www.schneier.com/twofish.html */
 int test_twofish256()
 {
 	twofish256_key skey;
-	char           tmp[16];	
+	unsigned char  tmp[16];	
 	int            i;
 	
-	for (i = 0; i < array_num(twofish_vectors); i++) 
+	for (i = 0; i < _countof(twofish_vectors); i++) 
 	{
 		twofish256_set_key(twofish_vectors[i].key, &skey);
-
+		
 		twofish256_encrypt(twofish_vectors[i].plaintext, tmp, &skey);
-
-		if (memcmp(twofish_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(twofish_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) return 0;
 
 		twofish256_decrypt(twofish_vectors[i].ciphertext, tmp, &skey);
-
-		if (memcmp(twofish_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(twofish_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) return 0;
 	}	
 	return 1;
 }

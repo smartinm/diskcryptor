@@ -1,15 +1,14 @@
-#include <windows.h>
-#include "defines.h"
+﻿#include <windows.h>
 #ifdef SMALL_CODE
- #include "serpent_small.h"
+	#include "serpent_small.h"
 #else
- #include "serpent.h"
+	#include "serpent.h"
 #endif
 
 static const struct { /* http://www.cs.technion.ac.il/~biham/Reports/Serpent/Serpent-256-128.verified.test-vectors */
-	const char key[32];
-	const char plaintext[16];
-	const char ciphertext[16];
+	const unsigned char key[32];
+	const unsigned char plaintext[16];
+	const unsigned char ciphertext[16];
 } serpent_vectors[] = 
 {
 	{
@@ -7721,24 +7720,18 @@ static const struct { /* http://www.cs.technion.ac.il/~biham/Reports/Serpent/Ser
 int test_serpent256()
 {
 	serpent256_key skey;
-	char           tmp[16];	
+	unsigned char  tmp[16];	
 	int            i;
 	
-	for (i = 0; i < array_num(serpent_vectors); i++) 
+	for (i = 0; i < _countof(serpent_vectors); i++) 
 	{
 		serpent256_set_key(serpent_vectors[i].key, &skey);
 
 		serpent256_encrypt(serpent_vectors[i].plaintext, tmp, &skey);
-
-		if (memcmp(serpent_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(serpent_vectors[i].ciphertext, tmp, sizeof(tmp)) != 0) return 0;
 
 		serpent256_decrypt(serpent_vectors[i].ciphertext, tmp, &skey);
-
-		if (memcmp(serpent_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) {
-			return 0;
-		}
+		if (memcmp(serpent_vectors[i].plaintext, tmp, sizeof(tmp)) != 0) return 0;
 	}	
 	return 1;
 }

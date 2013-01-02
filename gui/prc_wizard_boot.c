@@ -66,7 +66,7 @@ void _refresh_boot_buttons(
 		}
 		enable = TRUE;
 
-		_get_item_text( h_list, item, 2, s_item, sizeof_w(s_item) );
+		_get_item_text( h_list, item, 2, s_item, countof(s_item) );
 		if ( !wcscmp(s_item, L"installed") )
 		{
 			remove = TRUE;
@@ -147,7 +147,7 @@ int _init_boot_config(
 
 		_init_combo(
 			GetDlgItem(wnd->dlg[0], IDC_COMBO_METHOD), 
-			conf->options & OP_EXTERNAL ? boot_type_ext : boot_type_all, conf->boot_type, FALSE, -1
+			conf->options & LDR_OP_EXTERNAL ? boot_type_ext : boot_type_all, conf->boot_type, FALSE, -1
 			);
 
 		_list_part_by_disk_id( 
@@ -168,11 +168,11 @@ int _init_boot_config(
 
 		int bits = 0;
 
-		if (conf->logon_type & LT_GET_PASS)
+		if (conf->logon_type & LDR_LT_GET_PASS)
 		{
 			bits++;
 		}
-		if (conf->logon_type & LT_EMBED_KEY) 
+		if (conf->logon_type & LDR_LT_EMBED_KEY) 
 		{
 			bits++;
 		}
@@ -180,9 +180,9 @@ int _init_boot_config(
 		_init_combo( h_auth_combo, auth_type, conf->logon_type, TRUE, bits );
 
 		_sub_class( GetDlgItem(wnd->dlg[1], IDC_BT_ENTER_PASS_MSG), SUB_STATIC_PROC, HWND_NULL );
-		_set_check( wnd->dlg[1], IDC_BT_ENTER_PASS_MSG, conf->logon_type & LT_MESSAGE );
+		_set_check( wnd->dlg[1], IDC_BT_ENTER_PASS_MSG, conf->logon_type & LDR_LT_MESSAGE );
 
-		EnableWindow( h_msg, conf->logon_type & LT_MESSAGE );
+		EnableWindow( h_msg, conf->logon_type & LDR_LT_MESSAGE );
 		_init_combo( GetDlgItem(wnd->dlg[1], IDC_COMBO_SHOW_PASS), show_pass, conf->logon_type, TRUE, -1 );
 
 		SetWindowTextA( h_msg, conf->eps_msg );
@@ -195,7 +195,7 @@ int _init_boot_config(
 			);
 
 		_sub_class( GetDlgItem(wnd->dlg[1], IDC_BT_CANCEL_TMOUT), SUB_STATIC_PROC, HWND_NULL );
-		_set_check( wnd->dlg[1], IDC_BT_CANCEL_TMOUT, conf->options & OP_TMO_STOP );
+		_set_check( wnd->dlg[1], IDC_BT_CANCEL_TMOUT, conf->options & LDR_OP_TMO_STOP );
 
 		EnableWindow( GetDlgItem(wnd->dlg[1], IDC_BT_CANCEL_TMOUT), conf->timeout );
 		SendMessage( wnd->dlg[1], WM_COMMAND, MAKELONG(IDC_COMBO_AUTH_TYPE, CBN_SELCHANGE), (LPARAM)h_auth_combo );
@@ -208,12 +208,12 @@ int _init_boot_config(
 		HWND err_mes = GetDlgItem( wnd->dlg[2], IDE_RICH_ERRPASS_MSG );
 
 		_sub_class( GetDlgItem(wnd->dlg[2], IDC_BT_BAD_PASS_MSG), SUB_STATIC_PROC, HWND_NULL );
-		_set_check( wnd->dlg[2], IDC_BT_BAD_PASS_MSG, conf->error_type & ET_MESSAGE );
+		_set_check( wnd->dlg[2], IDC_BT_BAD_PASS_MSG, conf->error_type & LDR_ET_MESSAGE );
 
-		EnableWindow( GetDlgItem(wnd->dlg[2], IDE_RICH_ERRPASS_MSG), conf->error_type & ET_MESSAGE );
+		EnableWindow( GetDlgItem(wnd->dlg[2], IDE_RICH_ERRPASS_MSG), conf->error_type & LDR_ET_MESSAGE );
 
 		_sub_class( GetDlgItem(wnd->dlg[2], IDC_BT_ACTION_NOPASS), SUB_STATIC_PROC, HWND_NULL );
-		_set_check( wnd->dlg[2], IDC_BT_ACTION_NOPASS, conf->options & OP_NOPASS_ERROR );
+		_set_check( wnd->dlg[2], IDC_BT_ACTION_NOPASS, conf->options & LDR_OP_NOPASS_ERROR );
 
 		_init_combo( GetDlgItem(wnd->dlg[2], IDC_COMBO_BAD_PASS_ACT), bad_pass_act, conf->error_type, TRUE, -1 );
 
@@ -227,7 +227,7 @@ int _init_boot_config(
 	{
 	///////////////////////////////////////////////////////////////
 		_sub_class( GetDlgItem(wnd->dlg[3], IDC_USE_HARD_CRYPTO), SUB_STATIC_PROC, HWND_NULL );
-		_set_check( wnd->dlg[3], IDC_USE_HARD_CRYPTO, conf->options & OP_HW_CRYPTO );
+		_set_check( wnd->dlg[3], IDC_USE_HARD_CRYPTO, conf->options & LDR_OP_HW_CRYPTO );
 	}
 
 	tab_item.pszText = L"Main";
@@ -249,7 +249,7 @@ int _init_boot_config(
 		SendMessage( hwnd, WM_NOTIFY, IDT_BOOT_TAB, (LPARAM)&mhdr );
 	}
 
-	_snwprintf( s_title, sizeof_w(s_title), L"Bootloader config for [%s]", path[0] ? path : vol );
+	_snwprintf( s_title, countof(s_title), L"Bootloader config for [%s]", path[0] ? path : vol );
 	SetWindowText( GetParent(GetParent(hwnd)), s_title );
 
 	return rlt;
@@ -279,12 +279,12 @@ int _save_boot_config(
 		conf->kbd_layout = _get_combo_val( GetDlgItem( wnd->dlg[0], IDC_COMBO_KBLAYOUT ), kb_layouts );
 		conf->boot_type  = _get_combo_val( GetDlgItem( wnd->dlg[0], IDC_COMBO_METHOD ), boot_type_all );
 
-		if ( conf->boot_type == BT_DISK_ID )
+		if ( conf->boot_type == LDR_BT_DISK_ID )
 		{
 			wchar_t text[MAX_PATH];
 
 			_get_item_text( 
-				__lists[HBOT_PART_LIST_BY_ID], ListView_GetSelectionMark(__lists[HBOT_PART_LIST_BY_ID]), 2, text, sizeof_w(text) 
+				__lists[HBOT_PART_LIST_BY_ID], ListView_GetSelectionMark(__lists[HBOT_PART_LIST_BY_ID]), 2, text, countof(text) 
 				);
 
 			if ( wcslen(text) && ListView_GetSelectedCount( __lists[HBOT_PART_LIST_BY_ID] ) )
@@ -307,24 +307,24 @@ int _save_boot_config(
 		int timeout = _get_combo_val( GetDlgItem(wnd->dlg[1], IDC_COMBO_AUTH_TMOUT), auth_tmount );
 
 		BOOL show_text = _get_check( wnd->dlg[1], IDC_BT_ENTER_PASS_MSG );
-		BOOL embed_key = _get_combo_val( auth_combo, auth_type) & LT_EMBED_KEY;
+		BOOL embed_key = _get_combo_val( auth_combo, auth_type) & LDR_LT_EMBED_KEY;
 
-		conf->logon_type &= ~( LT_GET_PASS | LT_EMBED_KEY );
+		conf->logon_type &= ~( LDR_LT_GET_PASS | LDR_LT_EMBED_KEY );
 		conf->logon_type |= _get_combo_val( auth_combo, auth_type );
 
 		if ( show_text )
 		{
 			GetWindowTextA( GetDlgItem(wnd->dlg[1], IDE_RICH_BOOTMSG), conf->eps_msg, sizeof(conf->eps_msg) );
 		}
-		set_flag( conf->logon_type, LT_MESSAGE, show_text );
+		set_flag( conf->logon_type, LDR_LT_MESSAGE, show_text );
 
-		dsp_pass = _get_combo_val( show_combo, show_pass ) == LT_DSP_PASS;
-		set_flag( conf->logon_type, LT_DSP_PASS, dsp_pass );
+		dsp_pass = _get_combo_val( show_combo, show_pass ) == LDR_LT_DSP_PASS;
+		set_flag( conf->logon_type, LDR_LT_DSP_PASS, dsp_pass );
 
 		conf->timeout = timeout;
 
-		set_flag( conf->options, OP_EPS_TMO, timeout != 0 );
-		set_flag( conf->options, OP_TMO_STOP, _get_check(wnd->dlg[1], IDC_BT_CANCEL_TMOUT) );
+		set_flag( conf->options, LDR_OP_EPS_TMO, timeout != 0 );
+		set_flag( conf->options, LDR_OP_TMO_STOP, _get_check(wnd->dlg[1], IDC_BT_CANCEL_TMOUT) );
 
 		if ( embed_key )
 		{
@@ -334,7 +334,7 @@ int _save_boot_config(
 				byte *keyfile;
 
 				memset( conf->emb_key, 0, sizeof(conf->emb_key) );
-				set_flag( conf->logon_type, LT_EMBED_KEY, 0 );
+				set_flag( conf->logon_type, LDR_LT_EMBED_KEY, 0 );
 
 				if ( load_file(_first_keyfile(KEYLIST_EMBEDDED)->path, &keyfile, &keysize) != ST_OK )
 				{
@@ -343,7 +343,7 @@ int _save_boot_config(
 				} else 
 				{
 					memcpy( &conf->emb_key, keyfile, sizeof(conf->emb_key) );
-					set_flag( conf->logon_type, LT_EMBED_KEY, 1 );
+					set_flag( conf->logon_type, LDR_LT_EMBED_KEY, 1 );
 				}				
 				burn(keyfile, keysize);
 				free(keyfile);							
@@ -361,8 +361,8 @@ int _save_boot_config(
 
 		conf->error_type = _get_combo_val( GetDlgItem(wnd->dlg[2], IDC_COMBO_BAD_PASS_ACT), bad_pass_act );
 
-		set_flag( conf->error_type, ET_MESSAGE, show_err );
-		set_flag( conf->options, OP_NOPASS_ERROR, act_no_pass );
+		set_flag( conf->error_type, LDR_ET_MESSAGE, show_err );
+		set_flag( conf->options, LDR_OP_NOPASS_ERROR, act_no_pass );
 
 		if ( show_err )
 		{
@@ -376,7 +376,7 @@ int _save_boot_config(
 	{
 	///////////////////////////////////////////////////////////////
 		set_flag( 
-			conf->options, OP_HW_CRYPTO, _get_check(wnd->dlg[3], IDC_USE_HARD_CRYPTO) 
+			conf->options, LDR_OP_HW_CRYPTO, _get_check(wnd->dlg[3], IDC_USE_HARD_CRYPTO) 
 			);
 	}
 
@@ -523,8 +523,8 @@ _wizard_boot_dlg_proc(
 
 			static ldr_config conf = { 0 };
 
-			_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], ListView_GetSelectionMark(__lists[HBOT_WIZARD_BOOT_DEVS]), 0, vol, sizeof_w(vol) );
-			GetWindowText( GetDlgItem(bt_sheets[0].hwnd, IDE_BOOT_PATH), path, sizeof_w(path) );
+			_get_item_text( __lists[HBOT_WIZARD_BOOT_DEVS], ListView_GetSelectionMark(__lists[HBOT_WIZARD_BOOT_DEVS]), 0, vol, countof(vol) );
+			GetWindowText( GetDlgItem(bt_sheets[0].hwnd, IDE_BOOT_PATH), path, countof(path) );
 
 			switch ( id )
 			{
@@ -544,7 +544,7 @@ _wizard_boot_dlg_proc(
 				case IDC_BTN_INSTALL:
 				{
 					wchar_t btn_text[MAX_PATH];				
-					GetWindowText( (HWND)lparam, btn_text, sizeof_w(btn_text) );
+					GetWindowText( (HWND)lparam, btn_text, countof(btn_text) );
 
 					if ( wcscmp(btn_text, IDS_BOOTINSTALL) == 0 )
 					{

@@ -1,4 +1,4 @@
-/*
+﻿/*
     *
     * DiskCryptor - open source partition encryption tool
 	* Copyright (c) 2009
@@ -157,7 +157,7 @@ int dc_encrypt_cd(
 		dc_get_random(pv(&head.disk_id), sizeof(u32));
 		dc_get_random(pv(head.key_1),    DISKKEY_SIZE);
 
-		head.sign     = DC_VOLM_SIGN;
+		head.sign     = DC_VOLUME_SIGN;
 		head.version  = DC_HDR_VERSION;
 		head.flags    = VF_NO_REDIR;
 		head.alg_1    = cipher;

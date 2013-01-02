@@ -1,7 +1,7 @@
 ;
 ;   *
 ;   * Copyright (c) 2009-2010
-;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
+;   * ntldr <ntldr@diskcryptor.net> PGP key ID - 0x1B6A24550F33E44A
 ;   *
 ;   This program is free software: you can redistribute it and/or modify
 ;   it under the terms of the GNU General Public License version 3 as

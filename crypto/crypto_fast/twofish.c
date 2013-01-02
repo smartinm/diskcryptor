@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Twofish algorithm 
  *
  *  @author Matthew Skala <mskala@ansuz.sooke.bc.ca>, July 26, 1998
@@ -35,8 +35,7 @@
  * Abstract Algebra_ by Joseph A. Gallian, especially chapter 22 in the
  * Third Edition.
  */
-
-#include "defines.h"
+#include <intrin.h>
 #include "twofish.h"
 
 
@@ -48,7 +47,7 @@
 /* These two tables are the q0 and q1 permutations, exactly as described in
  * the Twofish paper. */
 
-static const u8 q0[256] = {
+static const unsigned char q0[256] = {
 	0xA9, 0x67, 0xB3, 0xE8, 0x04, 0xFD, 0xA3, 0x76, 0x9A, 0x92, 0x80, 0x78,
 	0xE4, 0xDD, 0xD1, 0x38, 0x0D, 0xC6, 0x35, 0x98, 0x18, 0xF7, 0xEC, 0x6C,
 	0x43, 0x75, 0x37, 0x26, 0xFA, 0x13, 0x94, 0x48, 0xF2, 0xD0, 0x8B, 0x30,
@@ -73,7 +72,7 @@ static const u8 q0[256] = {
 	0x4A, 0x5E, 0xC1, 0xE0
 };
 
-static const u8 q1[256] = {
+static const unsigned char q1[256] = {
 	0x75, 0xF3, 0xC6, 0xF4, 0xDB, 0x7B, 0xFB, 0xC8, 0x4A, 0xD3, 0xE6, 0x6B,
 	0x45, 0x7D, 0xE8, 0x4B, 0xD6, 0x32, 0xD8, 0xFD, 0x37, 0x71, 0xF1, 0xE1,
 	0x30, 0x0F, 0xF8, 0x1B, 0x87, 0xFA, 0x06, 0x3F, 0x5E, 0xBA, 0xAE, 0x5B,
@@ -111,7 +110,7 @@ static const u8 q1[256] = {
  * by Schneier et al, and I'm casually glossing over the byte/word
  * conversion issues. */
 
-static const u32 mds[4][256] = {
+static const unsigned long mds[4][256] = {
 	{
 	0xBCBC3275, 0xECEC21F3, 0x202043C6, 0xB3B3C9F4, 0xDADA03DB, 0x02028B7B,
 	0xE2E22BFB, 0x9E9EFAC8, 0xC9C9EC4A, 0xD4D409D3, 0x18186BE6, 0x1E1E9F6B,
@@ -326,7 +325,7 @@ static const u32 mds[4][256] = {
  * see a non-horrible way of avoiding them, and I did manage to group the
  * statements so that each if covers four group multiplications. */
 
-static const u8 poly_to_exp[255] = {
+static const unsigned char poly_to_exp[255] = {
 	0x00, 0x01, 0x17, 0x02, 0x2E, 0x18, 0x53, 0x03, 0x6A, 0x2F, 0x93, 0x19,
 	0x34, 0x54, 0x45, 0x04, 0x5C, 0x6B, 0xB6, 0x30, 0xA6, 0x94, 0x4B, 0x1A,
 	0x8C, 0x35, 0x81, 0x55, 0xAA, 0x46, 0x0D, 0x05, 0x24, 0x5D, 0x87, 0x6C,
@@ -351,7 +350,7 @@ static const u8 poly_to_exp[255] = {
 	0x85, 0xC8, 0xA1
 };
 
-static const u8 exp_to_poly[492] = {
+static const unsigned char exp_to_poly[492] = {
 	0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x4D, 0x9A, 0x79, 0xF2,
 	0xA9, 0x1F, 0x3E, 0x7C, 0xF8, 0xBD, 0x37, 0x6E, 0xDC, 0xF5, 0xA7, 0x03,
 	0x06, 0x0C, 0x18, 0x30, 0x60, 0xC0, 0xCD, 0xD7, 0xE3, 0x8B, 0x5B, 0xB6,
@@ -398,7 +397,7 @@ static const u8 exp_to_poly[492] = {
 
 /* The table constants are indices of
  * S-box entries, preprocessed through q0 and q1. */
-static const u8 calc_sb_tbl[512] = {
+static const unsigned char calc_sb_tbl[512] = {
 	0xA9, 0x75, 0x67, 0xF3, 0xB3, 0xC6, 0xE8, 0xF4,
 	0x04, 0xDB, 0xFD, 0x7B, 0xA3, 0xFB, 0x76, 0xC8,
 	0x9A, 0x4A, 0x92, 0xD3, 0x80, 0xE6, 0x78, 0x6B,
@@ -540,9 +539,9 @@ static const u8 calc_sb_tbl[512] = {
 #define CALC_K(a, j, k, l, m, n) \
    x = CALC_K_2 (k, l, k, l, 0); \
    y = CALC_K_2 (m, n, m, n, 4); \
-   y = ROL32(y, 8); \
+   y = _rotl(y, 8); \
    x += y; y += x; skey->a[j] = x; \
-   skey->a[(j) + 1] = rol32(y, 9)
+   skey->a[(j) + 1] = _rotl(y, 9)
 
 #define CALC_K192_2(a, b, c, d, j) \
    CALC_K_2 (q0[a ^ key[(j) + 16]], \
@@ -553,9 +552,9 @@ static const u8 calc_sb_tbl[512] = {
 #define CALC_K192(a, j, k, l, m, n) \
    x = CALC_K192_2 (l, l, k, k, 0); \
    y = CALC_K192_2 (n, n, m, m, 4); \
-   y = ROL32(y, 8); \
+   y = _rotl(y, 8); \
    x += y; y += x; skey->a[j] = x; \
-   skey->a[(j) + 1] = ROL32(y, 9)
+   skey->a[(j) + 1] = _rotl(y, 9)
 
 #define CALC_K256_2(a, b, j) \
    CALC_K192_2 (q1[b ^ key[(j) + 24]], \
@@ -566,9 +565,9 @@ static const u8 calc_sb_tbl[512] = {
 #define CALC_K256(a, j, k, l, m, n) \
    x = CALC_K256_2 (k, l, 0); \
    y = CALC_K256_2 (m, n, 4); \
-   y = ROL32(y, 8); \
+   y = _rotl(y, 8); \
    x += y; y += x; skey->a[j] = x; \
-   skey->a[(j) + 1] = ROL32(y, 9)
+   skey->a[(j) + 1] = _rotl(y, 9)
 
 
 /* Perform the key setup. */
@@ -577,15 +576,15 @@ void _stdcall twofish256_set_key(const unsigned char *key, twofish256_key *skey)
 	int i, j, k;
 
 	/* Temporaries for CALC_K. */
-	u32 x, y;
+	unsigned long x, y;
 
 	/* The S vector used to key the S-boxes, split up into individual bytes.
 	 * 128-bit keys use only sa through sh; 256-bit use all of them. */
-	u8 sa = 0, sb = 0, sc = 0, sd = 0, se = 0, sf = 0, sg = 0, sh = 0;
-	u8 si = 0, sj = 0, sk = 0, sl = 0, sm = 0, sn = 0, so = 0, sp = 0;
+	unsigned char sa = 0, sb = 0, sc = 0, sd = 0, se = 0, sf = 0, sg = 0, sh = 0;
+	unsigned char si = 0, sj = 0, sk = 0, sl = 0, sm = 0, sn = 0, so = 0, sp = 0;
 
 	/* Temporary for CALC_S. */
-	u8 tmp;
+	unsigned char tmp;
 
 	/* Compute the first two words of the S vector.  The magic numbers are
 	 * the entries of the RS matrix, preprocessed through poly_to_exp. The
@@ -680,15 +679,15 @@ void _stdcall twofish256_set_key(const unsigned char *key, twofish256_key *skey)
    x = G1 (a); y = G2 (b); \
    x += y; y += x + key->k[2 * (n) + 1]; \
    (c) ^= x + key->k[2 * (n)]; \
-   (c) = ROR32((c), 1); \
-   (d) = ROL32((d), 1) ^ y
+   (c) = _rotr((c), 1); \
+   (d) = _rotl((d), 1) ^ y
 
 #define DECROUND(n, a, b, c, d) \
    x = G1 (a); y = G2 (b); \
    x += y; y += x; \
    (d) ^= y + key->k[2 * (n) + 1]; \
-   (d) = ROR32((d), 1); \
-   (c) = ROL32((c), 1); \
+   (d) = _rotr((d), 1); \
+   (c) = _rotl((c), 1); \
    (c) ^= (x + key->k[2 * (n)])
 
 /* Encryption and decryption cycles; each one is simply two Feistel rounds
@@ -709,19 +708,19 @@ void _stdcall twofish256_set_key(const unsigned char *key, twofish256_key *skey)
  * whitening subkey number m. */
 
 #define INPACK(n, x, m) \
-   x = p32(in)[n] ^ key->w[m]
+   x = ((unsigned long*)in)[n] ^ key->w[m]
 
 #define OUTUNPACK(n, x, m) \
-   p32(out)[n] = x ^ key->w[m];
+   ((unsigned long*)out)[n] = x ^ key->w[m];
  
 /* Encrypt one block.  in and out may be the same. */
 void _stdcall twofish256_encrypt(const unsigned char *in, unsigned char *out, twofish256_key *key)
 {
 	/* The four 32-bit chunks of the text. */
-	u32 a, b, c, d;
+	unsigned long a, b, c, d;
 	
 	/* Temporaries used by the round function. */
-	u32 x, y;
+	unsigned long x, y;
 
 	/* Input whitening and packing. */
 	INPACK (0, a, 0);
@@ -750,10 +749,10 @@ void _stdcall twofish256_encrypt(const unsigned char *in, unsigned char *out, tw
 void _stdcall twofish256_decrypt(const unsigned char *in, unsigned char *out, twofish256_key *key)
 {
 	/* The four 32-bit chunks of the text. */
-	u32 a, b, c, d;
+	unsigned long a, b, c, d;
 	
 	/* Temporaries used by the round function. */
-	u32 x, y;
+	unsigned long x, y;
 	
 	/* Input whitening and packing. */
 	INPACK (0, c, 4);

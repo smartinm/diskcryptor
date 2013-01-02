@@ -1,17 +1,17 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include "xts_test.h"
 #ifdef SMALL_CODE
- #include "xts_small.h"
+	#include "xts_small.h"
 #else
- #include "xts_fast.h"
- #include "crc32.h"
+	#include "xts_fast.h"
+	#include "crc32.h"
 #endif
 
 static const struct { /* see IEEE 1619 */
-	const char key1[32];
-	const char key2[32];
-	const char index[8];	
-	const char ciphertext[XTS_SECTOR_SIZE];
+	const unsigned char key1[32];
+	const unsigned char key2[32];
+	const unsigned char index[8];	
+	const unsigned char ciphertext[XTS_SECTOR_SIZE];
 
 } xts_vectors[] = {
 	{
@@ -97,8 +97,8 @@ static const struct { /* see IEEE 1619 */
 
 static const struct { /* These values were obtained using Brian Gladman's XTS implementation */
 	int    alg;
-	u32    e_crc;
-	u32    d_crc;
+	unsigned long e_crc;
+	unsigned long d_crc;
 
 } xts_crc_vectors[] = {
 	{ CF_AES,                 0xd5faad12, 0xf78e1ee6 },
@@ -113,31 +113,29 @@ static const struct { /* These values were obtained using Brian Gladman's XTS im
 
 static int xts_vectors_test()
 {
-	const char *p_ct;
-	u8          key[XTS_FULL_KEY];
-	u8          plain[XTS_SECTOR_SIZE];
-	u8          tmp[XTS_SECTOR_SIZE];
-	xts_key     skey;
-	int         i;	
-	u64         index, offset;
-#ifndef SMALL_CODE
-	u32         old_p;
-#endif
+	const unsigned char *p_ct;
+	unsigned char key[XTS_FULL_KEY];
+	unsigned char plain[XTS_SECTOR_SIZE];
+	unsigned char tmp[XTS_SECTOR_SIZE];
+	xts_key skey;
+	int     i;	
+	unsigned __int64 index, offset;
 
+	// allow execute code from key buffer
 #ifndef SMALL_CODE
-	/* allow execute code from key buffer */
-	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_p) == 0) {
-		return 0;
-	}
+	DWORD old_protect;
+	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_protect) == 0) return 0;
 #endif
-	for (i = 0; i < XTS_SECTOR_SIZE; i++) {
-		plain[i] = i;
-	}
-	for (i = 0; i < array_num(xts_vectors); i++)
+	
+	// fill sector with bytes sequence
+	for (i = 0; i < XTS_SECTOR_SIZE; i++) plain[i] = i;
+
+	// run test vectors
+	for (i = 0; i < _countof(xts_vectors); i++)
 	{
 		p_ct   = xts_vectors[i].ciphertext;			
-		index  = p64(xts_vectors[i].index)[0];
-		offset = (BE64(index) - 1) * XTS_SECTOR_SIZE;
+		index  = ((unsigned __int64*)xts_vectors[i].index)[0];
+		offset = (_byteswap_uint64(index) - 1) * XTS_SECTOR_SIZE;
 			
 		memcpy(key, xts_vectors[i].key1, XTS_KEY_SIZE);
 		memcpy(key + XTS_KEY_SIZE, xts_vectors[i].key2, XTS_KEY_SIZE);
@@ -145,22 +143,16 @@ static int xts_vectors_test()
 		xts_set_key(key, CF_AES, &skey);
 
 		xts_encrypt(plain, tmp, XTS_SECTOR_SIZE, offset, &skey);
-
-		if (memcmp(tmp, p_ct, XTS_SECTOR_SIZE) != 0) {
-			return 0;
-		}
+		if (memcmp(tmp, p_ct, XTS_SECTOR_SIZE) != 0) return 0;
 
 		xts_decrypt(p_ct, tmp, XTS_SECTOR_SIZE, offset, &skey);
-
-		if (memcmp(tmp, plain, XTS_SECTOR_SIZE) != 0) {
-			return 0;
-		}
+		if (memcmp(tmp, plain, XTS_SECTOR_SIZE) != 0) return 0;
 	}
 	return 1;
 }
 
 #ifdef SMALL_CODE
-unsigned long crc32(const unsigned char *p, unsigned long len)
+static unsigned long crc32(const unsigned char *p, unsigned long len)
 {
 	unsigned long crc = 0xFFFFFFFF;
 	unsigned long temp;
@@ -178,41 +170,35 @@ unsigned long crc32(const unsigned char *p, unsigned long len)
 
 static int xts_crc_test()
 {
+	unsigned char  key[XTS_FULL_KEY];
+	unsigned short test[XTS_SECTOR_SIZE*8 / sizeof(unsigned short)];
+	unsigned short buff[XTS_SECTOR_SIZE*8 / sizeof(unsigned short)];
+	unsigned long  e_crc, d_crc;
 	xts_key skey;
-	u8      key[XTS_FULL_KEY];
-	u16     test[XTS_SECTOR_SIZE*8 / sizeof(u16)];
-	u16     buff[XTS_SECTOR_SIZE*8 / sizeof(u16)];
-	u32     e_crc, d_crc;
 	int     i;
-#ifndef SMALL_CODE
-	u32     old_p;
-#endif
 
+	// allow execute code from key buffer
 #ifndef SMALL_CODE
-	/* allow execute code from key buffer */
-	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_p) == 0) {
-		return 0;
-	}
+	DWORD old_protect;
+	if (VirtualProtect(&skey, sizeof(skey), PAGE_EXECUTE_READWRITE, &old_protect) == 0) return 0;
 #endif
-	for (i = 0; i < sizeof(key); i++) {
-		key[i] = i;
-	}
-	for (i = 0; i < array_num(test); i++) {
-		test[i] = i;
-	}
-	for (i = 0; i < array_num(xts_crc_vectors); i++)
+	
+	// fill key and test buffer
+	for (i = 0; i < _countof(key); i++) key[i] = i;
+	for (i = 0; i < _countof(test); i++) test[i] = i;
+
+	// run test cases
+	for (i = 0; i < _countof(xts_crc_vectors); i++)
 	{
 		xts_set_key(key, xts_crc_vectors[i].alg, &skey);
 
-		xts_encrypt(pv(test), pv(buff), sizeof(test), 0x3FFFFFFFC00, &skey);
-		e_crc = crc32(pv(buff), sizeof(buff));
+		xts_encrypt((const unsigned char*)&test, (unsigned char*)&buff, sizeof(test), 0x3FFFFFFFC00, &skey);
+		e_crc = crc32((const unsigned char*)&buff, sizeof(buff));
 
-		xts_decrypt(pv(test), pv(buff), sizeof(test), 0x3FFFFFFFC00, &skey);
-		d_crc = crc32(pv(buff), sizeof(buff));
+		xts_decrypt((const unsigned char*)&test, (unsigned char*)&buff, sizeof(test), 0x3FFFFFFFC00, &skey);
+		d_crc = crc32((const unsigned char*)&buff, sizeof(buff));
 
-		if ( e_crc != xts_crc_vectors[i].e_crc || d_crc != xts_crc_vectors[i].d_crc ) {
-			return 0;
-		}
+		if ( e_crc != xts_crc_vectors[i].e_crc || d_crc != xts_crc_vectors[i].d_crc ) return 0;
 	}
 	return 1;
 }
@@ -221,8 +207,8 @@ static int xts_crc_test()
 long _stdcall save_fpu_state(unsigned char state[32]) 
 {
 	static int count;
-	if (count++ % 2) return 0; /* return fpu save success */
-	return -1; /* return fpu save failed */
+	if (count++ % 2) return 0; // return fpu save success
+	return -1; // return fpu save failed
 }
 void _stdcall load_fpu_state(unsigned char state[32]) {
 }
@@ -232,18 +218,19 @@ int test_xts_mode()
 {
 	int i;
 
-	xts_init(0); /* disable HW crypto */
+	xts_init(0); // disable HW crypto
 
-	for (i = 0; i < 100; i++) { /* repeat tests 100 times */
+	for (i = 0; i < 100; i++) { // repeat tests 100 times
 		if (xts_vectors_test() == 0) return 0;
 		if (xts_crc_test() == 0) return 0;
 	}
-	xts_init(1); /* enable HW crypto */
+	xts_init(1); // enable HW crypto
 
-	for (i = 0; i < 100; i++) { /* repeat tests 100 times */
+	for (i = 0; i < 100; i++) { // repeat tests 100 times
 		if (xts_vectors_test() == 0) return 0;
 		if (xts_crc_test() == 0) return 0;
 	}
-	/* all tests passed */
+	
+	// all tests passed
 	return 1;
 }

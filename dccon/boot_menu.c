@@ -22,11 +22,11 @@
 #include <conio.h>
 #include "defines.h"
 #include "main.h"
-#include "dcapi\drv_ioctl.h"
-#include "boot\boot.h"
-#include "dcapi\misc.h"
-#include "dcapi\mbrinst.h"
-#include "dcapi\disk_name.h"
+#include "drv_ioctl.h"
+#include "bootloader.h"
+#include "misc.h"
+#include "mbrinst.h"
+#include "disk_name.h"
 #include "console.h"
 
 static int onoff_req()
@@ -46,15 +46,15 @@ static void menu_0_1(ldr_config *conf)
 	{
 		cls_console();
 
-		if (conf->options & OP_EPS_TMO) 
+		if (conf->options & LDR_OP_EPS_TMO) 
 		{
 			_snwprintf(
-				auth, sizeof_w(auth), L"%d seconds", conf->timeout);
+				auth, countof(auth), L"%d seconds", conf->timeout);
 		} else {
 			wcscpy(auth, L"disabled");
 		}
 
-		if (conf->logon_type & LT_DSP_PASS) {
+		if (conf->logon_type & LDR_LT_DSP_PASS) {
 			dp_type = L"display \"*\"";
 		} else {
 			dp_type = L"disabled";
@@ -68,21 +68,19 @@ static void menu_0_1(ldr_config *conf)
 			L"5 - Change authentication timeout (%s)\n"
 			L"6 - Cancel timeout if any key pressed (%s)\n"
 			L"7 - Return to main menu\n\n",
-			on_off(conf->logon_type & LT_MESSAGE),
+			on_off(conf->logon_type & LDR_LT_MESSAGE),
 			dp_type,
 			conf->eps_msg,
-			conf->logon_type & LT_EMBED_KEY ? L"enabled":L"disabled",
+			conf->logon_type & LDR_LT_EMBED_KEY ? L"enabled":L"disabled",
 			auth,
-			on_off(conf->options & OP_TMO_STOP));
+			on_off(conf->options & LDR_OP_TMO_STOP));
 
 		if ( (ch = getchr('1', '7')) == '7' ) {
 			break;
 		}
 
-		if (ch == '1') 
-		{
-			set_flag(
-				conf->logon_type, LT_MESSAGE, onoff_req());
+		if (ch == '1') {
+			set_flag(conf->logon_type, LDR_LT_MESSAGE, onoff_req());
 		}
 
 		if (ch == '2')
@@ -92,15 +90,19 @@ static void menu_0_1(ldr_config *conf)
 				L"2 - display \"*\"\n");
 
 			if (getchr('1', '2') == '2') {
-				conf->logon_type |= LT_DSP_PASS;
+				conf->logon_type |= LDR_LT_DSP_PASS;
 			} else {
-				conf->logon_type &= ~LT_DSP_PASS;
+				conf->logon_type &= ~LDR_LT_DSP_PASS;
 			}
 		}
 
-		if (ch == '3') {
+		if (ch == '3') 
+		{
 			wprintf(L"Enter new prompt text: ");
-			s_gets(conf->eps_msg, sizeof(conf->eps_msg));			
+
+			memset(conf->eps_msg, 0, sizeof(conf->eps_msg));
+			fgets(conf->eps_msg, _countof(conf->eps_msg), stdin);
+			conf->eps_msg[strlen(conf->eps_msg) - 1] = 0;
 		}
 
 		if (ch == '4')
@@ -112,10 +114,13 @@ static void menu_0_1(ldr_config *conf)
 			wprintf(L"Please enter path to keyfile: ");
 
 			memset(&conf->emb_key, 0, sizeof(conf->emb_key));
-			conf->logon_type &= ~LT_EMBED_KEY;
-			conf->logon_type |= LT_GET_PASS;
+			conf->logon_type &= ~LDR_LT_EMBED_KEY;
+			conf->logon_type |= LDR_LT_GET_PASS;
 			
-			if (s_wgets(path, sizeof(path)) != 0)
+			fgetws(path, _countof(path), stdin);
+			path[wcslen(path) - 1] = 0;
+			
+			if (path[0] != 0)
 			{
 				if (load_file(path, &keyfile, &keysize) != ST_OK) {
 					wprintf(L"keyfile not loaded\n");
@@ -132,11 +137,11 @@ static void menu_0_1(ldr_config *conf)
 							L"2 - Use only embedded keyfile\n");
 
 						if (getchr('1', '2') == '2') {							
-							conf->logon_type &= ~LT_GET_PASS;
+							conf->logon_type &= ~LDR_LT_GET_PASS;
 						}
 
 						memcpy(&conf->emb_key, keyfile, sizeof(conf->emb_key));
-						conf->logon_type |= LT_EMBED_KEY;
+						conf->logon_type |= LDR_LT_EMBED_KEY;
 					}
 					burn(keyfile, keysize);
 					free(keyfile);
@@ -152,14 +157,11 @@ static void menu_0_1(ldr_config *conf)
 				conf->timeout = 0;
 			}
 
-			set_flag(
-				conf->options, OP_EPS_TMO, (conf->timeout != 0));
+			set_flag(conf->options, LDR_OP_EPS_TMO, (conf->timeout != 0));
 		}
 
-		if (ch == '6') 
-		{
-			set_flag(
-				conf->options, OP_TMO_STOP, onoff_req());
+		if (ch == '6') {
+			set_flag(conf->options, LDR_OP_TMO_STOP, onoff_req());
 		}
 	} while (1);
 }
@@ -177,23 +179,23 @@ static void menu_0_2(ldr_config *conf)
 
 		action = L"halt system";
 
-		if (conf->error_type & ET_REBOOT) {
+		if (conf->error_type & LDR_ET_REBOOT) {
 			action = L"reboot system";
 		}
 
-		if (conf->error_type & ET_BOOT_ACTIVE) {
+		if (conf->error_type & LDR_ET_BOOT_ACTIVE) {
 			action = L"boot from active partition";
 		}
 
-		if (conf->error_type & ET_EXIT_TO_BIOS) {
+		if (conf->error_type & LDR_ET_EXIT_TO_BIOS) {
 			action = L"exit to BIOS";
 		}
 
-		if (conf->error_type & ET_RETRY) {
+		if (conf->error_type & LDR_ET_RETRY) {
 			action = L"retry authentication";
 		}
 
-		if (conf->error_type & ET_MBR_BOOT) {
+		if (conf->error_type & LDR_ET_MBR_BOOT) {
 			action = L"load boot disk MBR";
 		}
 
@@ -210,17 +212,15 @@ static void menu_0_2(ldr_config *conf)
 			L"2 - Invalid password action (%s)\n"
 			L"3 - Invalid password message (%S)\n"
 			L"4 - Return to main menu\n\n",
-			on_off(conf->error_type & ET_MESSAGE),
+			on_off(conf->error_type & LDR_ET_MESSAGE),
 			action, inv_msg);
 
 		if ( (ch = getchr('1', '4')) == '4' ) {
 			break;
 		}
 
-		if (ch == '1') 
-		{
-			set_flag(
-				conf->error_type, ET_MESSAGE, onoff_req());
+		if (ch == '1') {
+			set_flag(conf->error_type, LDR_ET_MESSAGE, onoff_req());
 		}
 
 		if (ch == '2')
@@ -233,16 +233,16 @@ static void menu_0_2(ldr_config *conf)
 				L"5 - exit to BIOS\n"
 				L"6 - retry authentication\n");
 
-			msgf = (conf->error_type & ET_MESSAGE);
+			msgf = (conf->error_type & LDR_ET_MESSAGE);
 
 			switch (getchr('1', '6'))
 			{
 				case '1': conf->error_type = 0; break;
-				case '2': conf->error_type = ET_REBOOT; break;
-				case '3': conf->error_type = ET_BOOT_ACTIVE; break;
-				case '4': conf->error_type = ET_MBR_BOOT; break;
-				case '5': conf->error_type = ET_EXIT_TO_BIOS; break;
-				case '6': conf->error_type = ET_RETRY; break;
+				case '2': conf->error_type = LDR_ET_REBOOT; break;
+				case '3': conf->error_type = LDR_ET_BOOT_ACTIVE; break;
+				case '4': conf->error_type = LDR_ET_MBR_BOOT; break;
+				case '5': conf->error_type = LDR_ET_EXIT_TO_BIOS; break;
+				case '6': conf->error_type = LDR_ET_RETRY; break;
 			}
 
 			conf->error_type |= msgf;
@@ -250,14 +250,10 @@ static void menu_0_2(ldr_config *conf)
 
 		if (ch == '3') 
 		{
-			size_t sz;
-
 			wprintf(L"Enter new message text: ");
 
-			if (s_gets(conf->err_msg, sizeof(conf->err_msg) - 2) != 0) {
-				sz = strlen(conf->err_msg);
-				conf->err_msg[sz] = '\n'; conf->err_msg[sz+1] = 0;
-			}
+			memset(conf->err_msg, 0, sizeof(conf->err_msg));
+			fgets(conf->err_msg, _countof(conf->err_msg), stdin);
 		}
 	} while (1);
 }
@@ -277,7 +273,7 @@ static u32 disk_id_select()
 		if ( (vol->status.flags & F_ENABLED) && (vol->status.disk_id != 0) ) 
 		{
 			dc_format_byte_size(
-				s_size, sizeof_w(s_size), vol->status.dsk_size
+				s_size, countof(s_size), vol->status.dsk_size
 				);
 
 			if (idn == 0) {
@@ -317,11 +313,11 @@ static void menu_0_3(ldr_config *conf)
 
 		switch (conf->boot_type)
 		{
-			case BT_MBR_BOOT: methd = L"load boot disk MBR"; break;
-			case BT_MBR_FIRST: methd = L"load first disk MBR"; break;
-			case BT_ACTIVE: methd = L"load OS from active partition"; break;
-			case BT_AP_PASSWORD: methd = L"boot from first partition with appropriate password"; break;
-			case BT_DISK_ID:
+			case LDR_BT_MBR_BOOT: methd = L"load boot disk MBR"; break;
+			case LDR_BT_MBR_FIRST: methd = L"load first disk MBR"; break;
+			case LDR_BT_ACTIVE: methd = L"load OS from active partition"; break;
+			case LDR_BT_AP_PASSWORD: methd = L"boot from first partition with appropriate password"; break;
+			case LDR_BT_DISK_ID:
 				{
 					/* find partition by disk_id */
 					found = 0;
@@ -332,10 +328,10 @@ static void menu_0_3(ldr_config *conf)
 						if ( (vol->status.flags & F_ENABLED) && (vol->status.disk_id == conf->disk_id) ) 
 						{
 							dc_format_byte_size(
-								s_size, sizeof_w(s_size), vol->status.dsk_size);
+								s_size, countof(s_size), vol->status.dsk_size);
 
 							_snwprintf(
-								part, sizeof_w(part), L"boot from pt%d (%s) (%s)", 
+								part, countof(part), L"boot from pt%d (%s) (%s)", 
 								i, vol->status.mnt_point, s_size);
 							found = 1;
 						}
@@ -344,14 +340,14 @@ static void menu_0_3(ldr_config *conf)
 					if (found == 0) 
 					{
 						_snwprintf(
-							part, sizeof_w(part), L"boot from unknown partition, id %0.8x", conf->disk_id);
+							part, countof(part), L"boot from unknown partition, id %0.8x", conf->disk_id);
 					}
 					methd = part;
 				}
 			break;
 		}
 
-		if (conf->options & OP_EXTERNAL)
+		if (conf->options & LDR_OP_EXTERNAL)
 		{
 			wprintf(
 				L"Current booting method: %s\n\n"
@@ -373,7 +369,7 @@ static void menu_0_3(ldr_config *conf)
 				methd);
 		}
 
-		if (conf->options & OP_EXTERNAL)
+		if (conf->options & LDR_OP_EXTERNAL)
 		{
 			if ( (ch = getchr('1', '4')) == '4' ) {
 				break;
@@ -381,13 +377,13 @@ static void menu_0_3(ldr_config *conf)
 
 			switch (ch)
 			{
-				case '1': conf->boot_type = BT_MBR_FIRST; break;
-				case '2': conf->boot_type = BT_AP_PASSWORD; break;
+				case '1': conf->boot_type = LDR_BT_MBR_FIRST; break;
+				case '2': conf->boot_type = LDR_BT_AP_PASSWORD; break;
 				case '3': 
 					{
 						if ( (id = disk_id_select()) != 0 ) {
 							conf->disk_id   = id;
-							conf->boot_type = BT_DISK_ID;
+							conf->boot_type = LDR_BT_DISK_ID;
 						}
 					}
 				break;
@@ -400,15 +396,15 @@ static void menu_0_3(ldr_config *conf)
 
 			switch (ch)
 			{
-				case '1': conf->boot_type = BT_MBR_BOOT; break;
-				case '2': conf->boot_type = BT_MBR_FIRST; break;
-				case '3': conf->boot_type = BT_ACTIVE; break;
-				case '4': conf->boot_type = BT_AP_PASSWORD; break;
+				case '1': conf->boot_type = LDR_BT_MBR_BOOT; break;
+				case '2': conf->boot_type = LDR_BT_MBR_FIRST; break;
+				case '3': conf->boot_type = LDR_BT_ACTIVE; break;
+				case '4': conf->boot_type = LDR_BT_AP_PASSWORD; break;
 				case '5':
 					{
 						if ( (id = disk_id_select()) != 0 ) {
 							conf->disk_id   = id;
-							conf->boot_type = BT_DISK_ID;
+							conf->boot_type = LDR_BT_DISK_ID;
 						}
 					}
 				break;
@@ -428,9 +424,9 @@ static void menu_0_4(ldr_config *conf)
 
 		switch (conf->kbd_layout)
 		{
-			case KB_QWERTY: layout = L"QWERTY"; break;
-			case KB_QWERTZ: layout = L"QWERTZ"; break;
-			case KB_AZERTY: layout = L"AZERTY"; break;
+			case LDR_KB_QWERTY: layout = L"QWERTY"; break;
+			case LDR_KB_QWERTZ: layout = L"QWERTZ"; break;
+			case LDR_KB_AZERTY: layout = L"AZERTY"; break;
 		}
 
 		wprintf(
@@ -447,9 +443,9 @@ static void menu_0_4(ldr_config *conf)
 
 		switch (ch)
 		{
-			case '1': conf->kbd_layout = KB_QWERTY; break;
-			case '2': conf->kbd_layout = KB_QWERTZ; break;
-			case '3': conf->kbd_layout = KB_AZERTY; break;			
+			case '1': conf->kbd_layout = LDR_KB_QWERTY; break;
+			case '2': conf->kbd_layout = LDR_KB_QWERTZ; break;
+			case '3': conf->kbd_layout = LDR_KB_AZERTY; break;			
 		}
 	} while (1);
 }
@@ -474,8 +470,8 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 			L"5 - Set booting method\n"
 			L"6 - Set bootauth keyboard layout\n"
 			L"7 - Save changes and exit\n\n",
-			on_off(conf->options & OP_NOPASS_ERROR),
-			on_off(conf->options & OP_HW_CRYPTO)
+			on_off(conf->options & LDR_OP_NOPASS_ERROR),
+			on_off(conf->options & LDR_OP_HW_CRYPTO)
 			);
 
 		if ( (ch = getchr('1', '7')) == '7' ) {
@@ -487,11 +483,11 @@ void boot_conf_menu(ldr_config *conf, wchar_t *msg)
 			case '1': menu_0_1(conf); break;
 			case '2': menu_0_2(conf); break;
 			case '3': {
-				set_flag(conf->options, OP_NOPASS_ERROR, onoff_req());
+				set_flag(conf->options, LDR_OP_NOPASS_ERROR, onoff_req());
 			}
 			break;
 			case '4': {
-				set_flag(conf->options, OP_HW_CRYPTO, onoff_req());
+				set_flag(conf->options, LDR_OP_HW_CRYPTO, onoff_req());
 			}
 			break;
 			case '5': menu_0_3(conf); break;
@@ -540,9 +536,9 @@ int boot_menu(int argc, wchar_t *argv[])
 			{
 				if (size = dc_dsk_get_size(i, 0)) 
 				{
-					dc_format_byte_size(s_size, sizeof_w(s_size), size);
+					dc_format_byte_size(s_size, countof(s_size), size);
 
-					if (dc_get_hw_name(i, 0, h_name, sizeof_w(h_name)) != ST_OK) {
+					if (dc_get_hw_name(i, 0, h_name, countof(h_name)) != ST_OK) {
 						h_name[0] = 0;
 					}
 					
@@ -627,8 +623,8 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options  |= OP_EXTERNAL;
-			conf.boot_type = BT_AP_PASSWORD;
+			conf.options  |= LDR_OP_EXTERNAL;
+			conf.boot_type = LDR_BT_AP_PASSWORD;
 
 			boot_conf_menu(
 				&conf, L"Please set bootloader options:");
@@ -649,8 +645,8 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options  |= OP_EXTERNAL;
-			conf.boot_type = BT_MBR_FIRST;
+			conf.options  |= LDR_OP_EXTERNAL;
+			conf.boot_type = LDR_BT_MBR_FIRST;
 
 			boot_conf_menu(
 				&conf, L"Please set bootloader options:");
@@ -671,8 +667,8 @@ int boot_menu(int argc, wchar_t *argv[])
 				break;
 			}
 
-			conf.options  |= OP_EXTERNAL;
-			conf.boot_type = BT_MBR_FIRST;
+			conf.options  |= LDR_OP_EXTERNAL;
+			conf.boot_type = LDR_BT_MBR_FIRST;
 
 			boot_conf_menu(
 				&conf, L"Please set bootloader options:");

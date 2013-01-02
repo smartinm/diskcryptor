@@ -1,4 +1,4 @@
-#ifndef _TWOFISH_SMALL_H_
+﻿#ifndef _TWOFISH_SMALL_H_
 #define _TWOFISH_SMALL_H_
 
 typedef struct _twofish256_key {

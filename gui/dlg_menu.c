@@ -127,7 +127,7 @@ void _refresh_menu( )
 	{
 		HWND h_mount = GetDlgItem(__dlg, IDC_BTN_MOUNT_);
 
-		GetWindowText( h_mount, ws_display, sizeof_w(ws_display) );
+		GetWindowText( h_mount, ws_display, countof(ws_display) );
 		wcscpy( ws_new_display, unmount ? IDS_UNMOUNT : IDS_MOUNT );
 
 		if ( ( wcscmp( ws_display, ws_new_display ) != 0 ) || ( IsWindowEnabled(h_mount) != ( unmount || mount ) ) )
@@ -167,13 +167,11 @@ int _finish_formating(
 		_dnode *node
 	)
 {
-	int rlt = dc_done_format( node->mnt.info.device );
-	if ( rlt == ST_OK )
+	int rlt;
+
+	if ( wcscmp(node->dlg.fs_name, L"RAW") != 0 )
 	{
-		if ( wcscmp(node->dlg.fs_name, L"RAW") != 0 )
-		{
-			rlt = dc_format_fs( node->mnt.info.w32_device, node->dlg.fs_name );
-		}
+		rlt = dc_format_fs( node->mnt.info.w32_device, node->dlg.fs_name );
 	}
 	if (rlt != ST_OK) 
 	{
@@ -250,7 +248,7 @@ int _menu_unset_loader_mbr(
 		wchar_t dev[MAX_PATH];
 		drive_inf inf;
 
-		_snwprintf( dev, sizeof_w(dev), L"\\\\.\\%s", vol );
+		_snwprintf( dev, countof(dev), L"\\\\.\\%s", vol );
 		rlt = dc_get_drive_info(dev, &inf);
 
 		if ( rlt == ST_OK )
@@ -313,8 +311,8 @@ int _menu_set_loader_vol(
 		{
 			if ( (rlt = dc_mbr_config_by_partition(vol, FALSE, &conf)) == ST_OK )
 			{				
-				conf.options  |= OP_EXTERNAL;
-				conf.boot_type = BT_AP_PASSWORD;
+				conf.options  |= LDR_OP_EXTERNAL;
+				conf.boot_type = LDR_BT_AP_PASSWORD;
 
 				rlt = dc_mbr_config_by_partition(vol, TRUE, &conf);
 			}
@@ -351,8 +349,8 @@ int _menu_set_loader_file(
 	{
 		if ( (rlt = dc_get_mbr_config( 0, path, &conf )) == ST_OK )
 		{
-			conf.options   |= OP_EXTERNAL;
-			conf.boot_type  = BT_MBR_FIRST;
+			conf.options   |= LDR_OP_EXTERNAL;
+			conf.boot_type  = LDR_BT_MBR_FIRST;
 
 			rlt = dc_set_mbr_config( 0, path, &conf );
 		}			
@@ -426,7 +424,7 @@ int _set_boot_loader(
 				  ( dc_get_mbr_config( boot_disk_1, NULL, &conf ) == ST_OK )
 				) 
 			{
-				conf.boot_type = BT_ACTIVE;						
+				conf.boot_type = LDR_BT_ACTIVE;						
 				if ( (rlt = dc_set_mbr_config( boot_disk_1, NULL, &conf )) != ST_OK )
 				{
 					dc_unset_mbr( boot_disk_1 );
@@ -615,7 +613,11 @@ void _menu_format(
 	{
 		if ( node->dlg.q_format )
 		{
-			_finish_formating(node);
+			rlt = dc_done_format( node->mnt.info.device );
+			if ( rlt == ST_OK )
+			{
+				_finish_formating(node);
+			}
 		} else {
 			_create_act_thread(node, ACT_FORMAT, ACT_RUNNING);
 			_activate_page( );
@@ -693,7 +695,7 @@ void _menu_mount(
 			{						
 				if ( mnt_point[0] != 0 )
 				{
-					_snwprintf( vol, sizeof_w(vol), L"%s\\", node->mnt.info.w32_device );
+					_snwprintf( vol, countof(vol), L"%s\\", node->mnt.info.w32_device );
 					_set_trailing_slash(mnt_point);
 
 					if ( SetVolumeMountPoint(mnt_point, vol) == 0 )
@@ -802,8 +804,8 @@ void _menu_backup_header(
 
 		if ( rlt == ST_OK )
 		{
-			_snwprintf( s_path, sizeof_w(s_path), L"%s.bin", wcsrchr(node->mnt.info.device, '\\') + 1 );
-			if ( _save_file_dialog( __dlg, s_path, sizeof_w(s_path), L"Save backup volume header to file" ) )
+			_snwprintf( s_path, countof(s_path), L"%s.bin", wcsrchr(node->mnt.info.device, '\\') + 1 );
+			if ( _save_file_dialog( __dlg, s_path, countof(s_path), L"Save backup volume header to file" ) )
 			{
 				rlt = save_file( s_path, backup, sizeof(backup) );
 			} else {
@@ -835,7 +837,7 @@ void _menu_restore_header(
 	int     rlt = ST_ERROR;
 	int     bytes;
 
-	if ( _open_file_dialog( __dlg, s_path, sizeof_w(s_path), L"Open backup volume header" ) )
+	if ( _open_file_dialog( __dlg, s_path, countof(s_path), L"Open backup volume header" ) )
 	{		
 		hfile = CreateFile(
 			s_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL

@@ -30,6 +30,8 @@
 #include "debug.h"
 #include "dump_hook.h"
 #include "misc_mem.h"
+#include "boot_pass.h"
+#include "crypto_functions.h"
 
 typedef struct _pw_irp_ctx {
 	WORK_QUEUE_ITEM  wrk_item;
@@ -134,31 +136,39 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 
-	if ( (irp_sp->MinorFunction == IRP_MN_SET_POWER) && 
-		 (irp_sp->Parameters.Power.Type == SystemPowerState) )
+	if ( irp_sp->MinorFunction == IRP_MN_SET_POWER && irp_sp->Parameters.Power.Type == SystemPowerState )
 	{
 		wait_object_infinity(&hook->busy_lock);
 
 		if (irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate)
 		{
-			/* prevent device encryption to sync device and memory state */
+			// prevent device encryption to sync device and memory state
 			hook->flags |= F_PREVENT_ENC;
 			dc_send_sync_packet(hook->dev_name, S_OP_SYNC, 0);
 		}
 
-		if (irp_sp->Parameters.Power.State.SystemState == PowerSystemWorking) {
-			/* allow encryption requests */
+		if (irp_sp->Parameters.Power.State.SystemState == PowerSystemWorking)
+		{
+			if (hook->pdo_dev->Flags & DO_SYSTEM_BOOT_PARTITION)
+			{
+				// search bootloader password in memory after hibernation
+				dc_get_boot_pass();
+				if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) dc_clean_pass_cache();
+
+				// initialize encryption again, because system may be resumed on different CPU model
+				dc_init_encryption();
+			}
+			// allow encryption requests
 			hook->flags &= ~F_PREVENT_ENC;
 		}
 
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 	}
 
-	if ( (irp_sp->MinorFunction == IRP_MN_QUERY_POWER) && 
-		 (irp_sp->Parameters.Power.Type == SystemPowerState) &&
-		 (irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate) )
+	if ( irp_sp->MinorFunction == IRP_MN_QUERY_POWER && irp_sp->Parameters.Power.Type == SystemPowerState &&
+		 irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate )
 	{
-		if ( (dc_is_vista_or_later == 0) && (dump_is_pverent_hibernate() != 0) ) {
+		if ( dc_is_vista_or_later == 0 && dump_is_pverent_hibernate() != 0 ) {
 			PoStartNextPowerIrp(irp);
 			status  = dc_complete_irp(irp, STATUS_UNSUCCESSFUL, 0);
 			no_pass = 1;

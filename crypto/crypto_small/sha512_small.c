@@ -1,4 +1,4 @@
-/* LibTomCrypt, modular cryptographic library -- Tom St Denis
+﻿/* LibTomCrypt, modular cryptographic library -- Tom St Denis
  *
  * LibTomCrypt is a library that provides various cryptographic
  * algorithms in a highly modular and flexible manner.
@@ -9,12 +9,11 @@
  * Tom St Denis, tomstdenis@gmail.com, http://libtomcrypt.com
  * modified by ntldr, http://diskcryptor.net/
  */ 
-#include "defines.h"
+#include <intrin.h>
 #include "sha512_small.h"
 
-
-/* the K array */
-static const u64 K[80] = {
+// the K array
+static const unsigned __int64 K[80] = {
 	0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
 	0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118,
 	0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2,
@@ -37,127 +36,121 @@ static const u64 K[80] = {
 	0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817
 };
 
-/* initial hash value */
-static const u64 H[8] = {
+// initial hash value
+static const unsigned __int64 H[8] = {
 	0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
 	0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
 };
 
-/* Various logical functions */
+// Various logical functions
 #define Ch(x,y,z)       (z ^ (x & (y ^ z)))
 #define Maj(x,y,z)      (((x | y) & z) | (x & y)) 
-#define S(x, n)         (ROR64(x, n))
-#define R(x, n)         (d64(x) >> d64(n))
+#define S(x, n)         (_rotr64(x, n))
+#define R(x, n)         ((unsigned __int64)(x) >> (unsigned __int64)(n))
 #define Sigma0(x)       (S(x, 28) ^ S(x, 34) ^ S(x, 39))
 #define Sigma1(x)       (S(x, 14) ^ S(x, 18) ^ S(x, 41))
 #define Gamma0(x)       (S(x, 1) ^ S(x, 8) ^ R(x, 7))
 #define Gamma1(x)       (S(x, 19) ^ S(x, 61) ^ R(x, 6))
 
-/* compress 1024-bits */
+// compress 1024-bits
 static void sha512_compress(sha512_ctx *ctx, const unsigned char *buf)
 {
-	u64 S[8], W[80], t0, t1;
-    int i;
+	unsigned __int64 S[8], W[80], t0, t1;
+	int              i;
 
-    /* copy state into S */
-	mincpy(S, ctx->hash, sizeof(S));
+	// copy state into S
+	__movsb((unsigned char*)&S, (const unsigned char*)&ctx->hash, sizeof(S));
 	
-    /* copy the state into 1024-bits into W[0..15] */
-    for (i = 0; i < 16; i++) {
-		W[i] = BE64(p64(buf)[i]);
-    }
-	/* fill W[16..79] */
-    for (i = 16; i < 80; i++) {
-        W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) + W[i - 16];
-    }
-	/* Compress */
-    for (i = 0; i < 80; i++) 
+	// copy the state into 1024-bits into W[0..15]
+	for (i = 0; i < 16; i++) {
+		W[i] = _byteswap_uint64(((unsigned __int64*)buf)[i]);
+	}
+	// fill W[16..79]
+	for (i = 16; i < 80; i++) {
+		W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) + W[i - 16];
+	}
+	// Compress
+	for (i = 0; i < 80; i++) 
 	{
-        t0 = S[7] + Sigma1(S[4]) + Ch(S[4], S[5], S[6]) + K[i] + W[i];
-        t1 = Sigma0(S[0]) + Maj(S[0], S[1], S[2]);
-        S[7] = S[6];
-        S[6] = S[5];
-        S[5] = S[4];
-        S[4] = S[3] + t0;
-        S[3] = S[2];
-        S[2] = S[1];
-        S[1] = S[0];
-        S[0] = t0 + t1;
-    }
+		t0 = S[7] + Sigma1(S[4]) + Ch(S[4], S[5], S[6]) + K[i] + W[i];
+		t1 = Sigma0(S[0]) + Maj(S[0], S[1], S[2]);
+		S[7] = S[6];
+		S[6] = S[5];
+		S[5] = S[4];
+		S[4] = S[3] + t0;
+		S[3] = S[2];
+		S[2] = S[1];
+		S[1] = S[0];
+		S[0] = t0 + t1;
+	}
 	for (i = 0; i < 8; i++) {
 		ctx->hash[i] += S[i];
 	}
-	/* prevent leaks */
-	minset(&S, 0, sizeof(S));
-	minset(&W, 0, sizeof(W));
+	// prevent leaks
+	__stosb((unsigned char*)&S, 0, sizeof(S));
+	__stosb((unsigned char*)&W, 0, sizeof(W));
 }
 
-/*
-   Initialize the hash state
-*/
+// Initialize the hash state
 void sha512_init(sha512_ctx *ctx)
 {
-    mincpy(ctx->hash, H, sizeof(H));
+	__movsb((unsigned char*)&ctx->hash, (const unsigned char*)&H, sizeof(H));
 	ctx->curlen = 0;
-    ctx->length = 0;
+	ctx->length = 0;
 }
 
-/*
-   Process a block of memory though the hash
-*/
+// Process a block of memory though the hash
 void sha512_hash(sha512_ctx *ctx, const unsigned char *in, size_t inlen) 
-{          
+{
 	while (inlen--)
 	{
 		ctx->buf[ctx->curlen++] = *in++;
 
 		if (ctx->curlen == SHA512_BLOCK_SIZE) {
 			sha512_compress(ctx, ctx->buf);
-			ctx->length += 8 * SHA512_BLOCK_SIZE;                                     
+			ctx->length += 8 * SHA512_BLOCK_SIZE;
 			ctx->curlen = 0;
 		}
 	}
-} 
-/**
-   Terminate the hash to get the digest
-*/
+}
+
+// Terminate the hash to get the digest
 void sha512_done(sha512_ctx *ctx, unsigned char *out)
 {
 	int i;
-    
-	/* increase the length of the message */
-    ctx->length += ctx->curlen * 8;
 
-    /* append the '1' bit */
-    ctx->buf[ctx->curlen++] = 0x80;
+	// increase the length of the message
+	ctx->length += ctx->curlen * 8;
 
-    /* if the length is currently above 112 bytes we append zeros
-     * then compress.  Then we can fall back to padding zeros and length
-     * encoding like normal.
-     */
-    if (ctx->curlen > 112) 
+	// append the '1' bit
+	ctx->buf[ctx->curlen++] = 0x80;
+
+	/* if the length is currently above 112 bytes we append zeros
+	 * then compress.  Then we can fall back to padding zeros and length
+	 * encoding like normal.
+	 */
+	if (ctx->curlen > 112)
 	{
-        while (ctx->curlen < SHA512_BLOCK_SIZE) {
-            ctx->buf[ctx->curlen++] = 0;
-        }
-        sha512_compress(ctx, ctx->buf);
-        ctx->curlen = 0;
-    }
+		while (ctx->curlen < SHA512_BLOCK_SIZE) {
+			ctx->buf[ctx->curlen++] = 0;
+		}
+		sha512_compress(ctx, ctx->buf);
+		ctx->curlen = 0;
+	}
 
-    /* pad upto 120 bytes of zeroes 
-     * note: that from 112 to 120 is the 64 MSB of the length.  We assume that you won't hash
-     * > 2^64 bits of data... :-)
-     */
+	/* pad upto 120 bytes of zeroes
+	 * note: that from 112 to 120 is the 64 MSB of the length.  We assume that you won't hash
+	 * > 2^64 bits of data... :-)
+	 */
 	while (ctx->curlen < 120) {
-        ctx->buf[ctx->curlen++] = 0;
-    }
-    /* store length */
-	p64(ctx->buf)[15] = BE64(ctx->length);
-    sha512_compress(ctx, ctx->buf);
+		ctx->buf[ctx->curlen++] = 0;
+	}
+	// store length
+	((unsigned __int64*)ctx->buf)[15] = _byteswap_uint64(ctx->length);
+	sha512_compress(ctx, ctx->buf);
 
-    /* copy output */
-    for (i = 0; i < 8; i++) {
-		p64(out)[i] = BE64(ctx->hash[i]);
-    }
+	// copy output
+	for (i = 0; i < 8; i++) {
+		((unsigned __int64*)out)[i] = _byteswap_uint64(ctx->hash[i]);
+	}
 }
-
