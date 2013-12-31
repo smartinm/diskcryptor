@@ -512,18 +512,18 @@ static int dc_decrypt_loop(vol_inf *inf)
 	return ST_OK;
 }
 
-static int dc_cd_callback(u64 iso_sz, u64 enc_sz, void *param)
+static BOOL dc_cd_callback(ULONGLONG isosize, ULONGLONG encsize, PVOID param)
 {
 	if ( (_kbhit() != 0) && (_getch() == 0x1B) ) {
 		wprintf(L"\nEncryption cancelled\n");
-		return ST_CANCEL;
+		return FALSE;
 	}
 
 	wprintf(
 		L"\r%-.3f %%", 
-		(double)(enc_sz) / (double)(iso_sz) * 100);
+		(double)(encsize) / (double)(isosize) * 100);
 
-	return ST_OK;
+	return TRUE;
 }
 
 int dc_set_boot_interactive(int d_num, int small_boot)
@@ -656,7 +656,6 @@ int wmain(int argc, wchar_t *argv[])
 {
 	vol_inf *inf;
 	int      resl;
-	int      status;
 	int      vers;
 	int      d_inited;
 
@@ -679,11 +678,9 @@ int wmain(int argc, wchar_t *argv[])
 			resl = ST_OK; break;
 		}
 
-		/* get driver load status */
-		status   = dc_driver_status();
 		d_inited = 0;
 
-		if ( (status == ST_OK) && (dc_open_device() == ST_OK) )
+		if ( dc_is_driver_works() && (dc_open_device() == ST_OK) )
 		{
 			if ((vers = dc_get_version()) == DC_DRIVER_VER) {
 				/* get information of all volumes in system */
@@ -710,7 +707,7 @@ int wmain(int argc, wchar_t *argv[])
 			break;
 		}	
 
-		if (status != ST_OK) 
+		if (dc_is_driver_works() == FALSE) 
 		{
 			wprintf(
 				L"DiskCryptor is not installed,\n"
@@ -935,7 +932,7 @@ int wmain(int argc, wchar_t *argv[])
 
 		if ( (argc >= 2) && (wcscmp(argv[1], L"-clean") == 0) ) 
 		{
-			resl = dc_clean_pass_cache();
+			resl = dc_device_control(DC_CTL_CLEAR_PASS, NULL, 0, NULL, 0) == NO_ERROR ? ST_OK : ST_ERROR;
 
 			if (resl == ST_OK) {
 				wprintf(L"passwords has been erased in memory\n");
@@ -995,11 +992,11 @@ int wmain(int argc, wchar_t *argv[])
 			if ( (inf->status.flags & F_SYSTEM) || (wcscmp(inf->device, boot_dev) == 0) )
 			{
 				ldr_config conf;
-				dc_conf    dcfg;
+				DC_FLAGS   flags;
 				int        dsk_1, dsk_2;
 
-				if ( (crypt.cipher_id != CF_AES) && (dc_get_conf_flags(&dcfg) == ST_OK) && 
-					 (dcfg.load_flags & DST_SMALL_MEM) )
+				if ( (crypt.cipher_id != CF_AES) && (dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR) && 
+					 (flags.load_flags & DST_SMALL_MEM) )
 				{
 					wprintf(
 						L"Your BIOS does not provide enough base memory, "
@@ -1054,7 +1051,7 @@ int wmain(int argc, wchar_t *argv[])
 		if ( (argc >= 3) && (wcscmp(argv[1], L"-decrypt") == 0) ) 
 		{
 			dc_pass *pass;
-			dc_conf  dcfg;
+			DC_FLAGS flags;
 
 			if ( (inf = find_device(argv[2])) == NULL ) {
 				resl = ST_NF_DEVICE; break;
@@ -1075,7 +1072,7 @@ int wmain(int argc, wchar_t *argv[])
 				resl = ST_OK; break;
 			}
 			if ( (inf->status.flags & F_SYSTEM) && 
-				 (dc_get_conf_flags(&dcfg) == ST_OK) && (dcfg.conf_flags & CONF_BLOCK_UNENC_HDDS) )
+				 (dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR) && (flags.conf_flags & CONF_BLOCK_UNENC_HDDS) )
 			{
 				wprintf(L"This device can not be decrypted because "
 					    L"'Deny access to unencrypted HDD's' option enabled.\n");
@@ -1385,7 +1382,7 @@ int wmain(int argc, wchar_t *argv[])
 		{
 			dc_conf_data dc_conf;
 
-			if ( (resl = dc_load_conf(&dc_conf)) != ST_OK ) {
+			if ( (resl = dc_load_config(&dc_conf) == NO_ERROR ? ST_OK : ST_ERROR) != ST_OK ) {
 				break;
 			}
 
@@ -1449,7 +1446,7 @@ int wmain(int argc, wchar_t *argv[])
 				}
 			} while (1);
 
-			if ( (resl = dc_save_conf(&dc_conf)) == ST_OK ) {
+			if ( (resl = dc_save_config(&dc_conf) == NO_ERROR ? ST_OK : ST_ERROR) == ST_OK ) {
 				wprintf(L"Configuration successfully saved\n");
 			}
 		}
@@ -1458,7 +1455,9 @@ int wmain(int argc, wchar_t *argv[])
 		{
 			u8 kf[64];
 
-			if ( (resl = dc_get_random(kf, sizeof(kf))) != ST_OK ) {
+			resl = dc_device_control(DC_CTL_GET_RAND, NULL, 0, kf, sizeof(kf)) == NO_ERROR ? ST_OK : ST_ERROR;
+
+			if ( resl != ST_OK ) {
 				break;
 			}
 			resl = save_file(argv[2], kf, sizeof(kf));
@@ -1487,8 +1486,7 @@ int wmain(int argc, wchar_t *argv[])
 				resl = ST_OK; break;
 			}
 
-			resl = dc_encrypt_cd(
-				argv[2], argv[3], pass, crypt.cipher_id, dc_cd_callback, NULL);
+			resl = (dc_encrypt_iso_image(argv[2], argv[3], pass, crypt.cipher_id, dc_cd_callback, NULL) == NO_ERROR) ? ST_OK : ST_ERROR;
 
 			_putch('\n');
 

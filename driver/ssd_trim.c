@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2010
+    * Copyright (c) 2010-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -28,28 +28,34 @@
 #include "misc.h"
 #include "device_io.h"
 
-/* function types declaration */
+// function types declaration
 KSTART_ROUTINE dc_trim_thread;
 
 #define MAX_TRIM_FILES 128
 #define TRIM_MIN_LEN   4096
 
-static int dc_is_trim_supported(dev_hook *hook)
+static BOOLEAN dc_is_trim_supported(dev_hook *hook)
 {
-	STORAGE_PROPERTY_QUERY query = { StorageDeviceTrimProperty,  PropertyStandardQuery };
-	DEVICE_TRIM_DESCRIPTOR trim;
-	int                    resl;
-
-	resl = io_hook_ioctl(
-		hook, IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &trim, sizeof(trim));
-
-	if ( (resl != ST_OK) || (trim.Version < sizeof(trim)) || (trim.Size < sizeof(trim)) ) {
-		return 0;
+	STORAGE_PROPERTY_QUERY pquery = { StorageDeviceTrimProperty,  PropertyStandardQuery, };
+	DEVICE_TRIM_DESCRIPTOR trimds  = { 0 };
+	NTSTATUS               status;
+	
+	if ( !NT_SUCCESS(status = io_device_control(hook->orig_dev,
+		                                        IOCTL_STORAGE_QUERY_PROPERTY,
+												&pquery, sizeof(pquery), &trimds, sizeof(trimds))) )
+	{
+		DbgMsg("IOCTL_STORAGE_QUERY_PROPERTY fails, dev=%ws, status=%08x\n", hook->dev_name, status);
+		return FALSE;
 	}
-	return trim.TrimEnabled == TRUE;
+	if (trimds.Version < sizeof(DEVICE_TRIM_DESCRIPTOR) || trimds.Size < sizeof(DEVICE_TRIM_DESCRIPTOR)) {
+		DbgMsg("Invalid DEVICE_TRIM_DESCRIPTOR returned, dev=%ws\n", hook->dev_name);
+		return FALSE;
+	}
+	DbgMsg("device %ws TrimEnabled = %d\n", hook->dev_name, trimds.TrimEnabled);
+	return trimds.TrimEnabled;
 }
 
-static HANDLE dc_create_trim_file(dev_hook *hook, u64 length)
+static HANDLE dc_create_trim_file(dev_hook *hook, ULONGLONG length)
 {
 	FILE_VALID_DATA_LENGTH_INFORMATION vdli;
 	FILE_END_OF_FILE_INFORMATION       eofi;
@@ -60,23 +66,24 @@ static HANDLE dc_create_trim_file(dev_hook *hook, u64 length)
 	HANDLE                             h_file;
 	NTSTATUS                           status;
 
-	status = RtlStringCchPrintfW(buff, MAX_PATH, L"%s\\$DC_TRIM_%x$", hook->dev_name, __rdtsc());
-	if (NT_SUCCESS(status) == FALSE) return NULL;
-
+	if ( !NT_SUCCESS(status = RtlStringCchPrintfW(buff, MAX_PATH, L"%s\\$DC_TRIM_%x$", hook->dev_name, __rdtsc())) ) return NULL;
 	RtlInitUnicodeString(&u_name, buff);
 	InitializeObjectAttributes(&obj_a, &u_name, OBJ_KERNEL_HANDLE, NULL, NULL);
 
-	status = ZwCreateFile(&h_file, GENERIC_WRITE, &obj_a, &iosb, NULL, 0, 0, FILE_CREATE, 0, NULL, 0);
-
-	if (NT_SUCCESS(status) == FALSE) {
+	if ( !NT_SUCCESS(status = ZwCreateFile(&h_file, GENERIC_WRITE, &obj_a, &iosb, NULL, 0, 0, FILE_CREATE, 0, NULL, 0)) )
+	{
+		DbgMsg("Can not create trim file, status=%08x, path=%ws\n", status, buff);
 		return NULL;
 	}
 	vdli.ValidDataLength.QuadPart = length;
 	eofi.EndOfFile.QuadPart = length;
 
-	ZwSetInformationFile(h_file, &iosb, &eofi, sizeof(eofi), FileEndOfFileInformation);
-	ZwSetInformationFile(h_file, &iosb, &vdli, sizeof(vdli), FileValidDataLengthInformation);
-	return h_file;	
+	if ( !NT_SUCCESS(status = ZwSetInformationFile(h_file, &iosb, &eofi, sizeof(eofi), FileEndOfFileInformation)) ||
+		 !NT_SUCCESS(status = ZwSetInformationFile(h_file, &iosb, &vdli, sizeof(vdli), FileValidDataLengthInformation)) )
+	{
+		DbgMsg("Can not allocate space for trim, status=%08x, path=%ws\n", status, buff);
+	}
+	return h_file;
 }
 
 static void dc_do_trim(dev_hook *hook)
@@ -84,14 +91,13 @@ static void dc_do_trim(dev_hook *hook)
 	FILE_FS_SIZE_INFORMATION     sinf;
 	FILE_DISPOSITION_INFORMATION dinf = { TRUE };
 	HANDLE                       h_files[MAX_TRIM_FILES];
-	int                          n_files = 0;
+	int                          n_files = 0, i;
 	HANDLE                       h_file;
-	int                          i;
 	IO_STATUS_BLOCK              iosb;	
 	NTSTATUS                     status;
-	u64                          length;
+	ULONGLONG                    length;
 
-	/* create first trim file */
+	// create first trim file
 	if ( (h_file = dc_create_trim_file(hook, TRIM_MIN_LEN)) == NULL ) {
 		return;
 	} else {
@@ -110,16 +116,16 @@ static void dc_do_trim(dev_hook *hook)
 			h_files[n_files++] = h_file;
 		}
 	}
-	/* delete trim files */
+	// delete trim files
 	for (i = 0; i < n_files; i++) {
 		ZwSetInformationFile(h_files[i], &iosb, &dinf, sizeof(dinf), FileDispositionInformation);
 		ZwClose(h_files[i]);
-	}	
+	}
 }
 
 static void dc_trim_thread(dev_hook *hook)
 {
-	if (dc_is_trim_supported(hook) != 0) {
+	if (dc_is_trim_supported(hook) != FALSE) {
 		dc_do_trim(hook);
 	}
 	dc_deref_hook(hook);

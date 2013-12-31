@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2010 
+    * Copyright (c) 2007-2013 
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -33,15 +33,15 @@
 #include "misc.h"
 #include "debug.h"
 #include "readwrite.h"
-#include "mem_lock.h"
 #include "misc_volume.h"
 #include "misc_mem.h"
 #include "device_io.h"
 #include "disk_info.h"
 #include "crypto_functions.h"
 
-#define IS_VERIFY_IOCTL(ioctl) ( \
-	(ioctl == IOCTL_DISK_CHECK_VERIFY) || (ioctl == IOCTL_CDROM_CHECK_VERIFY) || (ioctl == IOCTL_STORAGE_CHECK_VERIFY) )
+#define IS_VERIFY_IOCTL(_ioctl) ( \
+	(_ioctl) == IOCTL_DISK_CHECK_VERIFY || (_ioctl) == IOCTL_CDROM_CHECK_VERIFY || \
+	(_ioctl) == IOCTL_STORAGE_CHECK_VERIFY || (_ioctl) == IOCTL_STORAGE_CHECK_VERIFY2 )
 
 #define TRIM_BUFF_MAX(_set) ( \
 	_align(sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES), sizeof(DEVICE_DATA_SET_RANGE)) + \
@@ -176,32 +176,108 @@ static int dc_ioctl_process(u32 code, dc_ioctl *data)
 
 NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 {
-	PIO_STACK_LOCATION  irp_sp  = IoGetCurrentIrpStackLocation(irp);
-	NTSTATUS            status  = STATUS_INVALID_DEVICE_REQUEST;
-	void               *data    = irp->AssociatedIrp.SystemBuffer;
-	u32                 in_len  = irp_sp->Parameters.DeviceIoControl.InputBufferLength;
-	u32                 out_len = irp_sp->Parameters.DeviceIoControl.OutputBufferLength;
-	u32                 code    = irp_sp->Parameters.DeviceIoControl.IoControlCode;
-	u32                 bytes   = 0;
+	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
+	NTSTATUS           status = STATUS_INVALID_DEVICE_REQUEST; // returned status
+	ULONG              length = 0; // returned length
+	//
+	void              *data    = irp->AssociatedIrp.SystemBuffer;
+	u32                in_len  = irp_sp->Parameters.DeviceIoControl.InputBufferLength;
+	u32                out_len = irp_sp->Parameters.DeviceIoControl.OutputBufferLength;
 	
-	switch (code)
+	switch (irp_sp->Parameters.DeviceIoControl.IoControlCode)
 	{
 		case DC_GET_VERSION:
+			if (irp_sp->Parameters.DeviceIoControl.OutputBufferLength != sizeof(ULONG))
 			{
-				if (out_len == sizeof(u32)) 
-				{
-					p32(data)[0] = DC_DRIVER_VER;
-					bytes        = sizeof(u32);
-					status       = STATUS_SUCCESS;
-				}
+				status = STATUS_INVALID_PARAMETER;
+				break;
 			}
+			*((PULONG)irp->AssociatedIrp.SystemBuffer) = DC_DRIVER_VER;
+			status = STATUS_SUCCESS;
+			length = sizeof(ULONG);
 		break;
 		case DC_CTL_CLEAR_PASS:
+			dc_clean_pass_cache();
+			status = STATUS_SUCCESS;
+		break;
+		case DC_CTL_ADD_SEED:
+			if (irp_sp->Parameters.DeviceIoControl.InputBufferLength == 0)
 			{
-				dc_clean_pass_cache();
-				status = STATUS_SUCCESS;
+				status = STATUS_INVALID_PARAMETER;
+				break;
 			}
-		break;		
+			cp_rand_add_seed(irp->AssociatedIrp.SystemBuffer, irp_sp->Parameters.DeviceIoControl.InputBufferLength);
+			status = STATUS_SUCCESS;
+			// prevent leaks
+			RtlSecureZeroMemory(irp->AssociatedIrp.SystemBuffer, irp_sp->Parameters.DeviceIoControl.InputBufferLength);
+		break;
+		case DC_CTL_GET_RAND:
+			if (irp_sp->Parameters.DeviceIoControl.OutputBufferLength == 0)
+			{
+				status = STATUS_INVALID_PARAMETER;
+				break;
+			}
+			if ( (data = MmGetSystemAddressForMdlSafe(irp->MdlAddress, NormalPagePriority)) == NULL )
+			{
+				status = STATUS_INSUFFICIENT_RESOURCES;
+				break;
+			}
+			if (cp_rand_bytes(data, irp_sp->Parameters.DeviceIoControl.OutputBufferLength) == 0)
+			{
+				status = STATUS_INTERNAL_ERROR;
+				break;
+			}
+			status = STATUS_SUCCESS;
+			length = irp_sp->Parameters.DeviceIoControl.OutputBufferLength;
+		break;
+		case DC_CTL_LOCK_MEM:
+			if (irp_sp->Parameters.DeviceIoControl.InputBufferLength != sizeof(DC_LOCK_MEMORY))
+			{
+				status = STATUS_INVALID_PARAMETER;
+				break;
+			}
+			status = mm_lock_user_memory( PsGetProcessId(IoGetRequestorProcess(irp)), ((PDC_LOCK_MEMORY)irp->AssociatedIrp.SystemBuffer)->ptr,
+				                                                                      ((PDC_LOCK_MEMORY)irp->AssociatedIrp.SystemBuffer)->length );
+		break;
+		case DC_CTL_UNLOCK_MEM:
+			if (irp_sp->Parameters.DeviceIoControl.InputBufferLength != sizeof(PVOID*))
+			{
+				status = STATUS_INVALID_PARAMETER;
+				break;
+			}
+			status = mm_unlock_user_memory( PsGetProcessId(IoGetRequestorProcess(irp)), *((PVOID*)irp->AssociatedIrp.SystemBuffer) );
+		break;
+		case DC_CTL_GET_FLAGS:
+			if (irp_sp->Parameters.DeviceIoControl.OutputBufferLength != sizeof(DC_FLAGS))
+			{
+				status = STATUS_INVALID_PARAMETER;
+				break;
+			}
+			((PDC_FLAGS)irp->AssociatedIrp.SystemBuffer)->conf_flags = dc_conf_flags;
+			((PDC_FLAGS)irp->AssociatedIrp.SystemBuffer)->load_flags = dc_load_flags;
+			status = STATUS_SUCCESS;
+			length = sizeof(DC_FLAGS);
+		break;
+		case DC_CTL_SET_FLAGS:
+			if (irp_sp->Parameters.DeviceIoControl.InputBufferLength != sizeof(DC_FLAGS))
+			{
+				status = STATUS_INVALID_PARAMETER;
+				break;
+			}
+			dc_conf_flags = ((PDC_FLAGS)irp->AssociatedIrp.SystemBuffer)->conf_flags;
+
+			if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) dc_clean_pass_cache();
+			dc_init_encryption();
+
+			status = STATUS_SUCCESS;
+		break;
+		case DC_CTL_BSOD:
+			mm_clean_secure_memory();
+			dc_clean_keys();
+
+			KeBugCheck(IRQL_NOT_LESS_OR_EQUAL);
+		break;
+		//
 		case DC_CTL_STATUS:
 			{
 				dc_ioctl  *dctl = data;
@@ -229,40 +305,9 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 						stat->paging_count = hook->paging_count;
 						stat->vf_version   = hook->vf_version;
 						status             = STATUS_SUCCESS; 
-						bytes              = sizeof(dc_status);
+						length             = sizeof(dc_status);
 
 						dc_deref_hook(hook);
-					}
-				}
-			}
-		break;
-		case DC_CTL_ADD_SEED:
-			{
-				 if (in_len != 0) 
-				 {
-					 cp_rand_add_seed(data, in_len);
-					 status = STATUS_SUCCESS;
-					 /* prevent leaks */
-					 burn(data, in_len);
-				 }
-			}
-		break;
-		case DC_CTL_GET_RAND:
-			{
-				dc_rand_ctl *rctl = data;
-				
-				if (in_len == sizeof(dc_rand_ctl))
-				{
-					__try
-					{
-						ProbeForWrite(rctl->buff, rctl->size, sizeof(u8));
-
-						if (cp_rand_bytes(rctl->buff, rctl->size) != 0) {
-							status = STATUS_SUCCESS;
-						}
-					} 
-					__except(EXCEPTION_EXECUTE_HANDLER) {
-						status = GetExceptionCode();
 					}
 				}
 			}
@@ -273,76 +318,12 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 				 {
 					 if (dc_k_benchmark(p32(data)[0], pv(data)) == ST_OK) {
 						 status = STATUS_SUCCESS; 
-						 bytes  = sizeof(dc_bench_info);
+						 length = sizeof(dc_bench_info);
 					 }
 				 }
 			}
 		break;
-		case DC_CTL_BSOD:
-			{
-				lock_inc(&dc_dump_disable);
-				dc_clean_pass_cache();
-				mm_unlock_user_memory(NULL, NULL);
-				dc_clean_keys();
-
-				KeBugCheck(IRQL_NOT_LESS_OR_EQUAL);
-			}
-		break;
-		case DC_CTL_GET_CONF:
-			{
-				dc_conf *conf = data;
-
-				if (out_len == sizeof(dc_conf)) {
-					conf->conf_flags = dc_conf_flags;
-					conf->load_flags = dc_load_flags;
-					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_conf);
-				}
-			}
-		break;
-		case DC_CTL_SET_CONF:
-			{
-				dc_conf *conf = data;
-				
-				if (in_len == sizeof(dc_conf))
-				{
-					dc_conf_flags = conf->conf_flags;
-					status        = STATUS_SUCCESS;
-
-					if ( !(dc_conf_flags & CONF_CACHE_PASSWORD) ) {
-						dc_clean_pass_cache();
-					}
-					dc_init_encryption();
-				}
-			}
-		break;
-		case DC_CTL_LOCK_MEM:
-			{
-				PEPROCESS    process = IoGetRequestorProcess(irp);
-				dc_lock_ctl *smem = data;				
-
-				if ( (process != NULL) && (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) ) 
-				{
-					smem->resl = mm_lock_user_memory(smem->data, smem->size, process);
-
-					status = STATUS_SUCCESS; bytes = sizeof(dc_lock_ctl);
-				}
-			}
-		break;
-		case DC_CTL_UNLOCK_MEM:
-			{
-				PEPROCESS    process = IoGetRequestorProcess(irp);
-				dc_lock_ctl *smem = data;
-
-				if ( (process != NULL) && (in_len == sizeof(dc_lock_ctl)) && (out_len == in_len) )
-				{
-					mm_unlock_user_memory(smem->data, process);
-
-					status = STATUS_SUCCESS; bytes = sizeof(dc_lock_ctl);
-					smem->resl = ST_OK;
-				}
-			}
-		break; 
+		
 		case DC_BACKUP_HEADER:
 			{
 				dc_backup_ctl *back = data;
@@ -357,7 +338,7 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 					burn(&back->pass, sizeof(back->pass));
 
 					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_backup_ctl);
+					length = sizeof(dc_backup_ctl);
 				}
 			}
 		break;
@@ -375,7 +356,7 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 					burn(&back->pass, sizeof(back->pass));
 
 					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_backup_ctl);
+					length = sizeof(dc_backup_ctl);
 				}
 			}
 		break;
@@ -389,19 +370,19 @@ NTSTATUS dc_drv_control_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 					dctl->device[MAX_DEVICE] = 0;
 					
 					/* process IOCTL */
-					dctl->status = dc_ioctl_process(code, dctl);
+					dctl->status = dc_ioctl_process(irp_sp->Parameters.DeviceIoControl.IoControlCode, dctl);
 
 					/* prevent leaks  */
 					burn(&dctl->passw1, sizeof(dctl->passw1));
 					burn(&dctl->passw2, sizeof(dctl->passw2));
 
 					status = STATUS_SUCCESS;
-					bytes  = sizeof(dc_ioctl);
+					length = sizeof(dc_ioctl);
 				}
 			}
 		break;
 	}
-	return dc_complete_irp(irp, status, bytes);
+	return dc_complete_irp(irp, status, length);
 }
 
 static NTSTATUS dc_ioctl_complete(PDEVICE_OBJECT dev_obj, PIRP irp, void *param)
@@ -461,7 +442,7 @@ static NTSTATUS dc_ioctl_complete(PDEVICE_OBJECT dev_obj, PIRP irp, void *param)
 			dc_unmount_async(hook);
 		}	
 	}
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
+	IoReleaseRemoveLock(&hook->remove_lock, irp);
 
 	return STATUS_SUCCESS;
 }
@@ -484,10 +465,12 @@ static NTSTATUS dc_trim_irp(dev_hook *hook, PIRP irp)
 	{
 		return dc_forward_irp(hook, irp);
 	}
-	if (dc_conf_flags & CONF_DISABLE_TRIM) {
+	if (dc_conf_flags & CONF_DISABLE_TRIM)
+	{
 		return dc_release_irp(hook, irp, STATUS_SUCCESS);
 	}
-	if ( (n_set = mm_alloc(TRIM_BUFF_MAX(p_set), 0)) == NULL ) {
+	if ( (n_set = mm_pool_alloc(TRIM_BUFF_MAX(p_set))) == NULL )
+	{
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
 	n_set->Size = sizeof(DEVICE_MANAGE_DATA_SET_ATTRIBUTES);
@@ -528,7 +511,7 @@ static NTSTATUS dc_trim_irp(dev_hook *hook, PIRP irp)
 	if (n_set->DataSetRangesLength != 0) {
 		io_hook_ioctl(hook, IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES, n_set, TRIM_BUFF_LENGTH(n_set), NULL, 0);
 	}
-	mm_free(n_set);
+	mm_pool_free(n_set);
 
 	return dc_release_irp(hook, irp, STATUS_SUCCESS);
 }
@@ -536,25 +519,20 @@ static NTSTATUS dc_trim_irp(dev_hook *hook, PIRP irp)
 NTSTATUS dc_io_control_irp(dev_hook *hook, PIRP irp)
 {	
 	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
-	u32                ioctl  = irp_sp->Parameters.DeviceIoControl.IoControlCode;
-	
-	if ( (ioctl == IOCTL_DISK_GET_LENGTH_INFO)       || (ioctl == IOCTL_DISK_GET_PARTITION_INFO) ||
-		 (ioctl == IOCTL_DISK_GET_PARTITION_INFO_EX) || (ioctl == IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX) ||
-		 (IS_VERIFY_IOCTL(ioctl) != 0) )
+	ULONG              iocode = irp_sp->Parameters.DeviceIoControl.IoControlCode;
+
+	if (iocode == IOCTL_DISK_GET_LENGTH_INFO ||
+		iocode == IOCTL_DISK_GET_PARTITION_INFO || 
+		iocode == IOCTL_DISK_GET_PARTITION_INFO_EX ||
+		iocode == IOCTL_CDROM_GET_DRIVE_GEOMETRY_EX || IS_VERIFY_IOCTL(iocode) )
 	{
 		IoCopyCurrentIrpStackLocationToNext(irp);
 		IoSetCompletionRoutine(irp, dc_ioctl_complete, NULL, TRUE, TRUE, TRUE);
 		return IoCallDriver(hook->orig_dev, irp);
 	}
-	if (hook->flags & F_ENABLED)
-	{
-		if (ioctl == IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES) {
-			return dc_trim_irp(hook, irp);
-		}
-		if (ioctl == IOCTL_VOLUME_UPDATE_PROPERTIES) {
-			dc_update_volume(hook);
-			return dc_release_irp(hook, irp, STATUS_SUCCESS);
-		}
-	}	
+	if (hook->flags & F_ENABLED) {
+		if (iocode == IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES) return dc_trim_irp(hook, irp);
+		if (iocode == IOCTL_VOLUME_UPDATE_PROPERTIES) return dc_release_irp(hook, irp, dc_update_volume(hook));
+	}
 	return dc_forward_irp(hook, irp);
 }

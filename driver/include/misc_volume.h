@@ -8,6 +8,6 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass);
 int  dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt);
 int  dc_format_step(wchar_t *dev_name, int wp_mode);
 int  dc_format_done(wchar_t *dev_name);
-void dc_update_volume(dev_hook *hook);
+NTSTATUS dc_update_volume(dev_hook *hook);
 
 #endif

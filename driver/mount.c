@@ -23,7 +23,6 @@
 #include "devhook.h"
 #include "driver.h"
 #include "misc.h"
-#include "pkcs5.h"
 #include "crc32.h"
 #include "enc_dec.h"
 #include "misc_irp.h"
@@ -76,7 +75,7 @@ void dc_add_password(dc_pass *pass)
 			}
 		}
 
-		if ( (d_pass == NULL) && (d_pass = mm_alloc(sizeof(dsk_pass), MEM_SECURE)) )
+		if ( (d_pass == NULL) && (d_pass = mm_secure_alloc(sizeof(dsk_pass))) )
 		{
 			memcpy(&d_pass->pass, pass, sizeof(dc_pass));
 
@@ -107,7 +106,7 @@ void dc_clean_pass_cache()
 		/* zero password data */
 		burn(c_pass, sizeof(dsk_pass));
 		/* free memory if possible */
-		if (loirql != 0) mm_free(c_pass);
+		if (loirql != 0) mm_secure_free(c_pass);
 	}
 	f_pass = NULL;
 
@@ -145,7 +144,7 @@ int dc_probe_decrypt(dev_hook *hook, dc_header **header, xts_key **res_key, dc_p
 		if ( (resl = io_read_header(hook, header, NULL, NULL)) != ST_OK ) {
 			break;
 		}
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE | MEM_SUCCESS)) == NULL ) {
+		if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -183,10 +182,10 @@ int dc_probe_decrypt(dev_hook *hook, dc_header **header, xts_key **res_key, dc_p
 	} while (0);
 
 	if (resl != ST_OK && *header != NULL) {
-		mm_free(*header); *header = NULL;
+		mm_secure_free(*header); *header = NULL;
 	}
 	if (hdr_key != NULL) {
-		mm_free(hdr_key);
+		mm_secure_free(hdr_key);
 	}
 	return resl;
 }
@@ -316,8 +315,8 @@ int dc_mount_device(wchar_t *dev_name, dc_pass *password, u32 mnt_flags)
 		}
 	} while (0);
 
-	if (hdr_key != NULL) { mm_free(hdr_key); }
-	if (hcopy != NULL)   { mm_free(hcopy); }
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
+	if (hcopy != NULL)   mm_secure_free(hcopy);
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
@@ -340,13 +339,20 @@ int dc_process_unmount(dev_hook *hook, int opt)
 	int             locked = 0;
 	int             resl;	
 
-	DbgMsg("dc_process_unmount\n");
+	DbgMsg("dc_process_unmount, dev=%ws\n", hook->dev_name);
 	
-	if ( !(hook->flags & F_ENABLED) ) {
+	if ((hook->flags & F_ENABLED) == 0)
+	{
 		return ST_NO_MOUNT;
 	}
 
 	wait_object_infinity(&hook->busy_lock);
+
+	if ((hook->flags & F_ENABLED) == 0)
+	{
+		resl = ST_NO_MOUNT;
+		goto cleanup;
+	}
 
 	do
 	{
@@ -364,30 +370,28 @@ int dc_process_unmount(dev_hook *hook, int opt)
 
 			if (h_dev != NULL)
 			{
-				status = ZwFsControlFile(
-					h_dev, NULL, NULL, NULL, &iosb, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0);
+				status = ZwFsControlFile(h_dev, NULL, NULL, NULL, &iosb, FSCTL_LOCK_VOLUME, NULL, 0, NULL, 0);
 
 				if ( (NT_SUCCESS(status) == FALSE) && !(opt & MF_FORCE) ) {
 					resl = ST_LOCK_ERR; break;
 				}
 				locked = (NT_SUCCESS(status) != FALSE);
 
-				ZwFsControlFile(
-					h_dev, NULL, NULL, NULL, &iosb, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0);				
+				ZwFsControlFile(h_dev, NULL, NULL, NULL, &iosb, FSCTL_DISMOUNT_VOLUME, NULL, 0, NULL, 0);				
 			}
 		}
 
-		if ( !(opt & MF_NOSYNC) )
+		if ((opt & MF_NOSYNC) == 0)
 		{
-			/* temporary disable IRP processing */
+			// temporary disable IRP processing
 			hook->flags |= F_DISABLE;
 
-			/* wait for pending IRPs completion */
-			while (hook->remv_lock.Common.IoCount > 1) {
-				dc_delay(20);
+			// wait for pending IRPs completion
+			if ((opt & MF_NOWAIT_IO) == 0) {
+				while (hook->remove_lock.Common.IoCount > 1) dc_delay(20);
 			}
 			if (hook->flags & F_SYNC) {
-				/* send signal to syncronous mode thread */
+				// send signal to syncronous mode thread
 				dc_send_sync_packet(hook->dev_name, S_OP_FINALIZE, 0);
 			}			
 		}
@@ -411,15 +415,14 @@ int dc_process_unmount(dev_hook *hook, int opt)
 
 	if (h_dev != NULL) 
 	{
-		if (locked != 0) 
-		{
-			ZwFsControlFile(
-				h_dev, NULL, NULL, NULL, &iosb, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0);
+		if (locked != 0) {
+			ZwFsControlFile(h_dev, NULL, NULL, NULL, &iosb, FSCTL_UNLOCK_VOLUME, NULL, 0, NULL, 0);
 		}
 		ZwClose(h_dev);
 	}
-	KeReleaseMutex(&hook->busy_lock, FALSE);
-	
+
+cleanup:
+	KeReleaseMutex(&hook->busy_lock, FALSE);	
 	return resl;
 }
 
@@ -427,7 +430,7 @@ static void unmount_thread_proc(mount_ctx *mnt)
 {
 	dev_hook *hook = mnt->hook;
 	
-	dc_process_unmount(hook, MF_NOFSCTL);	
+	dc_process_unmount(hook, MF_NOFSCTL);
 
 	hook->dsk_size      = 0;
 	hook->use_size      = 0;
@@ -435,7 +438,7 @@ static void unmount_thread_proc(mount_ctx *mnt)
 	hook->mnt_probe_cnt = 0;
 
 	dc_deref_hook(hook);
-	mm_free(mnt);
+	mm_pool_free(mnt);
 	PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
@@ -443,7 +446,7 @@ static void unmount_item_proc(mount_ctx *mnt)
 {
 	if (start_system_thread(unmount_thread_proc, mnt, NULL) != ST_OK) {
 		dc_deref_hook(mnt->hook);
-		mm_free(mnt);
+		mm_pool_free(mnt);
 	}
 }
 
@@ -453,7 +456,7 @@ void dc_unmount_async(dev_hook *hook)
 
 	DbgMsg("dc_unmount_async at IRQL %d\n", KeGetCurrentIrql());
 
-	if (mnt = mm_alloc(sizeof(mount_ctx), 0))
+	if (mnt = mm_pool_alloc(sizeof(mount_ctx)))
 	{
 		mnt->hook = hook; dc_reference_hook(hook);
 
@@ -553,14 +556,14 @@ static void mount_item_proc(mount_ctx *mnt)
 			dc_forward_irp(hook, mnt->irp);	
 		}
 	}
-	mm_free(mnt);
+	mm_pool_free(mnt);
 }
 
 NTSTATUS dc_probe_mount(dev_hook *hook, PIRP irp)
 {
 	mount_ctx *mnt;
 
-	if ( (mnt = mm_alloc(sizeof(mount_ctx), MEM_SUCCESS)) == NULL ) {
+	if ( (mnt = mm_pool_alloc(sizeof(mount_ctx))) == NULL ) {
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
 	IoMarkIrpPending(irp);

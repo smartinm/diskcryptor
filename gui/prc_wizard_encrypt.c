@@ -314,16 +314,15 @@ int _init_wizard_encrypt_pages(
 		L"# Encryption Progress"
 	};
 
-	HWND    hwnd;
-	dc_conf dcfg;
-	int     k;
-	int     count       = 0;
+	HWND     hwnd;
+	DC_FLAGS flags;
+	int      k, count = 0;
 
 	BOOL    boot_device = (
 		_is_boot_device( &node->mnt.info )
 	);
 	BOOL    force_small = (
-		boot_device && ( dc_get_conf_flags(&dcfg) == ST_OK ) && ( dcfg.load_flags & DST_SMALL_MEM )
+		boot_device && ( dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR ) && ( flags.load_flags & DST_SMALL_MEM )
 	);
 
 	while ( sheets[count].id != -1 )

@@ -81,47 +81,40 @@ void _refresh(
 }
 
 
-static int _dc_upd_bootloader( )
+static DWORD _dc_upd_bootloader( )
 {
 	ldr_config conf;
+	DWORD      status;
 	
-	if ( dc_get_mbr_config( -1, NULL, &conf ) != ST_OK )
-	{
-		return ST_OK; 
-	} else {
-		return dc_update_boot( -1 );
-	}
+	if ( dc_get_mbr_config( -1, NULL, &conf ) != ST_OK ) return NO_ERROR;
+	if ( (status =  dc_update_boot(-1)) != ST_OK ) return 100000 + status;
+	return NO_ERROR;
 }
 
 
-int _drv_action(
-		int action, 
-		int version
-	)
+DWORD _drv_action(int action, int version)
 {
-	int stat = dc_driver_status( );
-	int rlt  = stat;
 	static wchar_t restart_confirm[ ] = 
 						L"You must restart your computer before the new settings will take effect.\n\n"
 						L"Do you want to restart your computer now?";
+	DWORD status = ERROR_INVALID_FUNCTION;
 
 	switch (action) 
 	{
 		case DA_INSTAL: 
 		{
-			if (stat == ST_INSTALLED) 
+			if ( dc_is_driver_installed() ) 
 			{
 				if ( __msg_q( HWND_DESKTOP, restart_confirm ) )
 				{
 					_reboot( );
 				}
-				rlt = ST_OK;
-			}
-			if (stat == ST_ERROR) 
+				status = NO_ERROR;
+			} else
 			{
 				if ( __msg_q( HWND_DESKTOP, L"Install DiskCryptor driver?" ) )
 				{
-					if ( (rlt = dc_install_driver(NULL)) == ST_OK )
+					if ( (status = dc_install_driver()) == NO_ERROR )
 					{
 						if ( __msg_q( HWND_DESKTOP, restart_confirm ) )
 						{
@@ -129,16 +122,16 @@ int _drv_action(
 						}						
 					}
 				} else {
-					rlt = ST_OK;
+					status = NO_ERROR;
 				}
 			}
 		}
 		break;
 		case DA_REMOVE: 
 		{
-			if (stat != ST_ERROR) 
+			if ( dc_is_driver_installed() ) 
 			{
-				if ((rlt = dc_remove_driver(NULL)) == ST_OK)
+				if ( (status = dc_remove_driver()) == NO_ERROR )
 				{
 					if ( __msg_q( HWND_DESKTOP, restart_confirm ) )
 					{
@@ -152,30 +145,32 @@ int _drv_action(
 		{
 			wchar_t up_atom[MAX_PATH];
 
-			_snwprintf(
-				up_atom, countof(up_atom), L"DC_UPD_%d", version);
+			_snwprintf(up_atom, countof(up_atom), L"DC_UPD_%d", version);
 
 			if (GlobalFindAtom(up_atom) != 0)
 			{
 				if ( __msg_q( HWND_DESKTOP, restart_confirm ) ) _reboot( );
-				rlt = rlt; break;
+				status = NO_ERROR;
+				break;
 			}
 
-			if (stat == ST_ERROR) break;
+			if ( dc_is_driver_installed() == FALSE )
+			{
+				status = ERROR_PRODUCT_UNINSTALLED;
+				break;
+			}
+
 			if ( __msg_q( HWND_DESKTOP, L"Update DiskCryptor?" ) )
 			{
-				if (((rlt = dc_update_driver()) == ST_OK) &&
-					  ((rlt = _dc_upd_bootloader()) == ST_OK))
+				if ( (status = dc_update_driver()) == NO_ERROR && (status = _dc_upd_bootloader()) == NO_ERROR )
 				{
-					if ( __msg_q( HWND_DESKTOP, restart_confirm ) ) {
-						_reboot( );					
-					}						
+					if ( __msg_q( HWND_DESKTOP, restart_confirm ) ) _reboot();
 				}
 			}
 		}
 		break;
 	}
-	return rlt;
+	return status;
 
 }
 
@@ -244,9 +239,9 @@ int WINAPI wWinMain(
 #ifdef LOG_FILE
 	_log( L"%0.8X driver status", dc_driver_status( ) );
 #endif
-	if ( dc_driver_status( ) != ST_OK )
+	if ( dc_is_driver_works( ) == FALSE )
 	{
-		if ( ( rlt = _drv_action(DA_INSTAL, 0) ) != ST_OK )
+		if ( ( rlt = _drv_action(DA_INSTAL, 0) ) != NO_ERROR )
 		{
 			__error_s( HWND_DESKTOP, NULL, rlt );
 		}
@@ -266,7 +261,7 @@ int WINAPI wWinMain(
 
 	if ( ver < DC_DRIVER_VER )
 	{
-		if ( ( rlt = _drv_action(DA_UPDATE, ver) ) != ST_OK )
+		if ( ( rlt = _drv_action(DA_UPDATE, ver) ) != NO_ERROR )
 		{
 			__error_s( HWND_DESKTOP, NULL, rlt );
 		}
@@ -320,7 +315,8 @@ int WINAPI wWinMain(
 		__error_s( HWND_DESKTOP, L"Can not initialize RNG", rlt );
 		return 0;
 	}
-	if ( ( rlt = dc_load_conf(&__config) ) != ST_OK )
+
+	if ( (rlt = dc_load_config(&__config) == NO_ERROR ? ST_OK : ST_ERROR) != ST_OK )
 	{
 		__error_s( HWND_DESKTOP, L"Error get config", rlt );
 		return 0;		

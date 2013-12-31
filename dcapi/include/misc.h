@@ -9,10 +9,8 @@ int dc_api is_admin();
 int dc_api is_wow64();
 int dc_api is_win_vista();
 
-void dc_api *secure_alloc(u32 size);
-void dc_api secure_free(void *mem);
-  
-
+PVOID dc_api secure_alloc(ULONG length);
+void  dc_api secure_free(PVOID ptr);
 
 void dc_api dc_format_byte_size(
 	   wchar_t *wc_buf, int wc_size, u64 num_bytes

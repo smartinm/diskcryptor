@@ -227,28 +227,28 @@
     <ClCompile Include="ui_utils.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\gui\autorun.h" />
-    <ClInclude Include="..\include\gui\dlg_code.h" />
-    <ClInclude Include="..\include\gui\dlg_drives_list.h" />
-    <ClInclude Include="..\include\gui\dlg_menu.h" />
-    <ClInclude Include="..\include\gui\drives_list.h" />
-    <ClInclude Include="..\include\gui\hotkeys.h" />
-    <ClInclude Include="..\include\gui\main.h" />
-    <ClInclude Include="..\include\gui\pass.h" />
-    <ClInclude Include="..\include\gui\prc_code.h" />
-    <ClInclude Include="..\include\gui\prc_common.h" />
-    <ClInclude Include="..\include\gui\prc_keyfiles.h" />
-    <ClInclude Include="..\include\gui\prc_main.h" />
-    <ClInclude Include="..\include\gui\prc_options.h" />
-    <ClInclude Include="..\include\gui\prc_pass.h" />
-    <ClInclude Include="..\include\gui\prc_wizard_boot.h" />
-    <ClInclude Include="..\include\gui\prc_wizard_encrypt.h" />
+    <ClInclude Include="include\autorun.h" />
+    <ClInclude Include="include\dlg_code.h" />
+    <ClInclude Include="include\dlg_drives_list.h" />
+    <ClInclude Include="include\dlg_menu.h" />
+    <ClInclude Include="include\drives_list.h" />
+    <ClInclude Include="include\hotkeys.h" />
+    <ClInclude Include="include\main.h" />
+    <ClInclude Include="include\pass.h" />
+    <ClInclude Include="include\prc_code.h" />
+    <ClInclude Include="include\prc_common.h" />
+    <ClInclude Include="include\prc_keyfiles.h" />
+    <ClInclude Include="include\prc_main.h" />
+    <ClInclude Include="include\prc_options.h" />
+    <ClInclude Include="include\prc_pass.h" />
+    <ClInclude Include="include\prc_wizard_boot.h" />
+    <ClInclude Include="include\prc_wizard_encrypt.h" />
+    <ClInclude Include="include\stat.h" />
+    <ClInclude Include="include\subs.h" />
+    <ClInclude Include="include\threads.h" />
+    <ClInclude Include="include\ui_draw.h" />
+    <ClInclude Include="include\ui_utils.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="..\include\gui\stat.h" />
-    <ClInclude Include="..\include\gui\subs.h" />
-    <ClInclude Include="..\include\gui\threads.h" />
-    <ClInclude Include="..\include\gui\ui_draw.h" />
-    <ClInclude Include="..\include\gui\ui_utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="main.rc" />

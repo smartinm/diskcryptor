@@ -33,7 +33,7 @@ int io_read_header(dev_hook *hook, dc_header **header, xts_key **out_key, dc_pas
 	int      resl;
 
 	/* allocate memory for header */
-	if ( (*header = mm_alloc(hdr_len, MEM_SECURE | MEM_SUCCESS)) == NULL ) return ST_NOMEM;
+	if ( (*header = mm_secure_alloc(hdr_len)) == NULL ) return ST_NOMEM;
 	do
 	{
 		/* read volume header */
@@ -42,7 +42,7 @@ int io_read_header(dev_hook *hook, dc_header **header, xts_key **out_key, dc_pas
 		if (password != NULL)
 		{
 			/* allocate memory for header key */
-			if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) { resl = ST_NOMEM; break; }
+			if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) { resl = ST_NOMEM; break; }
 			/* try to decrypt header */
 			if (cp_decrypt_header(hdr_key, *header, password) == 0) { resl = ST_PASS_ERR; break; }
 			/* save decrypted header and key */ 
@@ -51,9 +51,9 @@ int io_read_header(dev_hook *hook, dc_header **header, xts_key **out_key, dc_pas
 	} while (0);
 
 	if (resl != ST_OK) {
-		mm_free(*header); *header = NULL;
+		mm_secure_free(*header); *header = NULL;
 	}
-	if (hdr_key != NULL) mm_free(hdr_key);
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
 	return resl;
 }
 
@@ -67,11 +67,11 @@ int io_write_header(dev_hook *hook, dc_header *header, xts_key *hdr_key, dc_pass
 
 	do
 	{
-		if ( (hcopy = mm_alloc(hdr_len, MEM_SECURE | MEM_SUCCESS)) == NULL ) { resl = ST_NOMEM; break; }
+		if ( (hcopy = mm_secure_alloc(hdr_len)) == NULL ) { resl = ST_NOMEM; break; }
 		memcpy(hcopy, header, sizeof(dc_header));
 		
 		if (h_key == NULL) {
-			if ( (h_key = mm_alloc(sizeof(xts_key), MEM_SECURE | MEM_SUCCESS)) == NULL ) { resl = ST_NOMEM; break; }
+			if ( (h_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) { resl = ST_NOMEM; break; }
 		}
 		if (hdr_key == NULL)
 		{
@@ -107,7 +107,7 @@ int io_write_header(dev_hook *hook, dc_header *header, xts_key *hdr_key, dc_pass
 	/* prevent leaks */
 	burn(salt, sizeof(salt));
 	/* free resources */
-	if (h_key != NULL && h_key != hdr_key) mm_free(h_key);
-	if (hcopy != NULL) mm_free(hcopy);	
+	if (h_key != NULL && h_key != hdr_key) mm_secure_free(h_key);
+	if (hcopy != NULL) mm_secure_free(hcopy);	
 	return resl;
 }

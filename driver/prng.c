@@ -262,7 +262,7 @@ int cp_rand_bytes(u8 *buf, int len)
 
 int cp_rand_init()
 {
-	if ( (rnd_key = mm_alloc(sizeof(aes256_key), MEM_SECURE)) == NULL ) {
+	if ( (rnd_key = mm_secure_alloc(sizeof(aes256_key))) == NULL ) {
 		return ST_NOMEM;
 	}
 	KeInitializeMutex(&rnd_mutex, 0);

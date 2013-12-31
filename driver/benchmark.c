@@ -32,15 +32,15 @@
 
 int dc_k_benchmark(int cipher, dc_bench_info *info)
 {
-	u8       dkey[DISKKEY_SIZE];	
-	xts_key *xkey = NULL;
-	u8      *buff = NULL;
+	UCHAR    dkey[DISKKEY_SIZE];	
+	xts_key* xkey = NULL;
+	PUCHAR   buff = NULL;
 	int      resl = ST_NOMEM, i;
 	u64      offs = 0, time;
 
 	/* allocate memory */
-	if ( (buff = mm_alloc(TEST_BLOCK_LEN, MEM_PAGED)) == NULL ) goto exit;
-	if ( (xkey = mm_alloc(sizeof(xts_key), 0)) == NULL ) goto exit;
+	if ( (buff = mm_pool_alloc(TEST_BLOCK_LEN)) == NULL ) goto exit;
+	if ( (xkey = mm_secure_alloc(sizeof(xts_key))) == NULL ) goto exit;
 	
 	/* setup initial test block and key */
 	for (i = 0; i < TEST_BLOCK_LEN; i++) buff[i] = i % 256;
@@ -65,7 +65,7 @@ int dc_k_benchmark(int cipher, dc_bench_info *info)
 	}
 	resl = ST_OK;
 exit:
-	if (buff != NULL) mm_free(buff);
-	if (xkey != NULL) mm_free(xkey);
+	if (buff != NULL) mm_pool_free(buff);
+	if (xkey != NULL) mm_secure_free(xkey);
 	return resl;
 }

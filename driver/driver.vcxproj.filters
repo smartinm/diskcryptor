@@ -62,9 +62,6 @@
     <ClCompile Include="io_control.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="mem_lock.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="minifilter.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -146,9 +143,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\io_control.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\mem_lock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\minifilter.h">

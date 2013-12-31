@@ -11,6 +11,7 @@ typedef enum _dc_pnp_state {
     NotStarted = 0,         // Not started yet
     Started,                // Device has received the START_DEVICE IRP
     Stopped,                // Device has received the STOP_DEVICE IRP
+	SurpriseRemove,         // Device has received the SURPRISE_REMOVAL IRP
     Deleted                 // Device has received the REMOVE_DEVICE IRP
 
 } dc_pnp_state;
@@ -23,7 +24,7 @@ typedef align16 struct _dev_hook
 	PDEVICE_OBJECT hook_dev;
 	PDEVICE_OBJECT pdo_dev;
 	LIST_ENTRY     hooks_list;
-	IO_REMOVE_LOCK remv_lock;
+	IO_REMOVE_LOCK remove_lock;
 
 	wchar_t        dev_name[MAX_DEVICE + 1];
 
@@ -38,9 +39,10 @@ typedef align16 struct _dev_hook
 	LONG           paging_count;
 	
 	ULONG          chg_count;    // media changes counter
-	u32            chg_mount;    /* mount changes counter */
-	u32            io_depth;     /* depth of the I/O queue   */
-	u64            expect_off;   /* expected next I/O offset */
+	u32            chg_mount;    // mount changes counter
+	
+	volatile long     io_depth;   // depth of the I/O queue
+	volatile LONGLONG expect_off; // expected next I/O offset
 
 	u32            max_chunk;
 	int            mnt_probed;
@@ -58,9 +60,10 @@ typedef align16 struct _dev_hook
 	u64            use_size; /* user available part size */
 	u32            bps;      /* bytes per sector */
 
-	u64            tmp_size; 
-	u64            stor_off; /* redirection area offset */
-	u32            head_len; /* DC header length */
+	ULONGLONG      tmp_size; 
+	
+	ULONGLONG      stor_off; // redirection area offset (0 if redirection is not used)
+	ULONG          head_len; // DC header length (offset to data)
 	
 	KMUTEX         busy_lock;
 	KMUTEX         key_lock;

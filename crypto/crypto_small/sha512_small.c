@@ -100,7 +100,7 @@ void sha512_init(sha512_ctx *ctx)
 }
 
 // Process a block of memory though the hash
-void sha512_hash(sha512_ctx *ctx, const unsigned char *in, size_t inlen) 
+void sha512_hash(sha512_ctx *ctx, const unsigned char *in, unsigned long inlen) 
 {
 	while (inlen--)
 	{

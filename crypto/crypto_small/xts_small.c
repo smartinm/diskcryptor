@@ -1,6 +1,6 @@
 ﻿/*
     *
-    * Copyright (c) 2010-2012
+    * Copyright (c) 2010-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * based on rijndael-alg-fst.c
     *  @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
@@ -62,7 +62,7 @@ static cipher_desc *algs[7][3] = {
 #endif
 
 static void xts_process(
-		const unsigned char *in, unsigned char *out, size_t len, 
+		const unsigned char *in, unsigned char *out, unsigned long len, 
 		unsigned __int64 offset, encrypt_p crypt_p, encrypt_p tweak_p, void *crypt_k, void *tweak_k
 		)
 {
@@ -132,7 +132,7 @@ void xts_set_key(const unsigned char *key, int alg, xts_key *skey)
 	skey->ctxsz = p_ctx - skey->tweak_k;
 }
 
-void xts_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
+void xts_encrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key)
 {
 	cipher_desc   *p_alg;
 	unsigned char *p_crypt_k = key->crypt_k;
@@ -147,7 +147,7 @@ void xts_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsign
 	} while (++i <= key->max);
 }
 
-void xts_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
+void xts_decrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key)
 {
 	cipher_desc   *p_alg;
 	unsigned char *p_crypt_k = key->crypt_k + key->ctxsz;
@@ -169,12 +169,12 @@ void xts_set_key(const unsigned char *key, int alg, xts_key *skey)
 	aes256_set_key(key + XTS_KEY_SIZE, (aes256_key*)&skey->tweak_k);
 }
 
-void xts_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
+void xts_encrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key)
 {
 	xts_process(in, out, len, offset, aes256.encrypt, aes256.encrypt, &key->crypt_k, &key->tweak_k); 
 }
 
-void xts_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key)
+void xts_decrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key)
 {
 	xts_process(in, out, len, offset, aes256.decrypt, aes256.encrypt, &key->crypt_k, &key->tweak_k);
 }

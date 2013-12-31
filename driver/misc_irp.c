@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2011
+    * Copyright (c) 2007-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -26,7 +26,6 @@
 #include "driver.h"
 #include "mount.h"
 #include "enc_dec.h"
-#include "mem_lock.h"
 #include "debug.h"
 #include "dump_hook.h"
 #include "misc_mem.h"
@@ -57,7 +56,7 @@ NTSTATUS dc_complete_irp(PIRP irp, NTSTATUS status, ULONG_PTR bytes)
 NTSTATUS dc_release_irp(dev_hook *hook, PIRP irp, NTSTATUS status)
 {
 	dc_complete_irp(irp, status, 0);
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
+	IoReleaseRemoveLock(&hook->remove_lock, irp);
 	return status;
 }
 
@@ -68,7 +67,7 @@ NTSTATUS dc_forward_irp(dev_hook *hook, PIRP irp)
 	IoSkipCurrentIrpStackLocation(irp);
 	status = IoCallDriver(hook->orig_dev, irp);
 			
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
+	IoReleaseRemoveLock(&hook->remove_lock, irp);
 	return status;
 }
 
@@ -117,11 +116,8 @@ NTSTATUS dc_create_close_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 		}
 		if (token != NULL) PsDereferencePrimaryToken(token);
 	}
-	if (irp_sp->MajorFunction == IRP_MJ_CLOSE) 
-	{
-		/* unlock all memory locked by this process */
-		mm_unlock_user_memory(NULL, process);
-		/* syncronize all encryptions */
+	if (irp_sp->MajorFunction == IRP_MJ_CLOSE) {
+		// syncronize all encryptions
 		dc_sync_all_encs();
 	}
 	return dc_complete_irp(irp, status, 0);
@@ -132,7 +128,6 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 {
 	NTSTATUS           status;
 	PIO_STACK_LOCATION irp_sp;
-	int                no_pass = 0;
 
 	irp_sp = IoGetCurrentIrpStackLocation(irp);
 
@@ -165,31 +160,18 @@ NTSTATUS dc_process_power_irp(dev_hook *hook, PIRP irp)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 	}
 
-	if ( irp_sp->MinorFunction == IRP_MN_QUERY_POWER && irp_sp->Parameters.Power.Type == SystemPowerState &&
-		 irp_sp->Parameters.Power.State.SystemState == PowerSystemHibernate )
-	{
-		if ( dc_is_vista_or_later == 0 && dump_is_pverent_hibernate() != 0 ) {
-			PoStartNextPowerIrp(irp);
-			status  = dc_complete_irp(irp, STATUS_UNSUCCESSFUL, 0);
-			no_pass = 1;
-		}
-	}
+	PoStartNextPowerIrp(irp);
+	IoSkipCurrentIrpStackLocation(irp);
+	status = PoCallDriver(hook->orig_dev, irp);
 
-	if (no_pass == 0) {
-		PoStartNextPowerIrp(irp);
-		IoSkipCurrentIrpStackLocation(irp);
-		status = PoCallDriver(hook->orig_dev, irp);
-	}
-
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
-
+	IoReleaseRemoveLock(&hook->remove_lock, irp);
 	return status;
 }
 
 static void dc_power_irp_worker(pw_irp_ctx *pwc)
 {
 	dc_process_power_irp(pwc->hook, pwc->irp);
-	mm_free(pwc);
+	mm_pool_free(pwc);
 }
 
 NTSTATUS dc_power_irp(dev_hook *hook, PIRP irp)
@@ -200,7 +182,7 @@ NTSTATUS dc_power_irp(dev_hook *hook, PIRP irp)
 		return dc_process_power_irp(hook, irp);
 	}
 
-	if ( (pwc = mm_alloc(sizeof(pw_irp_ctx), 0)) == NULL )
+	if ( (pwc = mm_pool_alloc(sizeof(pw_irp_ctx))) == NULL )
 	{
 		PoStartNextPowerIrp(irp);		
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);

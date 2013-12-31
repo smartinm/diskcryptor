@@ -83,6 +83,8 @@
     <ClCompile Include="crypto_tests.c" />
     <ClCompile Include="pkcs5_test.c" />
     <ClCompile Include="serpent_test.c" />
+    <ClCompile Include="sha512_hmac_drbg_test.c" />
+    <ClCompile Include="sha512_hmac_test.c" />
     <ClCompile Include="sha512_test.c" />
     <ClCompile Include="twofish_test.c" />
     <ClCompile Include="xts_test.c" />
@@ -92,6 +94,8 @@
     <ClInclude Include="crc32_test.h" />
     <ClInclude Include="pkcs5_test.h" />
     <ClInclude Include="serpent_test.h" />
+    <ClInclude Include="sha512_hmac_drbg_test.h" />
+    <ClInclude Include="sha512_hmac_test.h" />
     <ClInclude Include="sha512_test.h" />
     <ClInclude Include="twofish_test.h" />
     <ClInclude Include="xts_test.h" />

@@ -1,6 +1,6 @@
 /*  *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2009 
+	* Copyright (c) 2009-2013
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include <windows.h>
-#include "defines.h"
+#include <tchar.h>
 #include "drv_ioctl.h"
 #include "drvinst.h"
 #include "mbrinst.h"
@@ -30,97 +30,84 @@
 	-isboot - check for bootloader on boot device
 */
 
-int WINAPI wWinMain(
-		HINSTANCE hinst,
-		HINSTANCE hprev,
-		LPWSTR    cmd_line,
-		int       cmd_show
-		)
+int APIENTRY _tWinMain(HINSTANCE hInstance,
+                       HINSTANCE hPrevInstance,
+                       LPTSTR    lpCmdLine,
+                       int       nCmdShow)
 {
-	int d_st;
-	int resl;
+	DWORD status = ERROR_INVALID_FUNCTION;
 
-	if (dc_is_old_runned() != 0) {
-		return ST_INCOMPATIBLE;
-	}
-
-	/* open DC driver device */
+	if (dc_is_old_runned() != 0) return ERROR_REVISION_MISMATCH;
 	dc_open_device();
-	/* get DC sriver status */
-	d_st = dc_driver_status();
-	resl = ST_ERROR;
 
-	do
+	if (_tcsicmp(lpCmdLine, _T("-setup")) == 0)
 	{
-		if (wcscmp(cmd_line, L"-setup") == 0)
+		if (dc_is_driver_installed() != FALSE)
 		{
-			if (d_st == ST_ERROR) {
-				resl = dc_install_driver(NULL);
-			} else
+			if ( (status = dc_update_boot(-1)) != ST_OK && status != ST_BLDR_NOTINST )
 			{
-				resl = dc_update_boot(-1);
-
-				if ( (resl != ST_OK) && (resl != ST_BLDR_NOTINST) ) {
-					break;
-				}
-				resl = dc_update_driver();
+				return 100000 + status;
 			}
-			break;
+			status = dc_update_driver();
+		} else {
+			status = dc_install_driver();
 		}
-
-		if (wcscmp(cmd_line, L"-unins") == 0)
+	}
+	if (_tcsicmp(lpCmdLine, _T("-unins")) == 0)
+	{
+		if (dc_is_driver_installed() == FALSE)
 		{
-			if (d_st == ST_ERROR) {
-				resl = ST_ERROR; break;
-			}
-			resl = dc_remove_driver(); 
-			break;
+			return ERROR_PRODUCT_UNINSTALLED;
 		}
-
-		if (wcscmp(cmd_line, L"-unldr") == 0) {
-			resl = dc_unset_mbr(-1);
-			break;
-		}
-
-		if (wcscmp(cmd_line, L"-isboot") == 0) {
-			ldr_config conf;
-			resl = dc_get_mbr_config(-1, NULL, &conf);
-			break;
-		}		
-
-		if (wcscmp(cmd_line, L"-isenc") == 0)
+		status = dc_remove_driver();
+	}
+	if (_tcsicmp(lpCmdLine, _T("-unldr")) == 0)
+	{
+		if ( (status = dc_unset_mbr(-1)) != ST_OK )
 		{
-			vol_inf info;
-			u32     flags;
-			wchar_t boot_dev[MAX_PATH];
-			int     is_enc = 0;
+			return 100000 + status; 
+		}
+	}
+	if (_tcsicmp(lpCmdLine, _T("-isboot")) == 0)
+	{
+		ldr_config conf;
+		
+		if ( (status = dc_get_mbr_config(-1, NULL, &conf)) != ST_OK )
+		{
+			return 100000 + status; 
+		}
+	}		
 
-			if (dc_open_device() != ST_OK) {
-				resl = ST_ERROR; break;
-			}
+	if (_tcsicmp(lpCmdLine, _T("-isenc")) == 0)
+	{
+		vol_inf info;
+		DWORD   flags;
+		wchar_t boot_dev[MAX_PATH];
+		int     is_enc = 0;
 
-			if (dc_get_boot_device(boot_dev) != ST_OK) {
-				boot_dev[0] = 0;
-			}
+		if (dc_open_device() != ST_OK)
+		{
+			return 100000 + ST_ERROR;
+		}
+
+		if (dc_get_boot_device(boot_dev) != ST_OK) {
+			boot_dev[0] = 0;
+		}
 	
-			if (dc_first_volume(&info) == ST_OK)
+		if (dc_first_volume(&info) == ST_OK)
+		{
+			do
 			{
-				do
+				flags = info.status.flags;
+
+				if ( ((flags & F_SYSTEM) || 
+					  (wcscmp(info.device, boot_dev) == 0)) && (flags & F_ENABLED) )
 				{
-					flags = info.status.flags;
-
-					if ( ((flags & F_SYSTEM) || 
-						  (wcscmp(info.device, boot_dev) == 0)) && (flags & F_ENABLED) )
-					{
-						is_enc = 1;
-					}
-				} while (dc_next_volume(&info) == ST_OK);
-			}
-
-			dc_close_device();
-			resl = is_enc != 0 ? ST_ENCRYPTED : ST_OK; break;
+					is_enc = 1;
+				}
+			} while (dc_next_volume(&info) == ST_OK);
 		}
-	} while (0);
-
-	return resl;
+		status = is_enc != 0 ? ST_ENCRYPTED : NO_ERROR;
+	}
+	return status;
 }

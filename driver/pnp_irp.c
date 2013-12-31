@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2008 
+    * Copyright (c) 2007-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -19,14 +19,12 @@
 */
 
 #include <ntifs.h>
-#include "defines.h"
 #include "devhook.h"
 #include "driver.h"
 #include "misc.h"
 #include "misc_irp.h"
 #include "mount.h"
 #include "prng.h"
-#include "dump_hook.h"
 #include "enc_dec.h"
 #include "debug.h"
 #include "pnp_irp.h"
@@ -34,41 +32,38 @@
 static
 NTSTATUS dc_pnp_usage_irp(dev_hook *hook, PIRP irp)
 {
-	DEVICE_USAGE_NOTIFICATION_TYPE usage;
-	PIO_STACK_LOCATION             irp_sp;
+	PDEVICE_OBJECT                 devobj = hook->hook_dev;
+	PIO_STACK_LOCATION             irp_sp = IoGetCurrentIrpStackLocation(irp);
+	BOOLEAN                        pagable_set, complete_irp = FALSE;
 	NTSTATUS                       status;
-	int                            setpg;
-	int                            complete;
-	BOOLEAN                        inpath;
-	PDEVICE_OBJECT                 dev_obj;
 
-	dev_obj  = hook->hook_dev;
-	irp_sp   = IoGetCurrentIrpStackLocation(irp);
-	usage    = irp_sp->Parameters.UsageNotification.Type;
-	inpath   = irp_sp->Parameters.UsageNotification.InPath;
-	complete = 0;
-
-	if (usage != DeviceUsageTypePaging)
+	if (irp_sp->Parameters.UsageNotification.Type != DeviceUsageTypePaging)
 	{
-		if (inpath) {
-			dump_usage_notify(hook, usage);
-		}
-
-		if (usage == DeviceUsageTypeHibernation) 
+		if (irp_sp->Parameters.UsageNotification.Type == DeviceUsageTypeHibernation) 
 		{
-			if ( (dc_is_vista_or_later != 0) && (dump_is_pverent_hibernate() != 0) ) {
-				/* preventing hibernate if memory contain sensitive data */
-				status = STATUS_UNSUCCESSFUL; complete = 1;
-			}
-			
-			if (inpath) {
-				hook->flags |= F_HIBERNATE;
+			if (irp_sp->Parameters.UsageNotification.InPath)			
+			{
+				SetFlag(hook->flags, F_HIBERNATE);				
+
+				// prevent hibernating if memory contain encryption keys
+				if (dc_prepare_for_dumping(TRUE, FALSE, NULL) == FALSE) {
+					DbgMsg("hibernation prevented because memory contain encryption keys\n");
+					complete_irp = TRUE;
+					status = STATUS_UNSUCCESSFUL;
+				}
 			} else {
-				hook->flags &= ~F_HIBERNATE;
-			}			
+				ClearFlag(hook->flags, F_HIBERNATE);
+			}
+		} else if (irp_sp->Parameters.UsageNotification.Type == DeviceUsageTypeDumpFile)
+		{
+			if (irp_sp->Parameters.UsageNotification.InPath) {
+				SetFlag(hook->flags, F_CRASHDUMP);
+			} else {
+				ClearFlag(hook->flags, F_CRASHDUMP);
+			}
 		}
 
-		if (complete != 0) {
+		if (complete_irp) {
 			status = dc_complete_irp(irp, status, 0);
 		} else {
 			IoSkipCurrentIrpStackLocation(irp);
@@ -76,131 +71,110 @@ NTSTATUS dc_pnp_usage_irp(dev_hook *hook, PIRP irp)
 		}
 	} else
 	{
-		/* wait on the paging path event */
+		// wait on the paging path event
 		wait_object_infinity(&hook->paging_count_event);
 
-		/* 
-		   if removing last paging device, need to set DO_POWER_PAGABLE
-		   bit here, and possible re-set it below on failure.
-		*/
-		setpg = 0;
+		// if removing last paging device, need to set DO_POWER_PAGABLE
+		// bit here, and possible re-set it below on failure.
+		pagable_set = FALSE;
 
-		if ( (inpath == FALSE) && (hook->paging_count == 1) ) {
-			dev_obj->Flags |= DO_POWER_PAGABLE; setpg = 1;
+		if (irp_sp->Parameters.UsageNotification.InPath == FALSE && hook->paging_count == 1) {
+			SetFlag(devobj->Flags, DO_POWER_PAGABLE);
+			pagable_set = TRUE;
 		}
 
-		/* send the irp synchronously */
+		// send the irp synchronously
 		status = dc_forward_irp_sync(hook, irp);
 
-		/* 
-		   now deal with the failure and success cases.
-		   note that we are not allowed to fail the irp
-		   once it is sent to the lower drivers.
-		*/
+		// now deal with the failure and success cases.
+		// note that we are not allowed to fail the irp
+		// once it is sent to the lower drivers.
 
 		if (NT_SUCCESS(status)) 
 		{
-			IoAdjustPagingPathCount(&hook->paging_count, inpath);
+			IoAdjustPagingPathCount(&hook->paging_count, irp_sp->Parameters.UsageNotification.InPath);
 
-			if ( (inpath == TRUE) && (hook->paging_count == 1) ) {
-				/* first paging file addition */
-				dev_obj->Flags &= ~DO_POWER_PAGABLE;
+			// handle first paging file addition
+			if (irp_sp->Parameters.UsageNotification.InPath && hook->paging_count == 1) {
+				ClearFlag(devobj->Flags, DO_POWER_PAGABLE);
 			}
 		} else {
-			/* cleanup the changes done above */
-			if (setpg == 1) {
-				dev_obj->Flags &= ~DO_POWER_PAGABLE;
-			}
+			if (pagable_set) ClearFlag(devobj->Flags, DO_POWER_PAGABLE); // cleanup the changes done above
 		}
 
-		/* set the event so the next one can occur. */
+		// set the event so the next one can occur.
+		KeSetEvent(&hook->paging_count_event, IO_NO_INCREMENT, FALSE);
 
-		KeSetEvent(
-			&hook->paging_count_event, IO_NO_INCREMENT, FALSE);
-
-		/* and complete the irp */
-		dc_complete_irp(
-			irp, status, irp->IoStatus.Information);
+		// and complete the irp
+		dc_complete_irp(irp, status, irp->IoStatus.Information);
 	}
 
-	IoReleaseRemoveLock(&hook->remv_lock, irp);
-
+	IoReleaseRemoveLock(&hook->remove_lock, irp);
 	return status;
 }
 
 NTSTATUS dc_pnp_irp(dev_hook *hook, PIRP irp)
 {
-	PIO_STACK_LOCATION irp_sp;
+	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
+	BOOLEAN            complete_irp = FALSE;
 	NTSTATUS           status;
-	int                is_sync;
 		
-	irp_sp  = IoGetCurrentIrpStackLocation(irp);
-	is_sync = 0;
-	
 	switch (irp_sp->MinorFunction)
 	{
 		case IRP_MN_REMOVE_DEVICE:
+			DbgMsg("IRP_MN_REMOVE_DEVICE, dev=%ws\n", hook->dev_name);
+
+			dc_set_pnp_state(hook, Deleted);
+			IoReleaseRemoveLockAndWait(&hook->remove_lock, irp);
+			
+			IoSkipCurrentIrpStackLocation(irp);
+			status = IoCallDriver(hook->orig_dev, irp);
+
+			dc_process_unmount(hook, MF_NOFSCTL | MF_NOWAIT_IO);
+			dc_remove_hook(hook);
+
+			IoDetachDevice(hook->orig_dev);
+			IoDeleteDevice(hook->hook_dev);
+		break;
 		case IRP_MN_SURPRISE_REMOVAL:
-			{
-				dc_set_pnp_state(hook, Deleted);
-				IoReleaseRemoveLockAndWait(&hook->remv_lock, irp);
+			DbgMsg("IRP_MN_SURPRISE_REMOVAL, dev=%ws\n", hook->dev_name);
 
-				DbgMsg("remove device %ws\n", hook->dev_name);
+			dc_set_pnp_state(hook, SurpriseRemove);
+			dc_process_unmount(hook, MF_NOFSCTL | MF_NOWAIT_IO);
 
-				IoSkipCurrentIrpStackLocation(irp);
-				status = IoCallDriver(hook->orig_dev, irp);
-				
-				dc_process_unmount(hook, MF_NOFSCTL);
-				dc_remove_hook(hook);
-
-				IoDetachDevice(hook->orig_dev);
-				IoDeleteDevice(hook->hook_dev);
-			}
+			status = dc_forward_irp(hook, irp);
 		break;
 		case IRP_MN_DEVICE_USAGE_NOTIFICATION:
-			{
-				status = dc_pnp_usage_irp(hook, irp);
-			}
+			status = dc_pnp_usage_irp(hook, irp);
 		break;
 		case IRP_MN_START_DEVICE:
+			if ( NT_SUCCESS(status = dc_forward_irp_sync(hook, irp)) )
 			{
-				status = dc_forward_irp_sync(hook, irp);
-
-				if (NT_SUCCESS(status) != FALSE)
-				{
-					if (hook->orig_dev->Characteristics & FILE_REMOVABLE_MEDIA) {
-						hook->hook_dev->Characteristics |= FILE_REMOVABLE_MEDIA;
-						hook->flags |= F_REMOVABLE;
-					}
-					dc_set_pnp_state(hook, Started);
+				if (hook->orig_dev->Characteristics & FILE_REMOVABLE_MEDIA) {
+					hook->hook_dev->Characteristics |= FILE_REMOVABLE_MEDIA;
+					hook->flags |= F_REMOVABLE;
 				}
-				is_sync = 1;
+				dc_set_pnp_state(hook, Started);
 			}
+			complete_irp = TRUE;
 		break;
 		case IRP_MN_STOP_DEVICE:
-			{
-				dc_set_pnp_state(hook, Stopped);
-
-				status = dc_forward_irp_sync(hook, irp);
-
-				if ( (NT_SUCCESS(status) == FALSE) && (hook->pnp_state == Stopped) ) {
-					dc_restore_pnp_state(hook);
-				}
-				is_sync = 1;
+			dc_set_pnp_state(hook, Stopped);
+			status = dc_forward_irp_sync(hook, irp);
+			
+			if (NT_SUCCESS(status) == FALSE && hook->pnp_state == Stopped) {
+				dc_restore_pnp_state(hook);
 			}
+			complete_irp = TRUE;
 		break;
 		default:
-			{
-				status = dc_forward_irp(hook, irp);
-			}
-		break;
+			status = dc_forward_irp(hook, irp);
 	}
 
-	if (is_sync != 0) {
+	if (complete_irp) {
 		dc_complete_irp(irp, status, irp->IoStatus.Information);
-		IoReleaseRemoveLock(&hook->remv_lock, irp);
+		IoReleaseRemoveLock(&hook->remove_lock, irp);
 	}
-
 	return status;
 }
 
@@ -211,14 +185,18 @@ NTSTATUS dc_add_device(PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT pdo_dev)
 	dev_hook      *hook;
 	NTSTATUS       status;
 
-	/* reseed PRNG on device attach */
+	// reseed PRNG on device attach
 	cp_rand_reseed();
 	
-	/* create FDO device */
-	status = IoCreateDevice(drv_obj, sizeof(dev_hook), NULL, high_dev->DeviceType, FILE_DEVICE_SECURE_OPEN, FALSE, &hook_dev);
-	if (NT_SUCCESS(status) == FALSE) { hook_dev = NULL; goto exit; }
-	memset(hook = hook_dev->DeviceExtension, 0, sizeof(dev_hook));
-	/* get device object name */
+	// create FDO device
+	if ( !NT_SUCCESS(status = IoCreateDevice(drv_obj, sizeof(dev_hook), NULL, high_dev->DeviceType, 0, FALSE, &hook_dev)) ) {
+		DbgMsg("IoCreateDevice failed, status=%0.8x\n", status);
+		hook_dev = NULL;
+		goto cleanup;
+	}
+	memset( (hook = (dev_hook*)hook_dev->DeviceExtension), 0, sizeof(dev_hook));
+	
+	// get device object name
 	if (high_dev->DeviceType == FILE_DEVICE_CD_ROM)
 	{
 		for (device = high_dev; device != NULL; device = nextdev) {
@@ -229,17 +207,22 @@ NTSTATUS dc_add_device(PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT pdo_dev)
 	} else {
 		dc_query_object_name(pdo_dev, hook->dev_name, sizeof(hook->dev_name));
 	}
-	/* attach device */
+	
+	// attach device
 	hook->hook_dev = hook_dev;
 	hook->pdo_dev  = pdo_dev;
-	hook->orig_dev = IoAttachDeviceToDeviceStack(hook_dev, pdo_dev);
-	if (hook->orig_dev == NULL) { status = STATUS_UNSUCCESSFUL; goto exit; }
 
-	/* complete initializaion */
+	if ( !NT_SUCCESS(status = IoAttachDeviceToDeviceStackSafe(hook_dev, pdo_dev, &hook->orig_dev)) ) {
+		DbgMsg("IoAttachDeviceToDeviceStackSafe failed, status=%0.8x\n", status);
+		hook->orig_dev = NULL;
+		goto cleanup;
+	}
+	
+	// complete initializaion
 	if (high_dev->Characteristics & FILE_REMOVABLE_MEDIA) hook->flags |= F_REMOVABLE;
 	if (high_dev->DeviceType == FILE_DEVICE_CD_ROM) hook->flags |= F_CDROM;
 	
-	IoInitializeRemoveLock(&hook->remv_lock, 0, 0, 0);
+	IoInitializeRemoveLock(&hook->remove_lock, 'LRCD', 0, 0);
 	KeInitializeEvent(&hook->paging_count_event, NotificationEvent, TRUE);
 
 	KeInitializeMutex(&hook->busy_lock, 0);
@@ -249,9 +232,10 @@ NTSTATUS dc_add_device(PDRIVER_OBJECT drv_obj, PDEVICE_OBJECT pdo_dev)
 	hook_dev->Flags |= high_dev->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE);
 	hook_dev->Flags &= ~DO_DEVICE_INITIALIZING;	
 
-	DbgMsg("dc_add_device %ws\n", hook->dev_name);
+	DbgMsg("dc_add_device, dev=%ws\n", hook->dev_name);
 	dc_insert_hook(hook);	
-exit:
+
+cleanup:
 	if (NT_SUCCESS(status) == FALSE && hook_dev != NULL) {
 		IoDeleteDevice(hook_dev);
 	}

@@ -320,19 +320,20 @@ _about_dlg_proc(
 					}
 				}
 				{
-					dc_conf conf;
-					if ( dc_get_conf_flags(&conf) == ST_OK )
+					DC_FLAGS flags;
+					
+					if ( dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR )
 					{
 						wchar_t *s_using = L"Not supported";
 						wchar_t *s_inset = L"Not supported";
 
-						if ( conf.load_flags & DST_HW_CRYPTO )
+						if ( flags.load_flags & DST_HW_CRYPTO )
 						{
 							s_using = (
-								conf.conf_flags & CONF_HW_CRYPTO ? L"Enabled" : L"Disabled"
+								flags.conf_flags & CONF_HW_CRYPTO ? L"Enabled" : L"Disabled"
 							);
-							if ( conf.load_flags & DST_INTEL_NI ) s_inset = L"Intel® AES Instructions Set (AES-NI)";
-							if ( conf.load_flags & DST_VIA_PADLOCK ) s_inset = L"The VIA PadLock Advanced Cryptography Engine (ACE)";
+							if ( flags.load_flags & DST_INTEL_NI ) s_inset = L"Intel® AES Instructions Set (AES-NI)";
+							if ( flags.load_flags & DST_VIA_PADLOCK ) s_inset = L"The VIA PadLock Advanced Cryptography Engine (ACE)";
 						}
 						_snwprintf( s_display, countof(s_display), 
 							L"Hardware Cryptography: %s\r\n"
@@ -340,7 +341,7 @@ _about_dlg_proc(
 							s_using, s_inset
 						);
 						SetWindowText( GetDlgItem(hwnd, IDC_EDIT_CIPHER_INFO), s_display );
-						EnableWindow( GetDlgItem(hwnd, IDC_EDIT_CIPHER_INFO), conf.load_flags & DST_HW_CRYPTO );
+						EnableWindow( GetDlgItem(hwnd, IDC_EDIT_CIPHER_INFO), flags.load_flags & DST_HW_CRYPTO );
 					}
 				}
 			}
@@ -393,14 +394,9 @@ void _dlg_benchmark(
 }
 
 
-static int 
-dc_cd_callback(
-		u64   iso_sz, 
-		u64   enc_sz, 
-		void *lparam
-	)
+static BOOL cd_encryption_callback(ULONGLONG isosize, ULONGLONG encsize, PVOID param)
 {
-	_dnode *node = pv(lparam);
+	_dnode *node = (_dnode*)param;
 	if ( node != NULL )
 	{
 		HWND h_iso_info = GetDlgItem( node->dlg.h_page, IDC_ISO_PROGRESS );
@@ -415,15 +411,15 @@ dc_cd_callback(
 		wchar_t s_elapsed[MAX_PATH]   = { STR_EMPTY };
 		wchar_t s_estimated[MAX_PATH] = { STR_EMPTY };
 
-		int speed   = _speed_stat_event( s_speed, countof(s_speed), &node->dlg.iso.speed, enc_sz, TRUE );
-		int new_pos = (int)( enc_sz / ( iso_sz / PRG_STEP ) );
+		int speed   = _speed_stat_event( s_speed, countof(s_speed), &node->dlg.iso.speed, encsize, TRUE );
+		int new_pos = (int)( encsize / ( isosize / PRG_STEP ) );
 
 		if ( speed != 0 )
 		{
-			_get_time_period( ( ( iso_sz - enc_sz ) / 1024 / 1024 ) / speed, s_estimated, TRUE );					
+			_get_time_period( ( ( isosize - encsize ) / 1024 / 1024 ) / speed, s_estimated, TRUE );					
 		}
-		dc_format_byte_size( s_enc_size, countof(s_enc_size), enc_sz );
-		dc_format_byte_size( s_ttl_size, countof(s_ttl_size), iso_sz );
+		dc_format_byte_size( s_enc_size, countof(s_enc_size), encsize );
+		dc_format_byte_size( s_ttl_size, countof(s_ttl_size), isosize );
 
 		_snwprintf( s_done, countof(s_done), L"%s / %s", s_enc_size, s_ttl_size );
 
@@ -440,14 +436,14 @@ dc_cd_callback(
 			);
 
 		_snwprintf(
-			s_percent, countof(s_percent), L"%.2f %%", (double)(enc_sz) / (double)(iso_sz) * 100 
+			s_percent, countof(s_percent), L"%.2f %%", (double)(encsize) / (double)(isosize) * 100 
 			);
 
 		SetWindowText( GetDlgItem(node->dlg.h_page, IDC_STATUS_PROGRESS), s_percent);
-		return node->dlg.rlt;
+
+		return node->dlg.rlt == ST_OK ? TRUE : FALSE;
 	}
-	return ST_OK;
-	
+	return TRUE;	
 }
 
 
@@ -464,9 +460,11 @@ _thread_enc_iso_proc(
 	{
 		node->dlg.rlt = ST_OK;
 
-		node->dlg.rlt = dc_encrypt_cd(
-			node->dlg.iso.s_iso_src, node->dlg.iso.s_iso_dst, node->dlg.iso.pass, node->dlg.iso.cipher_id, dc_cd_callback, lparam
-			);
+		node->dlg.rlt = dc_encrypt_iso_image(node->dlg.iso.s_iso_src,
+			                                 node->dlg.iso.s_iso_dst,
+											 node->dlg.iso.pass,
+											 node->dlg.iso.cipher_id,
+											 cd_encryption_callback, lparam) == NO_ERROR ? ST_OK : ST_ERROR;
 		{
 			secure_free( node->dlg.iso.pass );
 			SendMessage( GetParent(GetParent(node->dlg.h_page)), WM_CLOSE_DIALOG, 0, 0 );
@@ -476,7 +474,6 @@ _thread_enc_iso_proc(
 	//EnterCriticalSection(&crit_sect);
 	//LeaveCriticalSection(&crit_sect);
 
-	dc_close_device( );
 	return 1L;
 }
 

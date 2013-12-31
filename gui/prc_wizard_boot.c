@@ -50,7 +50,7 @@ void _refresh_boot_buttons(
 	wchar_t	   s_item[MAX_PATH];
 
 	ldr_config conf;
-	dc_conf    dcfg;
+	DC_FLAGS   flags;
 
 	if ( ListView_GetSelectedCount(h_list) )
 	{		
@@ -61,7 +61,7 @@ void _refresh_boot_buttons(
 		{
 			force_small = (
 				( boot_disk_1 == sel_disk || boot_disk_2 == sel_disk ) && 
-				( dc_get_conf_flags(&dcfg) == ST_OK ) && ( dcfg.load_flags & DST_SMALL_MEM )
+				( dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR ) && ( flags.load_flags & DST_SMALL_MEM )
 			);
 		}
 		enable = TRUE;

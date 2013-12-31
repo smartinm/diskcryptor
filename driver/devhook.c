@@ -29,6 +29,7 @@ static ERESOURCE  hooks_sync_resource;
 
 void dc_reference_hook(dev_hook *hook)
 {
+	ObReferenceObject(hook->hook_dev);
 	ObReferenceObject(hook->orig_dev);
 	ObReferenceObject(hook->pdo_dev);
 }
@@ -37,6 +38,7 @@ void dc_deref_hook(dev_hook *hook)
 {
 	ObDereferenceObject(hook->pdo_dev);
 	ObDereferenceObject(hook->orig_dev);
+	ObDereferenceObject(hook->hook_dev);
 }
 
 dev_hook *dc_find_hook(wchar_t *dev_name)

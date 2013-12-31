@@ -116,10 +116,10 @@ int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher
 
 		if (ctx->mode != NULL) 
 		{
-			if ( (ctx->buff = mm_alloc(max_size, MEM_SECURE)) == NULL ) {
+			if ( (ctx->buff = mm_pool_alloc(max_size)) == NULL ) {
 				break;
 			}
-			if ( (ctx->key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+			if ( (ctx->key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 				break;
 			}
 			/* generate random key */
@@ -135,8 +135,8 @@ int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher
 	burn(key, sizeof(key));
 
 	if (resl != ST_OK) {
-		if (ctx->buff != NULL) { mm_free(ctx->buff); }
-		if (ctx->key != NULL)  { mm_free(ctx->key); }
+		if (ctx->buff != NULL) mm_pool_free(ctx->buff);
+		if (ctx->key != NULL)  mm_secure_free(ctx->key);
 	}
 	return resl;
 }
@@ -144,8 +144,8 @@ int dc_wipe_init(wipe_ctx *ctx, void *hook, int max_size, int method, int cipher
 void dc_wipe_free(wipe_ctx *ctx)
 {
 	/* prevent leaks */
-	if (ctx->buff != NULL) { mm_free(ctx->buff); }
-	if (ctx->key != NULL)  { mm_free(ctx->key); }
+	if (ctx->buff != NULL) mm_pool_free(ctx->buff);
+	if (ctx->key != NULL)  mm_secure_free(ctx->key);
 
 	ctx->buff = NULL; ctx->key = NULL;
 }

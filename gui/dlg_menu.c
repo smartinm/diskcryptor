@@ -782,7 +782,7 @@ void _menu_clear_cache( )
 {
 	if ( __msg_q( __dlg, L"Wipe All Passwords?" ) )
 	{
-		dc_clean_pass_cache();
+		dc_device_control(DC_CTL_CLEAR_PASS, NULL, 0, NULL, 0);
 	}
 }
 

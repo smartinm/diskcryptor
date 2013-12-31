@@ -1,5 +1,10 @@
+[01.01.2014] - 1.0.802.118
+  [*] Fixed bug with a lost memory on some notebooks (e820 map enlarged to 64 items).
+  [*] Improved compatibility with perfmon (IO operation are showed in Disk Activity tab).
+  [*] Internal improvements of code quality.
+
 [03.01.2013] - 1.0.757.115
-  [+] Added workaround for AES-NI support on Hyper-V
+  [+] Added workaround for AES-NI support on Hyper-V.
   [+] Added internal self-tests for PKDBF2 and XTS engines.
   [*] Fixed bug with data loss with some cases on VIA-PadLock.
   [*] Fixed regression with SSD detection on Windows XP.

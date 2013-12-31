@@ -23,10 +23,8 @@
 #include "defines.h"
 #include "devhook.h"
 #include "misc_volume.h"
-#include "pkcs5.h"
 #include "misc.h"
 #include "mount.h"
-#include "crc32.h"
 #include "prng.h"
 #include "fast_crypt.h"
 #include "debug.h"
@@ -54,7 +52,7 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 		if (hook->flags & (F_SYNC | F_UNSUPRT | F_DISABLE | F_CDROM)) {
 			resl = ST_ERROR; break;
 		}
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 		/* get device params */
@@ -90,8 +88,8 @@ int dc_backup_header(wchar_t *dev_name, dc_pass *password, void *out)
 	/* prevent leaks */
 	burn(salt, sizeof(salt));
 	/* free memory */	
-	if (header != NULL) mm_free(header);
-	if (hdr_key != NULL) mm_free(hdr_key);
+	if (header != NULL) mm_secure_free(header);
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
 	return resl;
 }
 
@@ -119,13 +117,13 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 				resl = ST_IO_ERROR; break;
 			}
 		}
-		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
+		if ( (header = mm_secure_alloc(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 		/* copy header from input */
 		memcpy(header, in, sizeof(dc_header));
 
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 		/* decrypt header */
@@ -140,8 +138,8 @@ int dc_restore_header(wchar_t *dev_name, dc_pass *password, void *in)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}
-	if (hdr_key != NULL) mm_free(hdr_key);
-	if (header != NULL) mm_free(header);
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
+	if (header != NULL) mm_secure_free(header);
 
 	return resl;
 }
@@ -183,13 +181,13 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 			resl = ST_IO_ERROR; break;
 		}
 
-		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
+		if ( (header = mm_secure_alloc(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-		if ( (buff = mm_alloc(ENC_BLOCK_SIZE, 0)) == NULL ) {
+		if ( (buff = mm_pool_alloc(ENC_BLOCK_SIZE)) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-		if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (tmp_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}		
 
@@ -260,11 +258,11 @@ int dc_format_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		if (w_init != 0) {
 			dc_wipe_free(&hook->wp_ctx);
 		}
-		if (buff != NULL)    { mm_free(buff); }
-		if (tmp_key != NULL) { mm_free(tmp_key); }
+		if (buff != NULL)    mm_pool_free(buff);
+		if (tmp_key != NULL) mm_secure_free(tmp_key);
 	}
 	if (header != NULL) {
-		mm_free(header);
+		mm_secure_free(header);
 	}
 	if (hook != NULL) { 
 		KeReleaseMutex(&hook->busy_lock, FALSE);
@@ -384,8 +382,8 @@ int dc_format_done(wchar_t *dev_name)
 		hook->flags   &= ~F_FORMATTING;		
 		/* free resources */
 		dc_wipe_free(&hook->wp_ctx);
-		mm_free(hook->tmp_buff);
-		mm_free(hook->tmp_key);
+		mm_pool_free(hook->tmp_buff);
+		mm_secure_free(hook->tmp_key);
 		resl = ST_OK;
 	} while (0);
 
@@ -441,40 +439,48 @@ int dc_change_pass(wchar_t *dev_name, dc_pass *old_pass, dc_pass *new_pass)
 		KeReleaseMutex(&hook->busy_lock, FALSE);
 		dc_deref_hook(hook);
 	}	
-	if (header != NULL) mm_free(header);
+	if (header != NULL) mm_secure_free(header);
 	return resl;
 }
 
-void dc_update_volume(dev_hook *hook)
+NTSTATUS dc_update_volume(dev_hook *hook)
 {
-	void *p_buff = NULL;
-	u64   old_sz = hook->dsk_size;
+	LARGE_INTEGER timeout = { 0xffe17b80, 0xffffffff }; // 200ms timeout
+	ULONGLONG     old_len = hook->dsk_size;
+	PVOID         pb_buff = NULL;
+	NTSTATUS      status;
 
-	wait_object_infinity(&hook->busy_lock);
+	if (KeWaitForSingleObject(&hook->busy_lock, Executive, KernelMode, FALSE, &timeout) == STATUS_TIMEOUT)
+	{
+		return STATUS_DEVICE_NOT_READY;
+	}
+	if (hook->dsk_size != old_len || hook->pnp_state != Started || (hook->flags & F_DISABLE))
+	{
+		status = STATUS_INVALID_DEVICE_STATE;
+		goto cleanup;
+	}
 
 	if (IS_STORAGE_ON_END(hook->flags) != 0)
 	{
-		if ( (p_buff = mm_alloc(hook->head_len, 0)) == NULL ) {
-			goto exit;
+		if ( (pb_buff = mm_secure_alloc(hook->head_len)) == NULL )
+		{
+			status = STATUS_INSUFFICIENT_RESOURCES;
+			goto cleanup;
 		}
-		if (NT_SUCCESS(io_device_rw(hook->hook_dev, p_buff, hook->head_len, 0, 1)) == FALSE) {
-			goto exit;
-		}
-	}
-	if (io_hook_ioctl(hook, IOCTL_VOLUME_UPDATE_PROPERTIES, NULL, 0, NULL, 0) != ST_OK) {
-		goto exit;
+		if ( !NT_SUCCESS(status = io_device_rw(hook->hook_dev, pb_buff, hook->head_len, 0, 1)) ) goto cleanup;
 	}
 
-	if ( !NT_SUCCESS(dc_fill_device_info(hook)) || hook->dsk_size == old_sz ) {
-		goto exit;
-	} else {
-		hook->use_size += hook->dsk_size - old_sz;
-	}
-	if (p_buff != NULL) {
+	if ( !NT_SUCCESS(status = io_device_control(hook->orig_dev, IOCTL_VOLUME_UPDATE_PROPERTIES, NULL, 0, NULL, 0)) ) goto cleanup;
+	if ( !NT_SUCCESS(status = dc_fill_device_info(hook)) || hook->dsk_size == old_len )  goto cleanup;
+	hook->use_size += hook->dsk_size - old_len;
+
+	if (pb_buff != NULL) {
 		hook->stor_off = hook->dsk_size - hook->head_len;
-		io_device_rw(hook->hook_dev, p_buff, hook->head_len, 0, 0);
+		status = io_device_rw(hook->hook_dev, pb_buff, hook->head_len, 0, 0);
 	}
-exit:
-	if (p_buff != NULL) mm_free(p_buff);
+
+cleanup:
+	if (pb_buff != NULL) mm_secure_free(pb_buff);
 	KeReleaseMutex(&hook->busy_lock, FALSE);
+	return status;
 }

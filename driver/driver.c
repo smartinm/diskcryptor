@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2012 
+    * Copyright (c) 2007-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -34,7 +34,6 @@
 #include "pnp_irp.h"
 #include "boot_pass.h"
 #include "mount.h"
-#include "mem_lock.h"
 #include "fast_crypt.h"
 #include "debug.h"
 #include "misc_mem.h"
@@ -47,9 +46,8 @@ KSTART_ROUTINE    dc_automount_thread;
 DRIVER_DISPATCH   dc_dispatch_irp;
 
 PDEVICE_OBJECT dc_device;
-int            dc_is_vista_or_later;	   
-u32            dc_io_count;
-u32            dc_dump_disable;
+BOOLEAN        dc_is_vista_or_later;	   
+volatile long  dc_io_count;
 u32            dc_conf_flags; /* config flags readed from registry  */
 u32            dc_load_flags; /* other flags setted by driver       */
 u32            dc_boot_kbs;   /* bootloader base memory size in kbs */
@@ -111,7 +109,7 @@ static NTSTATUS dc_dispatch_irp(PDEVICE_OBJECT dev_obj, PIRP irp)
 			break;
 		}
 	}	
-	status = IoAcquireRemoveLock(&hook->remv_lock, irp);
+	status = IoAcquireRemoveLock(&hook->remove_lock, irp);
 
 	if (NT_SUCCESS(status) == FALSE) {
 		if (irp_sp->MajorFunction == IRP_MJ_POWER) PoStartNextPowerIrp(irp);
@@ -240,19 +238,49 @@ static int dc_get_cpu_count()
 	return count;
 }
 
+BOOLEAN dc_prepare_for_dumping(IN  BOOLEAN  is_hibernation, // FALSE for crashdumping, TRUE for hibernation
+	                           IN  BOOLEAN  is_dump_begins, // FALSE for get information only
+							   OUT PVOID*   operation_devhook OPTIONAL)
+{
+	dev_hook* hook;
+	ULONG     humber_of_mounts = 0;
+	BOOLEAN   dump_device_encrypted = FALSE;
+	ULONG     found_dump_devices = 0;
+
+	if (hook = dc_first_hook()) 
+	{
+		do 
+		{
+			if (hook->flags & (is_hibernation ? F_HIBERNATE : F_CRASHDUMP))
+			{
+				// dump device must be mounted,
+				// dump device must not contain unencrypted part
+				// and encryption keys must not been erased by dc_clean_keys / mm_clean_secure_memory
+				dump_device_encrypted = (hook->flags & F_ENABLED) != 0 &&
+					                    ( (hook->flags & F_SYNC) == 0 || (hook->flags & F_REENCRYPT) != 0 ) &&
+										( (hook->dsk_key.encrypt != NULL) && (hook->tmp_key == NULL || hook->tmp_key->encrypt != NULL) );
+				found_dump_devices++;
+				if (operation_devhook) *operation_devhook = dump_device_encrypted ? hook : NULL;
+			}
+			humber_of_mounts += (hook->flags & F_ENABLED) != 0;
+		} while (hook = dc_next_hook(hook));
+	}
+
+	// clean passwords cache if dumping operation begins, no active mounts and dump device is not encrypted
+	if (is_dump_begins && humber_of_mounts == 0 && !dump_device_encrypted) dc_clean_pass_cache();
+
+	// operation allowed if no active mounts, or dump device is correctly encrypted
+	return ( humber_of_mounts == 0 || (found_dump_devices == 1 && dump_device_encrypted) );
+}
+
 NTSTATUS 
   DriverEntry(
 	IN PDRIVER_OBJECT  DriverObject,
     IN PUNICODE_STRING RegistryPath
 	)
 {
-	NTSTATUS status = STATUS_DRIVER_INTERNAL_ERROR;
-	ULONG    maj_ver;
-	ULONG    min_ver;
+	NTSTATUS status;
 	int      num;
-
-	PsGetVersion(&maj_ver, &min_ver, NULL, NULL);
-	dc_is_vista_or_later = (maj_ver >= 6);
 
 #ifdef DBG_MSG
 	dc_dbg_init();
@@ -263,12 +291,11 @@ NTSTATUS
 	dc_cpu_count = dc_get_cpu_count();
 	DbgMsg("%d processors detected\n", dc_cpu_count);
 
+	mm_init();
 	dc_load_config(RegistryPath);
 	dc_init_encryption();
 	dc_init_devhook(); 
 	dc_init_mount();
-	mm_init(); 
-	mm_init_mem_lock();
 	io_init();
 	dc_get_boot_pass();
 	dc_check_base_mem();
@@ -281,31 +308,44 @@ NTSTATUS
 	}
 	DriverObject->DriverExtension->AddDevice = dc_add_device;
 
-	do
-	{
-		// init random number generator
-		if (cp_rand_init() != ST_OK) break;
-		// initialize crashdump port driver hooking
-		if (dump_hook_init(DriverObject) == 0) break;
-		// initialize multithreaded encryption
-		if (cp_init_fast_crypt() != ST_OK) break;
-		// initialize dcrypt device
-		if (dc_create_control_device(DriverObject) != ST_OK) break;
-		// all initialized OK
-		status = STATUS_SUCCESS;
-		// register reinit routine for complete automounting and clear cached passwords
-		IoRegisterDriverReinitialization(DriverObject, dc_reinit_routine, NULL);
-	} while (0);
+	// init random number generator
+	if (cp_rand_init() != ST_OK) {
+		status = STATUS_UNSUCCESSFUL;
+		goto cleanup;
+	}
+	
+	// initialize crashdump port hooking
+	if ( NT_SUCCESS(status = dump_hook_init(DriverObject)) == FALSE ) {
+		goto cleanup;
+	}
 
+	// initialize multithreaded encryption
+	if (cp_init_fast_crypt() != ST_OK) {
+		status = STATUS_UNSUCCESSFUL;
+		goto cleanup;
+	}
+
+	// initialize dcrypt device
+	if (dc_create_control_device(DriverObject) != ST_OK) {
+		status = STATUS_UNSUCCESSFUL;
+		goto cleanup;
+	}
+	// all initialized OK
+	status = STATUS_SUCCESS;
+	
+	// register reinit routine for complete automounting and clear cached passwords	
+	IoRegisterDriverReinitialization(DriverObject, dc_reinit_routine, NULL);
+	
 	// secondary reseed PRNG after all operations
 	cp_rand_reseed();
 	
+cleanup:
 	// free resources if initialization failed
 	if (NT_SUCCESS(status) == FALSE) 
 	{
 		cp_free_fast_crypt();
-		mm_uninit();
 		io_free();
+		mm_uninit();
 	}
 	return status;
 }

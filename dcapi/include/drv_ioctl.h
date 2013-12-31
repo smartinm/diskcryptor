@@ -18,9 +18,7 @@ int dc_api dc_next_volume(vol_inf *info);
 
 int  dc_api dc_is_old_runned();
 int  dc_api dc_open_device();
-void dc_api dc_close_device();
 int  dc_api dc_get_version();
-int  dc_api dc_clean_pass_cache();
 
 int dc_api dc_get_boot_device(wchar_t *device);
 
@@ -48,20 +46,13 @@ int dc_api dc_sync_enc_state(wchar_t *device);
 
 int dc_api dc_get_device_status(wchar_t *device, dc_status *status);
 
-int dc_api dc_add_seed(void *data, int size);
-int dc_api dc_get_random(void *data, int size);
-
 int dc_api dc_benchmark(int cipher, dc_bench_info *info);
 
-int dc_api dc_get_conf_flags(dc_conf *conf);
-int dc_api dc_set_conf_flags(dc_conf *conf);
+DWORD dc_api dc_device_control(DWORD dwIoControlCode, LPCVOID lpInBuffer, DWORD nInBufferSize, LPVOID lpOutBuffer, DWORD nOutBufferSize);
 
 void dc_api dc_get_bsod();
 
 int dc_api dc_backup_header(wchar_t *device, dc_pass *password, void *out);
 int dc_api dc_restore_header(wchar_t *device, dc_pass *password, void *in);
-
-int dc_api dc_lock_memory(void *data, u32 size);
-int dc_api dc_unlock_memory(void *data);
 
 #endif

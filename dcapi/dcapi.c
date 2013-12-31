@@ -1,7 +1,7 @@
 ﻿/*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2009
+	* Copyright (c) 2009-2013
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * 
 
@@ -22,8 +22,9 @@
 #include "defines.h"
 #include "dcapi.h"
 
-static HINSTANCE h_inst_dll;
-       u32       h_tls_idx;
+static HANDLE g_dc_mutex;
+HINSTANCE     g_inst_dll;
+DWORD         g_tls_index;
 
 void *dc_extract_rsrc(int *size, int id)
 {
@@ -32,51 +33,36 @@ void *dc_extract_rsrc(int *size, int id)
 	PVOID   data = NULL;
 
 	hres = FindResource(
-		h_inst_dll, MAKEINTRESOURCE(id), L"EXEFILE");
+		g_inst_dll, MAKEINTRESOURCE(id), L"EXEFILE");
 	
 	if (hres != NULL) 
 	{
-		size[0] = SizeofResource(h_inst_dll, hres);
-		hglb  = LoadResource(h_inst_dll, hres);
+		size[0] = SizeofResource(g_inst_dll, hres);
+		hglb  = LoadResource(g_inst_dll, hres);
 		data  = LockResource(hglb);
 	} 
 
 	return data;
 }
 
-u32 dc_get_prog_path(wchar_t *path, u32 n_size)
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpvReserved)
 {
-	u32 len;
+	HANDLE h_device;
 
-	len = GetModuleFileName(
-		h_inst_dll, path, n_size);
-
-	path[len] = 0;
-
-	while ( (len != 0) && (path[len] != L'\\') ) {
-		len--;
-	}
-
-	path[len] = 0;
-
-	return len;
-}
-
-BOOL WINAPI DllMain(
-    HINSTANCE h_inst, u32 dw_reason, void *reserved
-	)
-{
-	if (dw_reason == DLL_PROCESS_ATTACH)
+	switch (dwReason)
 	{
-		h_tls_idx  = TlsAlloc();
-		h_inst_dll = h_inst;
-
-		if (h_tls_idx != TLS_OUT_OF_INDEXES) {
-			DisableThreadLibraryCalls(h_inst);
-		} else {
-			return FALSE;
-		}
-		CreateMutex(NULL, FALSE, L"DISKCRYPTOR_MUTEX");
+		case DLL_PROCESS_ATTACH:
+			if ( (g_tls_index = TlsAlloc()) == TLS_OUT_OF_INDEXES ) return FALSE;
+			g_dc_mutex = CreateMutex(NULL, FALSE, L"DISKCRYPTOR_MUTEX");
+			g_inst_dll = hinstDLL;
+		break;
+		case DLL_PROCESS_DETACH:
+			if (g_dc_mutex != NULL) CloseHandle(g_dc_mutex);
+			TlsFree(g_tls_index);
+		break;
+		case DLL_THREAD_DETACH:
+			if ( (h_device = TlsGetValue(g_tls_index)) != NULL ) CloseHandle(h_device);
+		break;
 	}
 	return TRUE;
 }

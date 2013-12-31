@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <conio.h>
 #include "sha512_test.h"
+#include "sha512_hmac_test.h"
 #include "pkcs5_test.h"
 #include "aes_test.h"
 #include "twofish_test.h"
@@ -17,10 +18,13 @@
 	#include "xts_serpent_sse2.h"
 	#include "xts_serpent_avx.h"
 	#include "crc32_test.h"
+	#include "sha512_hmac_drbg_test.h"
 #endif
 
 int main(int argc, char *argv[])
 {
+	BOOLEAN passed = TRUE;
+
 #if !defined(SMALL_CODE) || !defined(_M_X64)
 	printf("VIA-Padlock support: %d\n", aes256_padlock_available());
 #endif
@@ -28,17 +32,78 @@ int main(int argc, char *argv[])
 	printf("AES-NI support: %d\n", xts_aes_ni_available());
 	printf("SSE2 support: %d\n", xts_serpent_sse2_available());
 	printf("AVX  support: %d\n", xts_serpent_avx_available());
-	printf("crc32: %d\n", test_crc32());
-#endif	
-	printf("sha512: %d\n", test_sha512());
-	printf("pkcs5: %d\n", test_pkcs5());
-	printf("Aes-256: %d\n", test_aes256());
-	printf("Twofish-256: %d\n", test_twofish256());
-	printf("Seprent-256: %d\n", test_serpent256());
-	printf("XTS: %d\n", test_xts_mode());
+	printf("--------------------------\n");
+
+	if ( test_crc32() ) {
+		printf("crc32: PASSED\n");
+	} else {
+		printf("crc32: FAILED\n");
+		passed = FALSE;
+	}
+#endif
+	if ( test_sha512() ) {
+		printf("sha512: PASSED\n");
+	} else {
+		printf("sha512: FAILED\n");
+		passed = FALSE;
+	}
+	if ( test_sha512_hmac() ) {
+		printf("SHA512-HMAC: PASSED\n");
+	} else {
+		printf("SHA512-HMAC: FAILED\n");
+		passed = FALSE;
+	}
+#ifndef SMALL_CODE
+	if ( test_sha512_hmac_drbg() ) {
+		printf("SHA512-HMAC-DRBG: PASSED\n");
+	} else {
+		printf("SHA512-HMAC-DRBG: FAILED\n");
+		passed = FALSE;
+	}
+#endif
+	if ( test_pkcs5() ) {
+		printf("pkcs5: PASSED\n");
+	} else {
+		printf("pkcs5: FAILED\n");
+		passed = FALSE;
+	}
+	if ( test_aes256() ) {
+		printf("Aes-256: PASSED\n");
+	} else {
+		printf("Aes-256: FAILED\n");
+		passed = FALSE;
+	}
+	if ( test_twofish256() ) {
+		printf("Twofish-256: PASSED\n");
+	} else {
+		printf("Twofish-256: FAILED\n");
+		passed = FALSE;
+	}
+	if ( test_serpent256() ) {
+		printf("Seprent-256: PASSED\n");
+	} else {
+		printf("Seprent-256: FAILED\n");
+		passed = FALSE;
+	}
+
+	if ( test_xts_mode() ) {
+		printf("XTS (all ciphers): PASSED\n");
+	} else {
+		printf("XTS (all ciphers): FAILED\n");
+		passed = FALSE;
+	}
+
 #ifdef SMALL_CODE
-	printf("XTS-AES: %d\n", test_xts_aes_only());
+	if ( test_xts_aes_only() ) {
+		printf("XTS-AES: PASSED\n");
+	} else {
+		printf("XTS-AES: FAILED\n");
+		passed = FALSE;
+	}
 #endif
 
-	_getch(); return 0;
+	printf("--------------------------\n");
+	printf("TOTAL: %s\n", passed ? "PASSED" : "FAILED");
+	_getch();
+	return 0;
 }

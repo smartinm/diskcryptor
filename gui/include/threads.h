@@ -1,10 +1,7 @@
 #ifndef _THREADS_
 #define _THREADS_
 
-int _drv_action(
-		int action, 
-		int version
-	);
+DWORD _drv_action(int action, int version);
 
 _dact *_create_act_thread(
 		_dnode *node,

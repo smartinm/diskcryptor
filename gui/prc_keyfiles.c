@@ -243,7 +243,9 @@ _keyfiles_dlg_proc(
 							hwnd, s_file, countof(s_file), L"Save 64 bytes random keyfile as.."
 						) )
 					{
-						if ( (rlt = dc_get_random(keyfile, sizeof(keyfile))) == ST_OK ) 
+						rlt = dc_device_control(DC_CTL_GET_RAND, NULL, 0, keyfile, sizeof(keyfile)) == NO_ERROR ? ST_OK : ST_ERROR;
+
+						if ( rlt == ST_OK ) 
 						{
 							rlt = save_file(s_file, keyfile, sizeof(keyfile));
 							burn(keyfile, sizeof(keyfile));

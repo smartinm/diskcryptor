@@ -91,7 +91,6 @@ _thread_format_proc(
 		_finish_formating( node );
 	}
 	LeaveCriticalSection( &crit_sect );
-	dc_close_device( );
 
 	return 1L;
 
@@ -179,7 +178,6 @@ _thread_enc_dec_proc(
 	dc_sync_enc_state(device);
 	LeaveCriticalSection(&crit_sect);
 
-	dc_close_device( );
 	return 1L;
 
 }

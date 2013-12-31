@@ -29,7 +29,6 @@
     <ClCompile Include="fast_crypt.c" />
     <ClCompile Include="header_io.c" />
     <ClCompile Include="io_control.c" />
-    <ClCompile Include="mem_lock.c" />
     <ClCompile Include="minifilter.c" />
     <ClCompile Include="misc.c" />
     <ClCompile Include="misc_irp.c" />
@@ -59,7 +58,6 @@
     <ClInclude Include="include\header_io.h" />
     <ClInclude Include="include\inbv.h" />
     <ClInclude Include="include\io_control.h" />
-    <ClInclude Include="include\mem_lock.h" />
     <ClInclude Include="include\minifilter.h" />
     <ClInclude Include="include\misc.h" />
     <ClInclude Include="include\misc_irp.h" />

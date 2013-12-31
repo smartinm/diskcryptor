@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2010
+    * Copyright (c) 2010-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -21,282 +21,246 @@
 #include <ntifs.h>
 #include <fltKernel.h>
 #include <ntstrsafe.h>
-#include "defines.h"
 #include "minifilter.h"
-#include "debug.h"
 #include "devhook.h"
 #include "misc_volume.h"
+#include "debug.h"
 
 typedef struct _mf_context {
-	dev_hook *hook;
-	u64       dcsys_id;
+	dev_hook* dev_hook;
+	LONGLONG  dcsys_id;
+
 } mf_context;
 
-static NTSTATUS mf_instance_setup(
-  PCFLT_RELATED_OBJECTS objects, FLT_INSTANCE_SETUP_FLAGS flags, DEVICE_TYPE dev_type, FLT_FILESYSTEM_TYPE fs_type)
+static NTSTATUS FLTAPI mf_instance_setup_callback(IN PCFLT_RELATED_OBJECTS    FltObjects,
+	                                              IN FLT_INSTANCE_SETUP_FLAGS Flags,
+										          IN DEVICE_TYPE              VolumeDeviceType,
+										          IN FLT_FILESYSTEM_TYPE      VolumeFilesystemType)
 {
 	wchar_t        buff[128];
-	UNICODE_STRING name = { 0, 127, buff };
-	dev_hook      *hook;
-	NTSTATUS       status;
-	mf_context    *mf_ctx;
+	UNICODE_STRING name = { 0, sizeof(buff) - sizeof(wchar_t), buff };
+	dev_hook*      hook = NULL;
+	mf_context*    mf_ctx = NULL;
+	NTSTATUS       status = STATUS_FLT_DO_NOT_ATTACH;
 
-	if (dev_type != FILE_DEVICE_DISK_FILE_SYSTEM) {
-		return STATUS_FLT_DO_NOT_ATTACH;
-	}
-	if (NT_SUCCESS(FltGetVolumeName(objects->Volume, &name, NULL)) == FALSE) {
-		return STATUS_FLT_DO_NOT_ATTACH;
-	} else {
-		name.Buffer[name.Length / sizeof(wchar_t)] = 0;
-	}
-	if ( (hook = dc_find_hook(name.Buffer)) == NULL ) {
-		return STATUS_FLT_DO_NOT_ATTACH;
-	}
-	status = FltAllocateContext(
-		objects->Filter, FLT_INSTANCE_CONTEXT, sizeof(mf_context), NonPagedPool, &mf_ctx);
+	// attach only to disk file systems
+	if (VolumeDeviceType != FILE_DEVICE_DISK_FILE_SYSTEM) goto cleanup;
+	
+	// get volume device name and find corresponding hook device
+	if ( !NT_SUCCESS(FltGetVolumeName(FltObjects->Volume, &name, NULL)) ) goto cleanup;
+	name.Buffer[name.Length / sizeof(wchar_t)] = 0;
+	if ( (hook = dc_find_hook(name.Buffer)) == NULL ) goto cleanup;
 
-	if (NT_SUCCESS(status) == FALSE) {
-		dc_deref_hook(hook); return STATUS_FLT_DO_NOT_ATTACH;
-	} else {
-		mf_ctx->hook = hook; mf_ctx->dcsys_id = 0;
-	}
-	status = FltSetInstanceContext(
-		objects->Instance, FLT_SET_CONTEXT_KEEP_IF_EXISTS, mf_ctx, NULL);
+	// allocate and set new filter instance context
+	if ( !NT_SUCCESS(FltAllocateContext(FltObjects->Filter,
+		                                FLT_INSTANCE_CONTEXT, sizeof(mf_context), NonPagedPool, (PVOID*)&mf_ctx)) ) goto cleanup;
 
-	FltReleaseContext(mf_ctx);
+	mf_ctx->dev_hook = hook;
+	mf_ctx->dcsys_id = 0;
 
-	if (NT_SUCCESS(status) == FALSE) {
-		dc_deref_hook(hook); return STATUS_FLT_DO_NOT_ATTACH;
-	}
-	return STATUS_SUCCESS;
+	if ( !NT_SUCCESS(FltSetInstanceContext(FltObjects->Instance, FLT_SET_CONTEXT_KEEP_IF_EXISTS, mf_ctx, NULL)) ) goto cleanup;
+	status = STATUS_SUCCESS;
+
+cleanup:
+	if (mf_ctx != NULL) FltReleaseContext(mf_ctx);
+	if (status != STATUS_SUCCESS && hook != NULL) dc_deref_hook(hook);
+	return status;
 }
 
-static void mf_teardown_complete(
-  PCFLT_RELATED_OBJECTS objects, FLT_INSTANCE_TEARDOWN_FLAGS reason)
+static void FLTAPI mf_teardown_complete_callback(IN PCFLT_RELATED_OBJECTS       FltObjects,
+	                                             IN FLT_INSTANCE_TEARDOWN_FLAGS Reason)
 {
-	mf_context *mf_ctx;
+	mf_context* mf_ctx;
 
-	if ( (NT_SUCCESS(FltGetInstanceContext(objects->Instance, &mf_ctx)) == FALSE) ||
-		 (mf_ctx == NULL) )
+	if (NT_SUCCESS(FltDeleteInstanceContext(FltObjects->Instance, (PVOID*)&mf_ctx)) && mf_ctx != NULL)
 	{
-		return;
+		// Workaround for strange crashes when disconnecting USB devices
+		if ( !MmIsAddressValid(mf_ctx) ||
+			 !MmIsAddressValid(mf_ctx->dev_hook) ||
+			 !MmIsAddressValid(mf_ctx->dev_hook->pdo_dev) )
+		{
+			return;
+		}
+
+		if (mf_ctx->dev_hook != NULL) dc_deref_hook(mf_ctx->dev_hook);
+		FltReleaseContext(mf_ctx);
 	}
-	dc_deref_hook(mf_ctx->hook);
-		
-	FltDeleteContext(mf_ctx);
-	FltReleaseContext(mf_ctx);
 }
 
-static int is_dcsys(wchar_t *buff, u32 length)
+static LONGLONG mf_query_dcsys_id(dev_hook* hook, PCFLT_RELATED_OBJECTS objects)
 {
-	return (length >= 14) && ((length == 14) || (buff[7] == L':')) &&
-		   (_wcsnicmp(buff, L"$dcsys$", 7) == 0);
-}
-
-static u64 mf_query_dcsys_id(dev_hook *hook, PCFLT_RELATED_OBJECTS objects)
-{
-	wchar_t                   buff[MAX_PATH];
-	FILE_INTERNAL_INFORMATION info;
+	wchar_t                   buff[128];
+	FILE_INTERNAL_INFORMATION info = { 0 };
 	OBJECT_ATTRIBUTES         obj_a;
 	UNICODE_STRING            name;
 	IO_STATUS_BLOCK           iosb;
 	HANDLE                    h_file = NULL;
 	PFILE_OBJECT              p_file = NULL;
-	NTSTATUS                  status;
 
-	status = RtlStringCchPrintfW(buff, MAX_PATH, L"%s\\$dcsys$", hook->dev_name);
-	if (NT_SUCCESS(status) == FALSE) return 0;
+	if ( !NT_SUCCESS(RtlStringCchPrintfW(buff, (sizeof(buff) / sizeof(buff[0])), L"%s\\$dcsys$", hook->dev_name)) )
+	{
+		goto cleanup;
+	}
 
 	RtlInitUnicodeString(&name, buff);
 	InitializeObjectAttributes(&obj_a, &name, OBJ_KERNEL_HANDLE, NULL, NULL);
 
-	status = FltCreateFile(objects->Filter, objects->Instance, &h_file, GENERIC_READ, 
-		&obj_a, &iosb, NULL, 0, FILE_SHARE_READ, FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0, 0);
-
-	if (NT_SUCCESS(status) == FALSE) {
-		h_file = NULL; goto exit;
+	if ( !NT_SUCCESS(FltCreateFile(objects->Filter,
+		                           objects->Instance, &h_file, GENERIC_READ, 
+								   &obj_a, &iosb, NULL, 0, FILE_SHARE_READ, FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0, 0)) )
+	{
+		h_file = NULL;
+		goto cleanup;
 	}
-	status = ObReferenceObjectByHandle(h_file, 0, NULL, KernelMode, &p_file, NULL);
 
-	if (NT_SUCCESS(status) == FALSE) {
-		p_file = NULL; goto exit;
+	if ( !NT_SUCCESS(ObReferenceObjectByHandle(h_file, 0, NULL, KernelMode, (PVOID*)&p_file, NULL)) )
+	{
+		p_file = NULL;
+		goto cleanup;
 	}
-	status = FltQueryInformationFile(
-		objects->Instance, p_file, &info, sizeof(info), FileInternalInformation, NULL);
-exit:
+
+	if ( !NT_SUCCESS(FltQueryInformationFile(objects->Instance, p_file, &info, sizeof(info), FileInternalInformation, NULL)) )
+	{
+		info.IndexNumber.QuadPart = 0;
+	}
+
+cleanup:
 	if (p_file != NULL) ObDereferenceObject(p_file);
 	if (h_file != NULL) FltClose(h_file);
-
-	return NT_SUCCESS(status) != FALSE ? info.IndexNumber.QuadPart : 0;
+	return info.IndexNumber.QuadPart;
 }
 
-static FLT_PREOP_CALLBACK_STATUS mf_irp_mj_create(
-  PFLT_CALLBACK_DATA data, PCFLT_RELATED_OBJECTS objects, PVOID *post_ctx)
+static BOOLEAN is_dcsys_name(const wchar_t* buff, ULONG length)
 {
-	mf_context *mf_ctx;
-	wchar_t    *p_buff = objects->FileObject->FileName.Buffer;
-	u16         length = objects->FileObject->FileName.Length;
-	int         denied = 0;
+	return length >= 14 && (length == 14 || buff[7] == L':') && _wcsnicmp(buff, L"$dcsys$", 7) == 0;
+}
 
-	if ( (NT_SUCCESS(FltGetInstanceContext(objects->Instance, &mf_ctx)) == FALSE) ||
-		 (mf_ctx == NULL) )
+static FLT_PREOP_CALLBACK_STATUS FLTAPI mf_irp_mj_create(IN OUT PFLT_CALLBACK_DATA    Data,
+	                                                     IN     PCFLT_RELATED_OBJECTS FltObjects,
+												         OUT    PVOID*                CompletionContext)
+{
+	mf_context* mf_ctx;
+	wchar_t*    p_buff = FltObjects->FileObject->FileName.Buffer;
+	USHORT      length = FltObjects->FileObject->FileName.Length;
+	BOOLEAN     denied = FALSE;
+
+	if ( !NT_SUCCESS(FltGetInstanceContext(FltObjects->Instance, (PVOID*)&mf_ctx)) || mf_ctx == NULL )
 	{
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
-	if (mf_ctx->hook->flags & F_PROTECT_DCSYS)
+
+	if (mf_ctx->dev_hook && (mf_ctx->dev_hook->flags & F_PROTECT_DCSYS))
 	{
-		if (data->Iopb->Parameters.Create.Options & FILE_OPEN_BY_FILE_ID)
+		if (Data->Iopb->Parameters.Create.Options & FILE_OPEN_BY_FILE_ID)
 		{
-			if ( (mf_ctx->dcsys_id == 0) && (KeGetCurrentIrql() == PASSIVE_LEVEL) ) {
-				mf_ctx->dcsys_id = mf_query_dcsys_id(mf_ctx->hook, objects);
+			if (mf_ctx->dcsys_id == 0 && KeGetCurrentIrql() == PASSIVE_LEVEL)
+			{
+				mf_ctx->dcsys_id = mf_query_dcsys_id(mf_ctx->dev_hook, FltObjects);
 			}
-			denied = (mf_ctx->dcsys_id != 0) && 
-				     (length == 8) && (p64(p_buff)[0] == mf_ctx->dcsys_id);
-		} else
-		{
-			while (length != 0 && p_buff[0] == L'\\') {
-				p_buff++, length -= sizeof(wchar_t);
-			}
-			denied = is_dcsys(p_buff, length);
+			denied = (mf_ctx->dcsys_id != 0) &&
+				     (length == sizeof(LARGE_INTEGER) && ((PLARGE_INTEGER)p_buff)->QuadPart == mf_ctx->dcsys_id);
+		} else {
+			while (length >= sizeof(wchar_t) && p_buff[0] == L'\\') p_buff++, length -= sizeof(wchar_t);
+			denied = is_dcsys_name(p_buff, length);
+		}
+
+		if (denied) {
+			Data->IoStatus.Status      = STATUS_ACCESS_DENIED;
+			Data->IoStatus.Information = 0;
 		}
 	}
 	FltReleaseContext(mf_ctx);
-
-	if (denied != 0) 
-	{
-		data->IoStatus.Status      = STATUS_ACCESS_DENIED; 
-		data->IoStatus.Information = 0;
-
-		return FLT_PREOP_COMPLETE;
-	}
-	return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	return denied ? FLT_PREOP_COMPLETE : FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
-static FLT_PREOP_CALLBACK_STATUS mf_directory_control(
-  PFLT_CALLBACK_DATA data, PCFLT_RELATED_OBJECTS objects, PVOID *post_ctx)
+static FLT_PREOP_CALLBACK_STATUS FLTAPI mf_directory_control(IN OUT PFLT_CALLBACK_DATA    Data,
+	                                                         IN     PCFLT_RELATED_OBJECTS FltObjects,
+												             OUT    PVOID*                CompletionContext)
 {
-	FILE_INFORMATION_CLASS i_class;
-	int                    is_root;
-	mf_context            *mf_ctx;
-	int                    postop;
+	mf_context* mf_ctx;
+	BOOLEAN     postop_needed = FALSE;
 
-	if ( (dc_conf_flags & CONF_HIDE_DCSYS) == 0 || data->Iopb->MinorFunction != IRP_MN_QUERY_DIRECTORY ) {
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-	}
-	i_class = data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass;
-
-	if (i_class != FileBothDirectoryInformation && i_class != FileDirectoryInformation &&
-		i_class != FileFullDirectoryInformation && i_class != FileIdBothDirectoryInformation &&
-		i_class != FileIdFullDirectoryInformation && i_class != FileNamesInformation)
+	if ( (dc_conf_flags & CONF_HIDE_DCSYS) == 0 || Data->Iopb->MinorFunction != IRP_MN_QUERY_DIRECTORY )
 	{
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
-	__try
+	if (Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileBothDirectoryInformation &&
+		Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileDirectoryInformation &&
+		Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileFullDirectoryInformation &&
+		Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileIdBothDirectoryInformation &&
+		Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileIdFullDirectoryInformation &&
+		Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass != FileNamesInformation)
 	{
-		is_root = objects->FileObject->FileName.Length == sizeof(wchar_t) &&
-			      objects->FileObject->FileName.Buffer && objects->FileObject->FileName.Buffer[0] == L'\\';
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	}
+	__try {
+		if (FltObjects->FileObject->FileName.Length != sizeof(wchar_t)) return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		if (FltObjects->FileObject->FileName.Buffer == NULL || FltObjects->FileObject->FileName.Buffer[0] != L'\\') return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER) {
-		is_root = 0;
-	}
-	if (is_root == 0) {
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
-	if ( (NT_SUCCESS(FltGetInstanceContext(objects->Instance, &mf_ctx)) != FALSE) &&
-		 (mf_ctx != NULL) )
+	
+	if ( NT_SUCCESS(FltGetInstanceContext(FltObjects->Instance, (PVOID*)&mf_ctx)) && mf_ctx != NULL )
 	{
-		postop = (mf_ctx->hook->flags & F_PROTECT_DCSYS) != 0;
+		postop_needed = mf_ctx->dev_hook && (mf_ctx->dev_hook->flags & F_PROTECT_DCSYS) != 0;
 		FltReleaseContext(mf_ctx);
-	} else {
-		postop = 0;
 	}
-	return postop != 0 ? FLT_PREOP_SYNCHRONIZE : FLT_PREOP_SUCCESS_NO_CALLBACK;
+	return postop_needed ? FLT_PREOP_SYNCHRONIZE : FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
-static int is_dcsys_di(void *di, FILE_INFORMATION_CLASS i_class)
+static BOOLEAN is_dcsys_info_entry(FILE_INFORMATION_CLASS entry_class, PVOID entry)
 {
-	wchar_t *f_name;
-	u32      length;
-
-	switch (i_class) 
+	switch (entry_class) 
 	{
-		case FileBothDirectoryInformation: 
-			{
-				FILE_BOTH_DIR_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+		case FileBothDirectoryInformation:
+			return is_dcsys_name(((PFILE_BOTH_DIR_INFORMATION)entry)->FileName, ((PFILE_BOTH_DIR_INFORMATION)entry)->FileNameLength);
 		case FileDirectoryInformation:
-			{
-				FILE_DIRECTORY_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+			return is_dcsys_name(((PFILE_DIRECTORY_INFORMATION)entry)->FileName, ((PFILE_DIRECTORY_INFORMATION)entry)->FileNameLength);
 		case FileFullDirectoryInformation:
-			{
-				FILE_FULL_DIR_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+			return is_dcsys_name(((PFILE_FULL_DIR_INFORMATION)entry)->FileName, ((PFILE_FULL_DIR_INFORMATION)entry)->FileNameLength);
 		case FileIdBothDirectoryInformation:
-			{
-				FILE_ID_BOTH_DIR_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+			return is_dcsys_name(((PFILE_ID_BOTH_DIR_INFORMATION)entry)->FileName, ((PFILE_ID_BOTH_DIR_INFORMATION)entry)->FileNameLength);
 		case FileIdFullDirectoryInformation:
-			{
-				FILE_ID_FULL_DIR_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+			return is_dcsys_name(((PFILE_ID_FULL_DIR_INFORMATION)entry)->FileName, ((PFILE_ID_FULL_DIR_INFORMATION)entry)->FileNameLength);
 		case FileNamesInformation:
-			{
-				FILE_NAMES_INFORMATION *inf = di;
-				f_name = inf->FileName; 
-				length = inf->FileNameLength;
-			}
-		break;
+			return is_dcsys_name(((PFILE_NAMES_INFORMATION)entry)->FileName, ((PFILE_NAMES_INFORMATION)entry)->FileNameLength);
 	}
-	return is_dcsys(f_name, length);
+	return FALSE;
 }
 
-
-static FLT_POSTOP_CALLBACK_STATUS mf_post_directory_control(
-  PFLT_CALLBACK_DATA data, PCFLT_RELATED_OBJECTS objects, void *context, FLT_POST_OPERATION_FLAGS flags)
+static FLT_POSTOP_CALLBACK_STATUS FLTAPI mf_post_directory_control(IN OUT PFLT_CALLBACK_DATA       Data,
+	                                                               IN     PCFLT_RELATED_OBJECTS    FltObjects,
+																   IN     PVOID                    CompletionContext,
+																   IN     FLT_POST_OPERATION_FLAGS Flags)
 {
-	FILE_INFORMATION_CLASS     i_class = data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass;
-	FILE_BOTH_DIR_INFORMATION *cur_dir = data->Iopb->Parameters.DirectoryControl.QueryDirectory.DirectoryBuffer;
-	FILE_BOTH_DIR_INFORMATION *lst_dir = NULL;
-	u32                        length  = data->Iopb->Parameters.DirectoryControl.QueryDirectory.Length;
+	FILE_INFORMATION_CLASS     i_class = Data->Iopb->Parameters.DirectoryControl.QueryDirectory.FileInformationClass;
+	PFILE_BOTH_DIR_INFORMATION cur_dir = (PFILE_BOTH_DIR_INFORMATION)Data->Iopb->Parameters.DirectoryControl.QueryDirectory.DirectoryBuffer;
+	PFILE_BOTH_DIR_INFORMATION lst_dir = (PFILE_BOTH_DIR_INFORMATION)NULL;
+	ULONG                      length  = Data->Iopb->Parameters.DirectoryControl.QueryDirectory.Length;
 
-	if (NT_SUCCESS(data->IoStatus.Status) == FALSE) {
+	if (NT_SUCCESS(Data->IoStatus.Status) == FALSE)
+	{
 		return FLT_POSTOP_FINISHED_PROCESSING;
 	}
 	__try
 	{
-		if (data->Iopb->OperationFlags & SL_RETURN_SINGLE_ENTRY)
+		if (Data->Iopb->OperationFlags & SL_RETURN_SINGLE_ENTRY)
 		{
-			if (is_dcsys_di(cur_dir, i_class) != 0)
+			if (is_dcsys_info_entry(i_class, cur_dir))
 			{
-				if (data->Iopb->OperationFlags & SL_RESTART_SCAN)
-				{
-					data->IoStatus.Status      = STATUS_NO_MORE_FILES;
-					data->IoStatus.Information = 0;
+				if (Data->Iopb->OperationFlags & SL_RESTART_SCAN) {
+					Data->IoStatus.Status      = STATUS_NO_MORE_FILES;
+					Data->IoStatus.Information = 0;
 				} else {
-					FltReissueSynchronousIo(objects->Instance, data);
+					FltReissueSynchronousIo(FltObjects->Instance, Data);
 				}
 			}
 		} else
 		{
 			for (;;)
 			{
-				if (is_dcsys_di(cur_dir, i_class) != 0)
+				if (is_dcsys_info_entry(i_class, cur_dir))
 				{
 					if (cur_dir->NextEntryOffset != 0)
 					{
@@ -305,10 +269,9 @@ static FLT_POSTOP_CALLBACK_STATUS mf_post_directory_control(
 						}
 					} else
 					{
-						if (lst_dir == NULL)
-						{
-							data->IoStatus.Status      = STATUS_NO_MORE_FILES;
-							data->IoStatus.Information = 0;
+						if (lst_dir == NULL) {
+							Data->IoStatus.Status      = STATUS_NO_MORE_FILES;
+							Data->IoStatus.Information = 0;
 						} else {
 							lst_dir->NextEntryOffset = 0;
 						}
@@ -319,7 +282,7 @@ static FLT_POSTOP_CALLBACK_STATUS mf_post_directory_control(
 					break;
 				} else {
 					lst_dir = cur_dir; length -= cur_dir->NextEntryOffset; 
-					cur_dir = addof(cur_dir, cur_dir->NextEntryOffset);
+					cur_dir = (PFILE_BOTH_DIR_INFORMATION)((char*)cur_dir + cur_dir->NextEntryOffset);
 				}
 			}
 		}
@@ -329,44 +292,44 @@ static FLT_POSTOP_CALLBACK_STATUS mf_post_directory_control(
 	return FLT_POSTOP_FINISHED_PROCESSING;
 }
 
-static FLT_PREOP_CALLBACK_STATUS mf_filesystem_control(
-  PFLT_CALLBACK_DATA data, PCFLT_RELATED_OBJECTS objects, PVOID *post_ctx)
+static FLT_PREOP_CALLBACK_STATUS FLTAPI mf_filesystem_control(IN OUT PFLT_CALLBACK_DATA    Data,
+	                                                          IN     PCFLT_RELATED_OBJECTS FltObjects,
+												              OUT    PVOID*                CompletionContext)
 {
-	mf_context *mf_ctx;
-	void       *p_buff = data->Iopb->Parameters.FileSystemControl.Buffered.SystemBuffer;
-	u32         length = data->Iopb->Parameters.FileSystemControl.Buffered.InputBufferLength;
-	u32         fs_cod = data->Iopb->Parameters.FileSystemControl.Buffered.FsControlCode;
+	mf_context* mf_ctx;
+	PVOID       p_buff = Data->Iopb->Parameters.FileSystemControl.Buffered.SystemBuffer;
+	ULONG       length = Data->Iopb->Parameters.FileSystemControl.Buffered.InputBufferLength;
+	ULONG       c_code = Data->Iopb->Parameters.FileSystemControl.Buffered.FsControlCode;
 
-	if (data->Iopb->MinorFunction != IRP_MN_USER_FS_REQUEST) {
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-	}
-	if (fs_cod != FSCTL_EXTEND_VOLUME && fs_cod != FSCTL_SHRINK_VOLUME) {
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-	}
-	if ( (NT_SUCCESS(FltGetInstanceContext(objects->Instance, &mf_ctx)) != FALSE) &&
-		 (mf_ctx != NULL) )
+	if (Data->Iopb->MinorFunction != IRP_MN_USER_FS_REQUEST) return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	if (c_code != FSCTL_EXTEND_VOLUME && c_code != FSCTL_SHRINK_VOLUME) return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	
+	if ( !NT_SUCCESS(FltGetInstanceContext(FltObjects->Instance, (PVOID*)&mf_ctx)) || mf_ctx == NULL )
 	{
-		if (IS_STORAGE_ON_END(mf_ctx->hook->flags) != 0)
-		{
-			dc_update_volume(mf_ctx->hook);
-
-			if (fs_cod == FSCTL_EXTEND_VOLUME && length >= sizeof(u64)) {
-				p64(p_buff)[0] -= mf_ctx->hook->head_len / mf_ctx->hook->bps;
-			}
-			if (fs_cod == FSCTL_SHRINK_VOLUME && length >= sizeof(SHRINK_VOLUME_INFORMATION))
-			{
-				PSHRINK_VOLUME_INFORMATION info = p_buff;
-				dev_hook                  *hook = mf_ctx->hook;
-
-				if (info->NewNumberOfSectors != 0) {
-					info->NewNumberOfSectors -= hook->head_len / hook->bps;
-				}
-			}
-		}
-		FltReleaseContext(mf_ctx);
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 	}
+
+	if (mf_ctx->dev_hook && IS_STORAGE_ON_END(mf_ctx->dev_hook->flags) != 0)
+	{
+		ULONG header_sectors = mf_ctx->dev_hook->head_len / min(mf_ctx->dev_hook->bps, SECTOR_SIZE);
+		
+		if (c_code == FSCTL_SHRINK_VOLUME && length >= sizeof(SHRINK_VOLUME_INFORMATION))
+		{
+			((PSHRINK_VOLUME_INFORMATION)p_buff)->NewNumberOfSectors = ((PSHRINK_VOLUME_INFORMATION)p_buff)->NewNumberOfSectors > header_sectors ?
+				                                                       ((PSHRINK_VOLUME_INFORMATION)p_buff)->NewNumberOfSectors - header_sectors : 0;
+
+		} else if (c_code == FSCTL_EXTEND_VOLUME && length >= sizeof(u64)) {
+			((PLARGE_INTEGER)p_buff)->QuadPart -= header_sectors;
+		}
+		if ( !NT_SUCCESS(Data->IoStatus.Status = dc_update_volume(mf_ctx->dev_hook)) ) {
+			FltReleaseContext(mf_ctx);
+			return FLT_PREOP_COMPLETE;
+		}
+	}
+	FltReleaseContext(mf_ctx);
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
+
 
 static const FLT_OPERATION_REGISTRATION mf_op_callbacks[] = {
 	{ IRP_MJ_CREATE,              0, mf_irp_mj_create,      NULL },
@@ -387,10 +350,10 @@ static const FLT_REGISTRATION mf_registration = {
     mf_contexts,                                    //  Context
     mf_op_callbacks,                                //  Operation callbacks
     NULL,                                           //  MiniFilterUnload
-    mf_instance_setup,                              //  InstanceSetup
+    mf_instance_setup_callback,                     //  InstanceSetup
     NULL,                                           //  InstanceQueryTeardown
     NULL,                                           //  InstanceTeardownStart
-    mf_teardown_complete,                           //  InstanceTeardownComplete
+    mf_teardown_complete_callback,                  //  InstanceTeardownComplete
     NULL,                                           //  GenerateFileName
     NULL,                                           //  GenerateDestinationFileName
     NULL                                            //  NormalizeNameComponent

@@ -112,11 +112,11 @@ end;
 
 function InitializeUninstall(): Boolean;
 var
- resl: integer;
+ error: integer;
 begin
  Result := true;
- if not Exec(ExpandConstant('{app}\dcinst.exe'), '-isenc', '', SW_SHOW, ewWaitUntilTerminated, resl) then resl := 0;
- if resl = 51 { ST_ENCRYPTED } then begin  	
+ if not Exec(ExpandConstant('{app}\dcinst.exe'), '-isenc', '', SW_SHOW, ewWaitUntilTerminated, error) then error := 0;
+ if error = 51 { ST_ENCRYPTED } then begin
   MsgBox('DiskCryptor can not be uninstalled, because system boot device is encrypted.'#13#10+
          'Please decrypt this device and try again.', mbError, MB_OK);
   Result := false;
@@ -153,13 +153,13 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
  succs: boolean;
- resl: integer;
+ error: integer;
 begin
 	if CurStep = ssPostInstall then begin
     if IsTaskSelected('modifypath') then modpath();
-    succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-setup', '', SW_SHOW, ewWaitUntilTerminated, resl);
-    if ((not succs) or (resl <> 0)) and (not repair) then begin
-      MsgBox('Error occurred when installing driver (error code: ' + IntToStr(resl) + ' ).', mbError, MB_OK);
+    succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-setup', '', SW_SHOW, ewWaitUntilTerminated, error);
+    if ((not succs) or (error <> 0)) and (not repair) then begin
+      MsgBox('Error occurred when installing driver (error code: ' + IntToStr(error) + ' ).', mbError, MB_OK);
     end;
   end;
 end;
@@ -167,22 +167,22 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
  succs: boolean;
- resl: integer;
+ error: integer;
 begin
  if (CurUninstallStep = usUninstall) then begin
    modpath();
    RegDeleteValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'DiskCryptor');
    RegDeleteValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce', 'DiskCryptor');
-   succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-unins', '', SW_SHOW, ewWaitUntilTerminated, resl);
-   if (not succs) or (resl <> 0) then begin
-     MsgBox('Error occurred when removing driver (error code: ' + IntToStr(resl) + ' ).', mbError, MB_OK);
+   succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-unins', '', SW_SHOW, ewWaitUntilTerminated, error);
+   if (not succs) or (error <> 0) then begin
+     MsgBox('Error occurred when removing driver (error code: ' + IntToStr(error) + ' ).', mbError, MB_OK);
    end;
-   succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-isboot', '', SW_SHOW, ewWaitUntilTerminated, resl);
-   if succs and (resl = 0) then begin
+   succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-isboot', '', SW_SHOW, ewWaitUntilTerminated, error);
+   if succs and (error = 0) then begin
     if MsgBox('Uninstall DiskCryptor bootloader from you HDD?', mbConfirmation, MB_YESNO) = IDYES then begin
-      succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-unldr', '', SW_SHOW, ewWaitUntilTerminated, resl);
-      if (not succs) or (resl <> 0) then begin
-        MsgBox('Error occurred when removing bootloader (error code: ' + IntToStr(resl) + ' ).', mbError, MB_OK);
+      succs := Exec(ExpandConstant('{app}\dcinst.exe'), '-unldr', '', SW_SHOW, ewWaitUntilTerminated, error);
+      if (not succs) or (error <> 0) then begin
+        MsgBox('Error occurred when removing bootloader (error code: ' + IntToStr(error) + ' ).', mbError, MB_OK);
       end;
     end;
    end;

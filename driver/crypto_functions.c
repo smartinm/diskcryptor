@@ -25,8 +25,9 @@
 #include "aes_padlock.h"
 #include "xts_serpent_sse2.h"
 #include "xts_serpent_avx.h"
-#include "pkcs5.h"
+#include "sha512_pkcs5_2.h"
 #include "crc32.h"
+#include "misc_mem.h"
 
 typedef struct _XTS_TEST_CONTEXT {
 	unsigned char  key[XTS_FULL_KEY];
@@ -74,7 +75,7 @@ static const struct {
 static void dc_simple_encryption_test()
 {
 	PXTS_TEST_CONTEXT ctx;
-	char              dk[256];
+	unsigned char     dk[256];
 	unsigned long     e_crc, d_crc, i;
 
 	// test PKDBF2
@@ -94,7 +95,7 @@ static void dc_simple_encryption_test()
 
 	// test XTS engine if memory may be allocated
 	if ( (KeGetCurrentIrql() <= DISPATCH_LEVEL) &&
-		 (ctx = (PXTS_TEST_CONTEXT)ExAllocatePoolWithTag(NonPagedPool, sizeof(XTS_TEST_CONTEXT), '6_cd')) != NULL )
+		 (ctx = (PXTS_TEST_CONTEXT)mm_secure_alloc(sizeof(XTS_TEST_CONTEXT))) != NULL )
 	{
 		// fill key and test buffer
 		for (i = 0; i < (sizeof(ctx->key) / sizeof(ctx->key[0])); i++) ctx->key[i] = (unsigned char)i;
@@ -118,7 +119,7 @@ static void dc_simple_encryption_test()
 		}
 
 		DbgMsg("XTS test passed\n");
-		ExFreePoolWithTag(ctx, '6_cd');
+		mm_secure_free(ctx);
 	}
 }
 

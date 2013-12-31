@@ -20,7 +20,7 @@
 
 #include "defines.h"
 #include "crypto_head.h"
-#include "pkcs5.h"
+#include "sha512_pkcs5_2.h"
 #include "crc32.h"
 #include "misc_mem.h"
 
@@ -30,7 +30,7 @@ int cp_decrypt_header(xts_key *hdr_key, dc_header *header, dc_pass *password)
 	int       i, succs = 0;
 	dc_header *hcopy;
 
-	if ( (hcopy = mm_alloc(sizeof(dc_header), MEM_SECURE)) == NULL ) {
+	if ( (hcopy = mm_secure_alloc(sizeof(dc_header))) == NULL ) {
 		return 0;
 	}
 	sha512_pkcs5_2(
@@ -58,7 +58,7 @@ int cp_decrypt_header(xts_key *hdr_key, dc_header *header, dc_pass *password)
 	}
 	/* prevent leaks */
 	burn(dk, sizeof(dk));
-	mm_free(hcopy);
+	mm_secure_free(hcopy);
 
 	return succs;
 }

@@ -35,6 +35,12 @@
     <ClCompile Include="xts_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sha512_hmac_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sha512_hmac_drbg_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="aes_test.h">
@@ -56,6 +62,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="xts_test.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sha512_hmac_test.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sha512_hmac_drbg_test.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

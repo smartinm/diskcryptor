@@ -22,11 +22,11 @@
 #define DC_CTL_DECRYPT_STEP  CTL_CODE(FILE_DEVICE_UNKNOWN, 14, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_SYNC_STATE    CTL_CODE(FILE_DEVICE_UNKNOWN, 15, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_RESOLVE       CTL_CODE(FILE_DEVICE_UNKNOWN, 16, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_GET_RAND      CTL_CODE(FILE_DEVICE_UNKNOWN, 19, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_GET_RAND      CTL_CODE(FILE_DEVICE_UNKNOWN, 19, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
 #define DC_CTL_BENCHMARK     CTL_CODE(FILE_DEVICE_UNKNOWN, 20, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_BSOD          CTL_CODE(FILE_DEVICE_UNKNOWN, 21, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_GET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 22, METHOD_BUFFERED, FILE_ANY_ACCESS)
-#define DC_CTL_SET_CONF      CTL_CODE(FILE_DEVICE_UNKNOWN, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_GET_FLAGS     CTL_CODE(FILE_DEVICE_UNKNOWN, 22, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define DC_CTL_SET_FLAGS     CTL_CODE(FILE_DEVICE_UNKNOWN, 23, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_LOCK_MEM      CTL_CODE(FILE_DEVICE_UNKNOWN, 24, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_CTL_UNLOCK_MEM    CTL_CODE(FILE_DEVICE_UNKNOWN, 25, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define DC_FORMAT_START      CTL_CODE(FILE_DEVICE_UNKNOWN, 26, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -67,12 +67,11 @@ typedef struct _dc_ioctl {
 
 } dc_ioctl;
 
-typedef struct _dc_lock_ctl {
-	void *data;
-	u32   size;
-	int   resl;
+typedef struct {
+	PVOID ptr;
+	ULONG length;
 
-} dc_lock_ctl;
+} DC_LOCK_MEMORY, *PDC_LOCK_MEMORY;
 
 typedef struct _dc_rand_ctl {
 	void *buff;
@@ -108,11 +107,11 @@ typedef struct _dc_bench_info {
 
 } dc_bench_info;
 
-typedef struct _dc_conf {
-	u32 conf_flags;
-	u32 load_flags;
+typedef struct {
+	ULONG conf_flags;
+	ULONG load_flags;
 
-} dc_conf;
+} DC_FLAGS, *PDC_FLAGS;
 
 #define IS_UNMOUNTABLE(d) ( !((d)->flags & (F_SYSTEM | F_HIBERNATE)) && \
                              ((d)->paging_count == 0) )
@@ -140,13 +139,16 @@ typedef struct _dc_conf {
 
 #ifdef IS_DRIVER
  extern PDEVICE_OBJECT dc_device;
- extern int            dc_is_vista_or_later; 
- extern u32            dc_io_count;
- extern u32            dc_dump_disable;
+ extern BOOLEAN        dc_is_vista_or_later; 
+ extern volatile long  dc_io_count;
  extern u32            dc_conf_flags;
  extern u32            dc_load_flags;
  extern u32            dc_boot_kbs;
  extern int            dc_cpu_count;
+
+ BOOLEAN dc_prepare_for_dumping(IN  BOOLEAN  is_hibernation, // FALSE for crashdumping, TRUE for hibernation
+	                            IN  BOOLEAN  is_dump_begins, // FALSE for get information only
+							    OUT PVOID*   operation_devhook OPTIONAL);
 #endif
 
 

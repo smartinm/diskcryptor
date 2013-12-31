@@ -106,15 +106,16 @@ static int dc_fill_dcsys(HANDLE h_file)
 	} else {
 		length = max(info.SectorsPerAllocationUnit * info.BytesPerSector, sizeof(dc_header));
 	}
-	if ( (buff = mm_alloc(length, MEM_ZEROED)) == NULL ) {
+	if ( (buff = mm_pool_alloc(length)) == NULL )
+	{
 		return 0;
 	}
-	ZwFsControlFile(
-		h_file, NULL, NULL, NULL, &iosb, FSCTL_SET_COMPRESSION, &state, sizeof(state), NULL, 0);
-
+	memset(buff, 0, length);
+	
+	ZwFsControlFile(h_file, NULL, NULL, NULL, &iosb, FSCTL_SET_COMPRESSION, &state, sizeof(state), NULL, 0);
 	status = ZwWriteFile(h_file, NULL, NULL, NULL, &iosb, buff, length, NULL, NULL);
-	mm_free(buff);
 
+	mm_pool_free(buff);
 	return NT_SUCCESS(status) != FALSE;
 }
 
@@ -209,11 +210,11 @@ static int dc_first_cluster_offset(HANDLE h_dev, u32 bps, u64 *offset)
 	if (_wcsicmp(ainf->FileSystemName, L"NTFS") == 0) {
 		*offset = 0; return ST_OK;
 	}
-	if ( (head = mm_alloc(bps, 0)) == NULL ) {
+	if ( (head = mm_pool_alloc(bps)) == NULL ) {
 		return ST_NOMEM;
 	}
 	if (NT_SUCCESS(ZwReadFile(h_dev, NULL, NULL, NULL, &iosb, head, bps, &vofs, NULL)) == FALSE) {
-		mm_free(head); return ST_RW_ERR;
+		mm_pool_free(head); return ST_RW_ERR;
 	}
 	if ( (_wcsicmp(ainf->FileSystemName, L"FAT") == 0) || (_wcsicmp(ainf->FileSystemName, L"FAT32") == 0) )
 	{
@@ -235,7 +236,7 @@ static int dc_first_cluster_offset(HANDLE h_dev, u32 bps, u64 *offset)
 	} else {
 		resl = ST_UNK_FS;
 	}
-	mm_free(head); return resl;
+	mm_pool_free(head); return resl;
 }
 
 static int dc_cluster_to_offset(dev_hook *hook, HANDLE h_file, u64 cluster, u64 *offset)

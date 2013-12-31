@@ -1,7 +1,7 @@
 ﻿/*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2010
+    * Copyright (c) 2010-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -19,9 +19,9 @@
 */
 #include <intrin.h>
 #include "sha512_small.h"
-#include "pkcs5_small.h"
+#include "sha512_pkcs5_2_small.h"
 
-void sha512_hmac(const void *k, size_t k_len, const void *d, size_t d_len, char *out)
+void sha512_hmac(const void *k, unsigned long k_len, const void *d, unsigned long d_len, unsigned char *out)
 {
 	sha512_ctx    ctx;
 	unsigned char buf[SHA512_BLOCK_SIZE];
@@ -60,7 +60,7 @@ void sha512_hmac(const void *k, size_t k_len, const void *d, size_t d_len, char 
 	sha512_init(&ctx);
 	sha512_hash(&ctx, buf, SHA512_BLOCK_SIZE);
 	sha512_hash(&ctx, hval, SHA512_DIGEST_SIZE);
-	sha512_done(&ctx, (unsigned char*)out);
+	sha512_done(&ctx, out);
 
 	// prevent leaks
 	__stosb(buf, 0, sizeof(buf));
@@ -68,27 +68,27 @@ void sha512_hmac(const void *k, size_t k_len, const void *d, size_t d_len, char 
 	__stosb((unsigned char*)&ctx, 0, sizeof(ctx));
 }
 
-void sha512_pkcs5_2(int i_count, const void *pwd, size_t pwd_len, const char *salt, size_t salt_len, char *dk, size_t dklen)
+void sha512_pkcs5_2(int i_count, const void *pwd, unsigned long pwd_len, const void *salt, unsigned long salt_len, unsigned char *dk, unsigned long dklen)
 {
-	unsigned char buff[128];
+	unsigned char buff[128 + sizeof(unsigned long)];
 	unsigned char blk[SHA512_DIGEST_SIZE];
 	unsigned char hmac[SHA512_DIGEST_SIZE];
 	unsigned long block = 1;
-	size_t c_len;
-	int    j, i;
+	unsigned long c_len;
+	int           j, i;
 
 	while (dklen != 0)
 	{
 		// first interation
 		__movsb(buff, (const unsigned char*)salt, salt_len);
 		((unsigned long*)(buff + salt_len))[0] = _byteswap_ulong(block);
-		sha512_hmac(pwd, pwd_len, buff, salt_len + 4, (char*)hmac);
+		sha512_hmac(pwd, pwd_len, buff, salt_len + sizeof(unsigned long), hmac);
 		__movsb(blk, hmac, SHA512_DIGEST_SIZE);
 
 		// next interations
 		for (i = 1; i < i_count; i++) 
 		{
-			sha512_hmac(pwd, pwd_len, hmac, SHA512_DIGEST_SIZE, (char*)hmac);
+			sha512_hmac(pwd, pwd_len, hmac, SHA512_DIGEST_SIZE, hmac);
 
 			for (j = 0; j < SHA512_DIGEST_SIZE; j++) {
 				blk[j] ^= hmac[j];

@@ -27,9 +27,6 @@
     <ClCompile Include="crc32.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pkcs5.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="serpent.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -45,6 +42,15 @@
     <ClCompile Include="xts_serpent_sse2.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sha512_hmac.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sha512_pkcs5_2.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sha512_hmac_drbg.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="aes_asm.h">
@@ -57,9 +63,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="crc32.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="pkcs5.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="serpent.h">
@@ -81,6 +84,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="xts_serpent_sse2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sha512_hmac.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sha512_pkcs5_2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sha512_hmac_drbg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

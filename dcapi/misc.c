@@ -27,12 +27,6 @@
 #include "misc.h"
 #include "drv_ioctl.h"
 
-typedef struct _sec_mem {
-	u32 size;
-	u8  data[];
-
-} sec_mem;
-
 typedef int (WINAPI fmt_callback) (int unk1, int unk2, int unk3);
 
 typedef void (WINAPI *PFORMAT) (
@@ -202,52 +196,32 @@ int load_file(wchar_t *name, void **data, int *size)
 	return resl;
 }
 
-void *secure_alloc(u32 size) 
+PVOID secure_alloc(ULONG length)
 {
-	u32      s_size;
-	sec_mem *s_mem;
-	void    *mem = NULL;
+	DC_LOCK_MEMORY mem;
 
-	do
-	{
-		/* allocate memory */
-		s_size = _align(size + sizeof(sec_mem), PAGE_SIZE);
-		s_mem  = VirtualAlloc(NULL, s_size, MEM_COMMIT + MEM_RESERVE, PAGE_READWRITE);
-
-		if (s_mem == NULL) {
-			break;
-		}
-
-		/* lock page to prevent save it to page file */
-		if (dc_lock_memory(s_mem, s_size) != ST_OK)
-		{
-			/* lock memory with win32 api */
-			VirtualLock(s_mem, s_size);
-		}
-		
-		s_mem->size = s_size;
-		mem         = &s_mem->data;
-	} while (0);	
-
-	return mem;
+	// on 32 bit system xts_key must be located in executable memory
+	// x64 does not require this
+#ifdef _M_IX86
+	if ( (mem.ptr = VirtualAlloc(NULL, (mem.length = length), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE)) == NULL ) return NULL;
+#else
+	if ( (mem.ptr = VirtualAlloc(NULL, (mem.length = length), MEM_COMMIT+MEM_RESERVE, PAGE_READWRITE)) == NULL ) return NULL;
+#endif
+	if (dc_device_control(DC_CTL_LOCK_MEM, &mem, sizeof(mem), NULL, 0) != NO_ERROR) VirtualLock(mem.ptr, length);
+	return mem.ptr;
 }
 
-void secure_free(void *mem)
+void secure_free(PVOID ptr)
 {
-	sec_mem *s_mem  = CONTAINING_RECORD(mem, sec_mem, data);
-	size_t   s_size = s_mem->size;
-
-	/* zero memory to prevent leaks */
-	burn(s_mem, s_size);
-
-	/* unlock region */
-	if (dc_unlock_memory(s_mem) != ST_OK)
+	MEMORY_BASIC_INFORMATION mbi;
+	
+	if ( (dc_device_control(DC_CTL_UNLOCK_MEM, &ptr, sizeof(ptr), NULL, 0) != NO_ERROR) &&
+		 (VirtualQuery(ptr, &mbi, sizeof(mbi)) == sizeof(mbi) && mbi.BaseAddress == ptr && mbi.AllocationBase == ptr) )
 	{
-		/* unlock memory with win32 api */
-		VirtualUnlock(s_mem, s_size);
+		RtlSecureZeroMemory(ptr, mbi.RegionSize);
+		VirtualUnlock(ptr, mbi.RegionSize);
 	}
-	/* free memory */
-	VirtualFree(s_mem, 0, MEM_RELEASE);
+	VirtualFree(ptr, 0, MEM_RELEASE);
 }
 
 int is_wow64()

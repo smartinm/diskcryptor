@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2009-2011
+    * Copyright (c) 2009-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -22,22 +22,33 @@
 #include "defines.h"
 #include "misc_mem.h"
 #include "misc.h"
+#include "debug.h"
 
-typedef struct _alloc_block {
-	size_t     size;
-	int        flags;
-	int        index;
-	align16 u8 data[];
+typedef struct {
+	LIST_ENTRY entry;
+	HANDLE     owner_id; // owner process id
+	PMDL       map_mdl;  // MDL for mapping usermode memory area to system space 
+	PVOID      map_ptr;  // system-space mapped memory
+	PVOID      user_ptr; // original usermode pointer
+	ULONG      length;   // locked memory length
 
-} alloc_block;
+} USER_MEM_LOCK, *PUSER_MEM_LOCK;
 
-#define MEM_PADDED  0x1000 /* internal, don't use */
+typedef struct {
+	LIST_ENTRY entry;
+	size_t     length;
 
-#define ALLOC_SIZE(_x)    ( (_x) + sizeof(alloc_block) + 8)
-#define APOOL_TYPE(_flags)( (_flags) & MEM_PAGED ? PagedPool : NonPagedPool )
+	__declspec(align(SYSTEM_CACHE_ALIGNMENT_SIZE)) UCHAR buffer[0]; // cache-aligned data
 
-#define NUM_MEM_LISTS 12  /* number of lookaside lists */
-static NPAGED_LOOKASIDE_LIST mem_lists[NUM_MEM_LISTS];
+} SECURE_MEM_BLOCK, *PSECURE_MEM_BLOCK;
+
+void __wbinvd(void); // intrinsic forward declaration
+
+static LIST_ENTRY g_usermode_memory_list;
+static FAST_MUTEX g_usermode_memory_lock;
+static BOOLEAN    g_ps_notify_registered;
+static LIST_ENTRY g_secure_memory_list;
+static KSPIN_LOCK g_secure_memory_lock;
 
 void *mm_map_mdl_success(PMDL mdl)
 {
@@ -95,70 +106,193 @@ void *mm_alloc_success(POOL_TYPE pool, SIZE_T bytes, u32 tag)
 	return mem;
 }
 
-void *mm_alloc(size_t size, int flags)
+PVOID mm_secure_alloc(size_t length)
 {
-	alloc_block *block;
-	char        *p_mem = NULL;
-	int          i;
-	
-	if (flags & MEM_FAST)
-	{
-		for (i = 0; i < NUM_MEM_LISTS; i++) {
-			if ((512u << i) < size) continue;
-			p_mem = ExAllocateFromNPagedLookasideList(&mem_lists[i]); 
-			break;
-		}
-	}
-	if (p_mem == NULL) /* if memory not allocated, allocate from pool */
-	{
-		if (flags & MEM_SUCCESS)
-			p_mem = mm_alloc_success(APOOL_TYPE(flags), ALLOC_SIZE(size), '1_cd'); else
-			p_mem = ExAllocatePoolWithTag(APOOL_TYPE(flags), ALLOC_SIZE(size), '1_cd');
-		
-		if (p_mem == NULL) return NULL;
-		flags &= ~MEM_FAST;
-	}
-	/* memory block must be 16byte aligned */
-	if (dSZ(p_mem) & (16-1)) p_mem += 8, flags |= MEM_PADDED;
-	/* initialize alloc_block struct */
-	block = pv(p_mem);
-	block->size  = size;
-	block->flags = flags;
-	block->index = i;
-	/* zero memory if needed */
-	if (flags & MEM_ZEROED) memset(block->data, 0, size);
-	return &block->data;
+	KLOCK_QUEUE_HANDLE lock_queue;
+	PSECURE_MEM_BLOCK  block;
+
+	// allocate cache-aligned nonpaged memory attempts to retry on failure
+	if ( (block = (PSECURE_MEM_BLOCK)mm_alloc_success(NonPagedPoolCacheAligned, sizeof(SECURE_MEM_BLOCK) + length, 'S_CD')) == NULL ) return NULL;
+
+	// secure memory must be zero-filled after allocation
+	memset(block->buffer, 0, (block->length = length));
+
+	KeAcquireInStackQueuedSpinLock(&g_secure_memory_lock, &lock_queue);
+	InsertTailList(&g_secure_memory_list, &block->entry);
+	KeReleaseInStackQueuedSpinLock(&lock_queue);
+
+	return block->buffer;
 }
 
-void mm_free(void *mem)
+void mm_secure_free(PVOID ptr)
 {
-	alloc_block *block = CONTAINING_RECORD(mem, alloc_block, data);               /* get the alloc_block struct */
-	char        *p_mem = (block->flags & MEM_PADDED) ? p8(block) - 8 : p8(block); /* get the original memory pointer */
+	KLOCK_QUEUE_HANDLE lock_queue;
+	PSECURE_MEM_BLOCK  block = CONTAINING_RECORD(ptr, SECURE_MEM_BLOCK, buffer);
 
-	/* zero block to prevent leaks if needed */
-	if (block->flags & MEM_SECURE) burn(block->data, block->size);
-	/* free memory */
-	if (block->flags & MEM_FAST) {
-		ExFreeToNPagedLookasideList(&mem_lists[block->index], p_mem);
-	} else {
-		ExFreePoolWithTag(p_mem, '1_cd');
+	// data buffer must be zeroed before removing block from blocks list
+	RtlSecureZeroMemory(block->buffer, block->length);
+	
+	KeAcquireInStackQueuedSpinLock(&g_secure_memory_lock, &lock_queue);
+	RemoveEntryList(&block->entry);
+	KeReleaseInStackQueuedSpinLock(&lock_queue);
+
+	ExFreePoolWithTag(block, 'S_CD');
+}
+
+NTSTATUS mm_lock_user_memory(HANDLE process_id, PVOID ptr, ULONG length)
+{
+	PUSER_MEM_LOCK lock = NULL;
+	NTSTATUS       status;
+
+	// if PsSetCreateProcessNotifyRoutine fails, we can not lock usermode memory,
+	// because if the process terminated without unlocking the pages, system will BSOD 
+	if (g_ps_notify_registered == FALSE)
+	{
+		status = STATUS_DEVICE_NOT_READY;
+		goto cleanup;
 	}
+
+	// process for which the locked memory pages, should be current process
+	if (process_id != PsGetCurrentProcessId())
+	{
+		status = STATUS_CONTEXT_MISMATCH;
+		goto cleanup;
+	}
+
+	if ( (lock = (PUSER_MEM_LOCK)mm_pool_alloc(sizeof(USER_MEM_LOCK))) == NULL ||
+		 (lock->map_mdl = IoAllocateMdl(ptr, length, FALSE, FALSE, NULL)) == NULL )
+	{
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto cleanup;
+	}
+	lock->owner_id = process_id;
+	lock->user_ptr = ptr;
+	lock->length = length;
+
+	__try {
+		MmProbeAndLockPages(lock->map_mdl, UserMode, IoModifyAccess);
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER) {
+		status = GetExceptionCode();
+		goto cleanup;
+	}
+	
+	if ( (lock->map_ptr = MmMapLockedPagesSpecifyCache(lock->map_mdl, KernelMode, MmCached, NULL, FALSE, NormalPagePriority)) == NULL )
+	{
+		MmUnlockPages(lock->map_mdl);
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto cleanup;
+	}
+
+	ExAcquireFastMutex(&g_usermode_memory_lock);
+
+	InsertTailList(&g_usermode_memory_list, &lock->entry);
+	status = STATUS_SUCCESS;
+
+	ExReleaseFastMutex(&g_usermode_memory_lock);
+cleanup:
+	if (status != STATUS_SUCCESS && lock != NULL) {
+		if (lock->map_mdl) IoFreeMdl(lock->map_mdl);
+		mm_pool_free(lock);
+	}
+	return status;
+}
+
+NTSTATUS mm_unlock_user_memory(HANDLE process_id, PVOID ptr)
+{
+	PUSER_MEM_LOCK lock;
+	PLIST_ENTRY    item;
+	NTSTATUS       status = STATUS_NOT_LOCKED;
+
+	ExAcquireFastMutex(&g_usermode_memory_lock);
+
+	for (item = g_usermode_memory_list.Flink; item != &g_usermode_memory_list;)
+	{
+		lock = CONTAINING_RECORD(item, USER_MEM_LOCK, entry);
+		item = item->Flink;
+
+		if (lock->owner_id == process_id && (ptr == NULL || lock->user_ptr == ptr))
+		{
+			// remove item from lockings list and secure erase memory content
+			RemoveEntryList(&lock->entry);
+			RtlSecureZeroMemory(lock->map_ptr, lock->length);
+
+			// unmap, unlock pages and free resources
+			MmUnmapLockedPages(lock->map_ptr, lock->map_mdl);
+			MmUnlockPages(lock->map_mdl);
+			IoFreeMdl(lock->map_mdl);
+			mm_pool_free(lock);
+
+			status = STATUS_SUCCESS;
+		}
+	}
+	ExReleaseFastMutex(&g_usermode_memory_lock);
+	return status;
+}
+
+void mm_clean_secure_memory()
+{
+	KLOCK_QUEUE_HANDLE lock_queue;
+	BOOLEAN            mutex_acquired = FALSE;
+	BOOLEAN            spinlock_acquired = FALSE;
+	PLIST_ENTRY        item;
+
+	// clean secure memory
+	if (KeGetCurrentIrql() <= DISPATCH_LEVEL) {
+		KeAcquireInStackQueuedSpinLock(&g_secure_memory_lock, &lock_queue);
+		spinlock_acquired = TRUE;
+	}
+	for (item = g_secure_memory_list.Flink; item != &g_secure_memory_list; item = item->Flink) {
+		PSECURE_MEM_BLOCK block = CONTAINING_RECORD(item, SECURE_MEM_BLOCK, entry);
+		RtlSecureZeroMemory(block->buffer, block->length);
+	}
+	if (spinlock_acquired) {
+		KeReleaseInStackQueuedSpinLock(&lock_queue);
+	}
+	
+	// clean locked usermode memory
+	if (KeGetCurrentIrql() <= APC_LEVEL) {
+		ExAcquireFastMutex(&g_usermode_memory_lock);
+		mutex_acquired = TRUE;
+	}
+	for (item = g_usermode_memory_list.Flink; item != &g_usermode_memory_list; item = item->Flink) {
+		PUSER_MEM_LOCK lock = CONTAINING_RECORD(item, USER_MEM_LOCK, entry);
+		RtlSecureZeroMemory(lock->map_ptr, lock->length);
+	}	
+	if (mutex_acquired) {
+		ExReleaseFastMutex(&g_usermode_memory_lock);
+	}
+
+	// Write Back and Invalidate CPU Caches
+	__wbinvd();
+}
+
+static void mm_create_process_notify(IN HANDLE ParentId, IN HANDLE ProcessId, IN BOOLEAN Create)
+{
+	// when process is exiting, clean and unlock all locked memory regions, otherwise it will BSOD
+	if (Create == FALSE) mm_unlock_user_memory(ProcessId, NULL);
 }
 
 void mm_init()
 {
-	int i;
+	InitializeListHead(&g_usermode_memory_list);
+	ExInitializeFastMutex(&g_usermode_memory_lock);
 
-	for (i = 0; i < NUM_MEM_LISTS; i++) {
-		ExInitializeNPagedLookasideList(&mem_lists[i], NULL, NULL, 0, ALLOC_SIZE(512u << i), '2_cd', 0);
+	if (NT_SUCCESS(PsSetCreateProcessNotifyRoutine(mm_create_process_notify, FALSE))) {
+		DbgMsg("CreateProcessNotifyRoutine installed\n");
+		g_ps_notify_registered = TRUE;
+	} else {
+		DbgMsg("can not install CreateProcessNotifyRoutine\n");
+		g_ps_notify_registered = FALSE;
 	}
+	InitializeListHead(&g_secure_memory_list);
+	KeInitializeSpinLock(&g_secure_memory_lock);
 }
 
 void mm_uninit()
 {
-	int i;
-
-	for (i = 0; i < NUM_MEM_LISTS; i++) {
-		ExDeleteNPagedLookasideList(&mem_lists[i]);
+	if (g_ps_notify_registered) {
+		PsSetCreateProcessNotifyRoutine(mm_create_process_notify, TRUE);
+		DbgMsg("CreateProcessNotify removed\n");
 	}
 }

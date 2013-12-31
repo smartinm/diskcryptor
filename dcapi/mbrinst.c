@@ -601,14 +601,14 @@ static int dc_set_mbr_i(int dsk_num, int begin, int small_boot)
 
 int dc_set_mbr(int dsk_num, int begin, int small_boot)
 {
-	dc_conf conf;
-	int     dsk_1, dsk_2;
-	int     resl;
+	DC_FLAGS flags;
+	int      dsk_1, dsk_2;
+	int      resl;
 
 	if (small_boot == -1)
 	{
-		if (dc_get_conf_flags(&conf) == ST_OK) {
-			small_boot = (conf.load_flags & DST_SMALL_MEM) != 0;
+		if (dc_device_control(DC_CTL_GET_FLAGS, NULL, 0, &flags, sizeof(flags)) == NO_ERROR) {
+			small_boot = (flags.load_flags & DST_SMALL_MEM) != 0;
 		} else {
 			small_boot = 0;
 		}

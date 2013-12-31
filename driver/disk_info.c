@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2010-2012
+    * Copyright (c) 2010-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -38,9 +38,9 @@ static ULONG dc_get_device_mtl(dev_hook *hook)
 	ULONG                      max_chunk;
 
 	if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_STORAGE_QUERY_PROPERTY, &sq, sizeof(sq), &sd, sizeof(sd))) ) {
-		max_chunk = min(sd.MaximumTransferLength, sd.MaximumPhysicalPages ? (sd.MaximumPhysicalPages - 1) * PAGE_SIZE : 0);
+		max_chunk = min(sd.MaximumTransferLength, (sd.MaximumPhysicalPages ? sd.MaximumPhysicalPages * PAGE_SIZE : 0));
 	} else if ( NT_SUCCESS(io_device_control(hook->orig_dev, IOCTL_SCSI_GET_CAPABILITIES, NULL, 0, &sc, sizeof(sc))) ) {
-		max_chunk = min(sc.MaximumTransferLength, sc.MaximumPhysicalPages ? (sc.MaximumPhysicalPages - 1) * PAGE_SIZE : 0);
+		max_chunk = min(sc.MaximumTransferLength, (sc.MaximumPhysicalPages ? sc.MaximumPhysicalPages * PAGE_SIZE : 0));
 	} else {
 		// 64k safe for removable devices, 128k safe for internal devices
 		max_chunk = ((hook->flags & F_REMOVABLE) ? 64 : 128) * 1024;

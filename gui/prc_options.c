@@ -267,7 +267,7 @@ _options_dlg_proc(
 						__config.conf_flags = _flags;
 						memcpy(&__config.hotkeys, &_hotkeys, sizeof(DWORD)*HOTKEYS);
 
-						dc_save_conf(&__config);						
+						dc_save_config(&__config);
 
 					}
 					_set_hotkeys(hwnd, __config.hotkeys, FALSE);

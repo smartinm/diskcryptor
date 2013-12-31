@@ -3,30 +3,32 @@
 
 /* hook control flags */
 #define F_NONE          0x0000
-#define F_ENABLED       0x0001 /* device mounted                                          */
-#define F_SYNC          0x0002 /* syncronous IRP processing mode                          */
-#define F_SYSTEM        0x0004 /* this is a system device                                 */
-#define F_REMOVABLE     0x0008 /* this is removable device                                */
-#define F_HIBERNATE     0x0010 /* this device used for hibernation                        */
-#define F_UNSUPRT       0x0020 /* device unsupported                                      */
-#define F_DISABLE       0x0040 /* device temporary disabled                               */
-#define F_REENCRYPT     0x0100 /* reencryption in progress                                */
-#define F_FORMATTING    0x0200 /* formatting in progress                                  */
-#define F_NO_AUTO_MOUNT 0x0400 /* automounting disabled for this device                   */
-#define F_PROTECT_DCSYS 0x0800 /* protect \$dcsys$ file from any access                   */
-#define F_PREVENT_ENC   0x1000 /* fail any encrypt/decrypt requests with ST_CANCEL status */
-#define F_CDROM         0x2000 /* this is CDROM device */
-#define F_NO_REDIRECT   0x4000 /* redirection area is not used */
-#define F_SSD           0x8000 /* this is SSD disk */
+#define F_ENABLED       0x0001 // device mounted
+#define F_SYNC          0x0002 // syncronous IRP processing mode
+#define F_SYSTEM        0x0004 // this is a system device
+#define F_REMOVABLE     0x0008 // this is removable device
+#define F_HIBERNATE     0x0010 // this device used for hibernation
+#define F_CRASHDUMP     0x0020 // this device used for crashdumping
+#define F_UNSUPRT       0x0040 // device unsupported
+#define F_DISABLE       0x0080 // device temporary disabled
+#define F_REENCRYPT     0x0100 // reencryption in progress
+#define F_FORMATTING    0x0200 // formatting in progress
+#define F_NO_AUTO_MOUNT 0x0400 // automounting disabled for this device
+#define F_PROTECT_DCSYS 0x0800 // protect $dcsys$ file from any access
+#define F_PREVENT_ENC   0x1000 // fail any encrypt/decrypt requests with ST_CANCEL status
+#define F_CDROM         0x2000 // this is CDROM device
+#define F_NO_REDIRECT   0x4000 // redirection area is not used
+#define F_SSD           0x8000 // this is SSD disk
 
 #define F_CLEAR_ON_UNMOUNT ( \
 	F_ENABLED | F_SYNC | F_REENCRYPT | F_FORMATTING | F_PROTECT_DCSYS | F_NO_REDIRECT )
 
 /* unmount flags */
-#define MF_FORCE    0x01 /* unmount volume if FSCTL_LOCK_VOLUME fail */
-#define MF_NOFSCTL  0x02 /* no send FSCTL_DISMOUNT_VOLUME            */
-#define MF_NOSYNC   0x04 /* no stop syncronous mode thread */
-#define MF_DELMP    0x08 /* delete volume mount point when unmount */
+#define MF_FORCE     0x01 // unmount volume if FSCTL_LOCK_VOLUME fail
+#define MF_NOFSCTL   0x02 // no send FSCTL_DISMOUNT_VOLUME
+#define MF_NOSYNC    0x04 // no stop syncronous mode thread
+#define MF_DELMP     0x08 // delete volume mount point when unmount
+#define MF_NOWAIT_IO 0x10 // no wait for IO IRPs completion
 
 /* operation status codes */
 #define ST_OK             0  /* operation completed successfull */

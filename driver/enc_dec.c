@@ -25,8 +25,6 @@
 #include "prng.h"
 #include "misc.h"
 #include "readwrite.h"
-#include "crc32.h"
-#include "pkcs5.h"
 #include "mount.h"
 #include "enc_dec.h"
 #include "data_wipe.h"
@@ -241,7 +239,7 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 				{
 					DbgMsg("S_INIT_RE_ENC\n");
 
-					if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+					if ( (tmp_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 						resl = ST_NOMEM; break;
 					}
 					/* swap keys */
@@ -256,7 +254,7 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 					/* save initial state */
 					dc_save_enc_state(hook, 0);
 					
-					mm_free(tmp_key); 
+					mm_secure_free(tmp_key); 
 					resl = ST_OK;
 				}
 			break;
@@ -264,7 +262,7 @@ static int dc_init_sync_mode(dev_hook *hook, sync_context *ctx)
 				{
 					DbgMsg("S_CONTINUE_RE_ENC\n");
 
-					if ( (tmp_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+					if ( (tmp_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 						resl = ST_NOMEM; break;
 					}
 
@@ -372,7 +370,6 @@ static void dc_sync_op_routine(dev_hook *hook)
 	
 	DbgMsg("sync thread started\n");
 
-	lock_inc(&dc_dump_disable);
 	dc_reference_hook(hook);
 
 	/* initialize sync mode data */
@@ -391,7 +388,7 @@ static void dc_sync_op_routine(dev_hook *hook)
 	del_storage = 0;
 
 	/* allocate resources */
-	if (buff = mm_alloc(ENC_BLOCK_SIZE, 0))
+	if (buff = mm_pool_alloc(ENC_BLOCK_SIZE))
 	{
 		hook->tmp_buff = buff;
 
@@ -434,8 +431,9 @@ static void dc_sync_op_routine(dev_hook *hook)
 		{
 			if (hook->flags & F_SYNC)
 			{
-				while (entry = ExInterlockedRemoveHeadList(&hook->sync_irp_queue, &hook->sync_req_lock)) {
-					io_encrypted_irp_io(hook, CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry), 1);
+				while (entry = ExInterlockedRemoveHeadList(&hook->sync_irp_queue, &hook->sync_req_lock))
+				{
+					io_encrypted_irp_io(hook, CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry), TRUE);
 				}
 			}
 			if (entry = ExInterlockedRemoveHeadList(&hook->sync_req_queue, &hook->sync_req_lock))
@@ -486,16 +484,16 @@ cleanup:;
 		dc_wipe_free(&hook->wp_ctx);
 	}
 	if (buff != NULL) {
-		mm_free(buff);
+		mm_pool_free(buff);
 	}
 	/* prevent leaks */
 	wait_object_infinity(&hook->key_lock);
 
 	if (hook->hdr_key != NULL) {
-		mm_free(hook->hdr_key); hook->hdr_key = NULL;
+		mm_secure_free(hook->hdr_key); hook->hdr_key = NULL;
 	}
 	if (hook->tmp_key != NULL) {
-		mm_free(hook->tmp_key); hook->tmp_key = NULL;
+		mm_secure_free(hook->tmp_key); hook->tmp_key = NULL;
 	}
 	burn(&hook->tmp_header, sizeof(hook->tmp_header));
 	KeReleaseMutex(&hook->key_lock, FALSE);
@@ -510,7 +508,6 @@ cleanup:;
 	}
 
 	dc_deref_hook(hook);
-	lock_dec(&dc_dump_disable);
 
 	DbgMsg("exit from sync thread\n");
 
@@ -566,7 +563,7 @@ int dc_send_sync_packet(wchar_t *dev_name, u32 type, void *param)
 			resl = ST_CANCEL; break;
 		}
 
-		if ( (packet = mm_alloc(sizeof(sync_packet), 0)) == NULL ) {
+		if ( (packet = mm_pool_alloc(sizeof(sync_packet))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 
@@ -587,7 +584,7 @@ int dc_send_sync_packet(wchar_t *dev_name, u32 type, void *param)
 		wait_object_infinity(&packet->sync_event);
 
 		resl = packet->status; mutex = 1;
-		mm_free(packet);
+		mm_pool_free(packet);
 	} while (0);
 
 	if (hook != NULL) 
@@ -652,13 +649,16 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 		DbgMsg("storage created\n");
 
-		if ( (header = mm_alloc(sizeof(dc_header), MEM_SECURE | MEM_ZEROED)) == NULL ) {
+		if ( (header = mm_secure_alloc(sizeof(dc_header))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
+		
 		/* create volume header */
+		memset(header, 0, sizeof(dc_header));
+
 		cp_rand_bytes(pv(header->salt),     PKCS5_SALT_SIZE);
 		cp_rand_bytes(pv(&header->disk_id), sizeof(u32));
 		cp_rand_bytes(pv(header->key_1),    DISKKEY_SIZE);
@@ -698,8 +698,8 @@ int dc_encrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 	} while (0);
 
-	if (hdr_key != NULL) { mm_free(hdr_key); }
-	if (header != NULL)  { mm_free(header); }
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
+	if (header != NULL)  mm_secure_free(header);
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
@@ -739,11 +739,11 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 		}
 
 		/* allocate new volume key */
-		if ( (dsk_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (dsk_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 		/* allocate new header key */
-		if ( (hdr_key = mm_alloc(sizeof(xts_key), MEM_SECURE)) == NULL ) {
+		if ( (hdr_key = mm_secure_alloc(sizeof(xts_key))) == NULL ) {
 			resl = ST_NOMEM; break;
 		}
 		/* read volume header */
@@ -793,9 +793,9 @@ int dc_reencrypt_start(wchar_t *dev_name, dc_pass *password, crypt_info *crypt)
 	} while (0);
 
 	/* free resources */
-	if (dsk_key != NULL) mm_free(dsk_key);
-	if (hdr_key != NULL) mm_free(hdr_key);
-	if (header != NULL)  mm_free(header);
+	if (dsk_key != NULL) mm_secure_free(dsk_key);
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
+	if (header != NULL)  mm_secure_free(header);
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);
@@ -849,8 +849,8 @@ int dc_decrypt_start(wchar_t *dev_name, dc_pass *password)
 		}
 	} while (0);
 
-	if (hdr_key != NULL) mm_free(hdr_key);
-	if (header != NULL)  mm_free(header);
+	if (hdr_key != NULL) mm_secure_free(hdr_key);
+	if (header != NULL)  mm_secure_free(header);
 
 	if (hook != NULL) {
 		KeReleaseMutex(&hook->busy_lock, FALSE);

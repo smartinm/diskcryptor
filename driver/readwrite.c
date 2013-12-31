@@ -1,7 +1,7 @@
 /*
     *
     * DiskCryptor - open source partition encryption tool
-    * Copyright (c) 2007-2010
+    * Copyright (c) 2007-2013
     * ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     *
 
@@ -19,16 +19,12 @@
 */
 
 #include <ntifs.h>
-#include "defines.h"
 #include "devhook.h"
 #include "misc_irp.h"
 #include "readwrite.h"
-#include "misc.h"
 #include "mount.h"
-#include "enc_dec.h"
 #include "driver.h"
 #include "fast_crypt.h"
-#include "debug.h"
 #include "misc_mem.h"
 
 #define SSD_PAGE_SIZE				4096
@@ -51,28 +47,36 @@ typedef struct _io_context {
 	dev_hook *hook;
 	PIRP      orig_irp;
 	PIRP      new_irp;
-	char     *buff;
-	char     *new_buff;
-	u32       length;    /* request length    */
-	u64       offset;    /* request disk offset */
-	u32       completed; /* IO completed bytes */
-	u32       encrypted; /* encrypted bytes */
-	u32       refs;
-	int       expected;
+	//
+	PUCHAR buff;
+	PUCHAR new_buff;
+	int    new_buff_index; // new_buff lookaside list index (-1, if allocated from pool)
+	//
+	ULONG     length;    // request length
+	ULONGLONG offset;    // request disk offset
+	ULONG     completed; // IO completed bytes
+	ULONG     encrypted; // encrypted bytes
+	//
+	volatile long refs;  // context references counter
+	
 
-	u64      chunk_diskof;
-	u32      chunk_length;
-	u32      chunk_offset;
-	xts_key *chunk_key;
-	int      chunk_nocont; /* this is discontinuous chunk */
+	ULONGLONG chunk_diskof;
+	ULONG     chunk_length;
+	ULONG     chunk_offset;
+	xts_key  *chunk_key;
+	
+	BOOLEAN expected;      // this io operation is expected, enable optimization
+	BOOLEAN discontinuous; // this is discontinuous chunk
+	BOOLEAN write_pending; // write operation currently pending
 
-	u64      write_offset;
-	u32      write_length;
-
-	int        is_writing;
+	BOOLEAN is_sync; // this is syncronous IO operation,
+	                 // io_encrypted_irp_io must not return before this IO completed
+	
+	ULONGLONG  write_offset;
+	ULONG      write_length;
+	
 	KSPIN_LOCK write_lock;
 
-	int      is_sync;
 	KEVENT   done_event;
 	NTSTATUS status;
 
@@ -80,100 +84,113 @@ typedef struct _io_context {
 
 } io_context;
 
-/* function types declaration */
+// function types declarations
 WORKER_THREAD_ROUTINE io_async_read_chunk;
 IO_COMPLETION_ROUTINE io_chunk_read_complete;
 WORKER_THREAD_ROUTINE io_write_next_chunk;
 IO_COMPLETION_ROUTINE io_chunk_write_complete;
 WORKER_THREAD_ROUTINE io_async_encrypt_chunk;
 
-#define io_context_addref(_ctx)      ( lock_inc(&(_ctx)->refs) )
+#define io_context_addref(_ctx)      ( InterlockedIncrement(&(_ctx)->refs) )
 #define io_set_status(_ctx, _status) ( (_ctx)->status = (_status) )
 
-static NPAGED_LOOKASIDE_LIST io_context_mem;
+static NPAGED_LOOKASIDE_LIST g_io_contexts_list;    // Non-Paged lookaside list for io_context structures allocation
+static NPAGED_LOOKASIDE_LIST g_temp_buff_lists[12]; // Lookaside lists for temporary buffers (512 - 2097152 bytes length)
 
 static void io_context_deref(io_context *ctx)
 {
-	if (lock_dec(&ctx->refs) != 0) {
-		return;
-	}
-	/* complete the original irp */
-	if (NT_SUCCESS(ctx->status) != FALSE) {
-		ctx->orig_irp->IoStatus.Status = STATUS_SUCCESS;
-		ctx->orig_irp->IoStatus.Information = ctx->length;
-	} else {
-		ctx->orig_irp->IoStatus.Status = ctx->status;
-		ctx->orig_irp->IoStatus.Information = ctx->length;
-	}
-	IoCompleteRequest(ctx->orig_irp, IO_DISK_INCREMENT);
+	if (InterlockedDecrement(&ctx->refs) == 0)
+	{
+		// complete the original irp
+		if (NT_SUCCESS(ctx->status)) {
+			ctx->orig_irp->IoStatus.Status = STATUS_SUCCESS;
+			ctx->orig_irp->IoStatus.Information = ctx->length;
+		} else {
+			ctx->orig_irp->IoStatus.Status = ctx->status;
+			ctx->orig_irp->IoStatus.Information = ctx->length;
+		}
+		IoCompleteRequest(ctx->orig_irp, IO_DISK_INCREMENT);
 
-	/* free resources */
-	IoReleaseRemoveLock(&ctx->hook->remv_lock, ctx->orig_irp);
-	lock_dec(&ctx->hook->io_depth);
-	
-	if (ctx->new_irp != NULL) {
-		IoFreeIrp(ctx->new_irp);
-	}
-	if (ctx->new_buff != NULL) {
-		mm_free(ctx->new_buff);
-	}
-	/* set completion event if needed */
-	if (ctx->is_sync != 0) {
-		KeSetEvent(&ctx->done_event, IO_NO_INCREMENT, FALSE);
-	} else {
-		ExFreeToNPagedLookasideList(&io_context_mem, ctx);
+		// free resources
+		IoReleaseRemoveLock(&ctx->hook->remove_lock, ctx->orig_irp);
+		InterlockedDecrement(&ctx->hook->io_depth);
+
+		if (ctx->new_irp)
+		{
+			IoFreeIrp(ctx->new_irp);
+		}
+
+		if (ctx->new_buff)
+		{
+			if (ctx->new_buff_index >= 0) {
+				ExFreeToNPagedLookasideList(&g_temp_buff_lists[ctx->new_buff_index], ctx->new_buff);
+			} else {
+				ExFreePoolWithTag(ctx->new_buff, '7_cd');
+			}
+		}
+
+		// set the completion event if needed
+		if (ctx->is_sync) {
+			KeSetEvent(&ctx->done_event, IO_NO_INCREMENT, FALSE);
+		} else {
+			ExFreeToNPagedLookasideList(&g_io_contexts_list, ctx);
+		}
 	}
 }
 
-static u32 io_read_chunk_length(io_context *ctx)
+static ULONG io_read_chunk_length(io_context *ctx)
 {
-	u32 remain = ctx->length - ctx->completed;
-	u32 length = min(remain / 2, CHUNK_READ_CHUNK_SIZE);
+	ULONG remain = ctx->length - ctx->completed;
+	ULONG length = min(remain / 2, CHUNK_READ_CHUNK_SIZE);
 
-	/* don't create chunks that are too small */
-	if (remain - length < CHUNK_MIN_READ_SIZE) {
+	// don't create chunks that are too small
+	if (remain - length < CHUNK_MIN_READ_SIZE)
+	{
 		length += remain - length;
-	}
-	/* increase the first chunk's size so subsequent chunks start aligned */
-	if ( (ctx->chunk_offset == 0) && ((ctx->offset + length) & (CHUNK_READ_ALIGN-1)) ) {
+	}	
+	
+	// increase the first chunk's size so subsequent chunks start aligned 
+	if ( (ctx->chunk_offset == 0) && ((ctx->offset + length) & (CHUNK_READ_ALIGN-1)) )
+	{
 		length += CHUNK_READ_ALIGN - ((ctx->offset + length) & (CHUNK_READ_ALIGN-1));
 	}
 	return length;
 }
 
-static u32 io_write_chunk_length(io_context *ctx)
+static ULONG io_write_chunk_length(io_context *ctx)
 {
-	u32 length = CHUNK_WRITE_CHUNK_SIZE;
+	ULONG length = CHUNK_WRITE_CHUNK_SIZE;
 
-	/* increase the first chunk's size so subsequent chunks start aligned */
-	if ( (ctx->chunk_offset == 0) && ((ctx->offset + length) & (CHUNK_WRITE_ALIGN-1)) ) {
+	// increase the first chunk's size so subsequent chunks start aligned
+	if ( (ctx->chunk_offset == 0) && ((ctx->offset + length) & (CHUNK_WRITE_ALIGN-1)) )
+	{
 		length += CHUNK_WRITE_ALIGN - ((ctx->offset + length) & (CHUNK_WRITE_ALIGN-1));
 	}
 	return length;
 }
 
-static void io_async_make_chunk(io_context *ctx, int is_read)
+static void io_async_make_chunk(io_context *ctx, BOOLEAN is_read)
 {
 	dev_hook *hook = ctx->hook;
-	u32       done = is_read != 0 ? ctx->completed : ctx->encrypted;
+	ULONG     done = is_read != 0 ? ctx->completed : ctx->encrypted;
 	
-	ctx->chunk_diskof = ctx->offset + done;
-	ctx->chunk_offset = done;
-	ctx->chunk_key    = &hook->dsk_key;
-	ctx->chunk_nocont = 0;
+	ctx->chunk_diskof  = ctx->offset + done;
+	ctx->chunk_offset  = done;
+	ctx->chunk_key     = &hook->dsk_key;
+	ctx->discontinuous = FALSE;
 
-	/* handle redirected sectors */
+	// handle redirected sectors
 	if ( !(hook->flags & F_NO_REDIRECT) && (ctx->chunk_diskof < hook->head_len) )
 	{
-		ctx->chunk_diskof += hook->stor_off;
-		ctx->chunk_length = hook->head_len;
-		ctx->chunk_nocont = 1;
+		ctx->chunk_diskof  = ctx->chunk_diskof + hook->stor_off;
+		ctx->chunk_length  = hook->head_len;
+		ctx->discontinuous = TRUE;
 	} else 
 	{
 		if ( (dc_conf_flags & CONF_ENABLE_SSD_OPT) && (hook->flags & F_SSD) &&
-			 (hook->io_depth == 1) && (ctx->expected != 0) && IS_CHUNKING_NEEDED(ctx->length, is_read) )
+			 (hook->io_depth == 1 && ctx->expected) && IS_CHUNKING_NEEDED(ctx->length, is_read) )
 		{
-			if (is_read != 0) {
+			if (is_read) {
 				ctx->chunk_length = io_read_chunk_length(ctx);
 			} else {
 				ctx->chunk_length = io_write_chunk_length(ctx);
@@ -182,90 +199,94 @@ static void io_async_make_chunk(io_context *ctx, int is_read)
 			ctx->chunk_length = ctx->length;
 		}
 	}
-	/* handle partial encrypted state */
+	
+	// handle partial encrypted state
 	if (hook->flags & F_SYNC) 
 	{
-		if (ctx->chunk_diskof >= hook->tmp_size) {
+		if (ctx->chunk_diskof >= hook->tmp_size)
+		{
 			ctx->chunk_key = (hook->flags & F_REENCRYPT) ? hook->tmp_key : NULL;			
 		} else
 		{
-			if (ctx->chunk_diskof + ctx->chunk_length > hook->tmp_size) {
-				ctx->chunk_length = d32(hook->tmp_size - ctx->chunk_diskof);
+			if (ctx->chunk_diskof + ctx->chunk_length > hook->tmp_size)
+			{
+				ctx->chunk_length = (ULONG)(hook->tmp_size - ctx->chunk_diskof);
 			}
 		}
 	}
-	if (ctx->chunk_length > ctx->length - done) {
+	if (ctx->chunk_length > ctx->length - done)
+	{
 		ctx->chunk_length = ctx->length - done;
 	}
 }
 
 static NTSTATUS io_chunk_read_complete(PDEVICE_OBJECT dev_obj, PIRP irp, io_context *ctx)
 {
-	dev_hook  *hook   = ctx->hook;
-	char      *buff   = ctx->buff + ctx->chunk_offset;
-	NTSTATUS   status = irp->IoStatus.Status;
-	u64        offset = ctx->chunk_diskof;
-	u32        size   = d32(irp->IoStatus.Information);
+	dev_hook* hook   = ctx->hook;
+	PUCHAR    buff   = ctx->buff + ctx->chunk_offset;
+	NTSTATUS  status = irp->IoStatus.Status;
+	ULONGLONG offset = ctx->chunk_diskof;
+	ULONG     length = (ULONG)irp->IoStatus.Information;
 		
-	/* free mdl from the chunk irp */
-	IoFreeMdl(irp->MdlAddress); irp->MdlAddress	= NULL;
+	// free mdl from the chunk irp
+	IoFreeMdl(irp->MdlAddress);
+	irp->MdlAddress	= NULL;
 
-	/* update completed length */
+	// update completed length
 	ctx->completed += ctx->chunk_length;
 
-	if (NT_SUCCESS(status) != FALSE)
+	if (NT_SUCCESS(status))
 	{
+		// if reading operation is not completed, start next chunk
 		if (ctx->completed < ctx->length)
 		{
-			/* reinitialize IRP */
 			IoReuseIrp(irp, STATUS_SUCCESS);
-			/* start next chunk if not completed */
 			io_context_addref(ctx);
 			io_async_read_chunk(ctx);
 		}
-		/* decrypt chunk if needed */
+
+		// decrypt chunk if needed
 		if (ctx->chunk_key != NULL) 
 		{
+			if (hook->flags & F_NO_REDIRECT)
+			{
+				offset -= hook->head_len; // XTS offset is calculated from the beginning of the volume data
+				                          // if redirection not used, substract the header length
+			}
 			io_context_addref(ctx);
-
-			if (hook->flags & F_NO_REDIRECT) {
-				offset -= hook->head_len;
-			}			
-			cp_parallelized_crypt(
-				0, ctx->chunk_key, io_context_deref, ctx, buff, buff, size, offset);
+			cp_parallelized_crypt(0, ctx->chunk_key, io_context_deref, ctx, buff, buff, length, offset);
 		}
 	}
-	/* set completion status if read completed */
-	if ( (NT_SUCCESS(status) == FALSE) || (ctx->completed == ctx->length) ) {
+
+	// set the completion status if read operation completed or failed.
+	if (NT_SUCCESS(status) == FALSE || ctx->completed == ctx->length)
+	{
 		io_set_status(ctx, status);
 	}
-	io_context_deref(ctx); return STATUS_MORE_PROCESSING_REQUIRED;
+	io_context_deref(ctx);
+	return STATUS_MORE_PROCESSING_REQUIRED;
 }
 
 static void io_async_read_chunk(io_context *ctx)
 {
 	PIO_STACK_LOCATION new_sp;
-	PIRP               new_irp, old_irp;
 	PMDL               new_mdl;
-	char              *pbuf_va;
+	PUCHAR             pbuf_va;
 
 	if (KeGetCurrentIrql() >= DISPATCH_LEVEL) {
 		ExInitializeWorkItem(&ctx->work_item, io_async_read_chunk, ctx);
 		ExQueueWorkItem(&ctx->work_item, CriticalWorkQueue);
 		return;
 	}
-	new_irp = ctx->new_irp;
-	old_irp = ctx->orig_irp;
-	new_sp  = IoGetNextIrpStackLocation(new_irp);
+	io_async_make_chunk(ctx, TRUE);
 
-	io_async_make_chunk(ctx, 1);
-
+	new_sp = IoGetNextIrpStackLocation(ctx->new_irp);
 	new_sp->MajorFunction = IRP_MJ_READ;
-	new_sp->Flags         = IoGetCurrentIrpStackLocation(old_irp)->Flags;
+	new_sp->Flags         = IoGetCurrentIrpStackLocation(ctx->orig_irp)->Flags;
 	new_sp->Parameters.Read.Length              = ctx->chunk_length;
 	new_sp->Parameters.Read.ByteOffset.QuadPart = ctx->chunk_diskof;
 	
-	pbuf_va = p8(MmGetMdlVirtualAddress(old_irp->MdlAddress)) + ctx->chunk_offset;
+	pbuf_va = ((PUCHAR)MmGetMdlVirtualAddress(ctx->orig_irp->MdlAddress)) + ctx->chunk_offset;
 	new_mdl = mm_allocate_mdl_success(pbuf_va, ctx->chunk_length);
 
 	if (new_mdl == NULL) {
@@ -273,50 +294,53 @@ static void io_async_read_chunk(io_context *ctx)
 		io_context_deref(ctx); 
 		return;
 	}
-	IoBuildPartialMdl(old_irp->MdlAddress, new_mdl, pbuf_va, ctx->chunk_length);
-	new_irp->MdlAddress = new_mdl;
+	IoBuildPartialMdl(ctx->orig_irp->MdlAddress, new_mdl, pbuf_va, ctx->chunk_length);
+	ctx->new_irp->MdlAddress = new_mdl;
 
-	IoSetCompletionRoutine(new_irp, io_chunk_read_complete, ctx, TRUE, TRUE, TRUE);
-	IoCallDriver(ctx->hook->orig_dev, new_irp);
+	IoSetCompletionRoutine(ctx->new_irp, io_chunk_read_complete, ctx, TRUE, TRUE, TRUE);
+	IoCallDriver(ctx->hook->orig_dev, ctx->new_irp);
 }
 
 static NTSTATUS io_chunk_write_complete(PDEVICE_OBJECT dev_obj, PIRP irp, io_context *ctx)
 {
 	KLOCK_QUEUE_HANDLE lock_queue;
-	int                need_write;
+	BOOLEAN            need_write;
 
-	/* free mdl from the chunk irp */
-	IoFreeMdl(irp->MdlAddress); irp->MdlAddress	= NULL;
+	// free mdl from the chunk irp
+	IoFreeMdl(irp->MdlAddress);
+	irp->MdlAddress	= NULL;
 
-	if (NT_SUCCESS(irp->IoStatus.Status) != FALSE)
+	if (NT_SUCCESS(irp->IoStatus.Status))
 	{
 		KeAcquireInStackQueuedSpinLock(&ctx->write_lock, &lock_queue);
 
-		/* update pointers */
+		// update pointers
 		ctx->write_offset += ctx->write_length;
 		ctx->completed    += ctx->write_length;
-		ctx->write_length  = ctx->encrypted - ctx->completed;		
-		need_write = ctx->is_writing = (ctx->write_length != 0);
+		ctx->write_length  = ctx->encrypted - ctx->completed;
+		need_write = ctx->write_pending = (ctx->write_length != 0);
 
 		KeReleaseInStackQueuedSpinLock(&lock_queue);
 
-		if ( (ctx->chunk_nocont != 0) && (ctx->completed < ctx->length) )
+		// if discontinuous chunk completed, start encryption of next chunk if needed
+		if (ctx->discontinuous && ctx->completed < ctx->length)
 		{
-			ctx->write_offset = ctx->offset + ctx->completed;
-			ctx->chunk_nocont = 0;
+			ctx->discontinuous = FALSE;
+			ctx->write_offset  = ctx->offset + ctx->completed;
 			io_context_addref(ctx);
 			io_async_encrypt_chunk(ctx);
 		}
-		if (need_write != 0) 
+
+		// if next encrypted part available, start writing it now
+		if (need_write) 
 		{
-			/* reinitialize IRP */
 			IoReuseIrp(irp, STATUS_SUCCESS);
-			/* start next chunk if not completed */
 			io_context_addref(ctx);
 			io_write_next_chunk(ctx);
 		}
 	}
-	io_context_deref(ctx); return STATUS_MORE_PROCESSING_REQUIRED;
+	io_context_deref(ctx);
+	return STATUS_MORE_PROCESSING_REQUIRED;
 }
 
 static void io_write_next_chunk(io_context *ctx)
@@ -337,10 +361,8 @@ static void io_write_next_chunk(io_context *ctx)
 	new_sp->Parameters.Write.Length              = ctx->write_length;
 	new_sp->Parameters.Write.ByteOffset.QuadPart = ctx->write_offset;
 	
-	new_irp->MdlAddress = 
-		mm_allocate_mdl_success(ctx->new_buff + ctx->completed, ctx->write_length);
-
-	if (new_irp->MdlAddress == NULL) {
+	if ( (new_irp->MdlAddress = mm_allocate_mdl_success(ctx->new_buff + ctx->completed, ctx->write_length)) == NULL )
+	{
 		io_set_status(ctx, STATUS_INSUFFICIENT_RESOURCES);
 		io_context_deref(ctx);
 		return;
@@ -353,83 +375,92 @@ static void io_write_next_chunk(io_context *ctx)
 static void io_chunk_encrypt_complete(io_context *ctx)
 {
 	KLOCK_QUEUE_HANDLE lock_queue;
-	int                need_write;
+	BOOLEAN            need_write;
 	
 	if (ctx->chunk_offset == 0) {
 		ctx->write_offset = ctx->chunk_diskof;
 	}
 	KeAcquireInStackQueuedSpinLock(&ctx->write_lock, &lock_queue);
 
-	/* update encrypted length */
+	// update encrypted length
 	ctx->encrypted += ctx->chunk_length;
 
-	if (ctx->is_writing == 0) {
+	if (need_write = (ctx->write_pending == FALSE)) {
+		ctx->write_pending = TRUE;
 		ctx->write_length = ctx->encrypted - ctx->completed;
-		need_write = ctx->is_writing = 1;
-	} else {
-		need_write = 0;
 	}
 	KeReleaseInStackQueuedSpinLock(&lock_queue);
 
-	if (need_write != 0) {
-		io_context_addref(ctx); 
+	// write encrypted part if previous write operation completed
+	if (need_write)
+	{
+		io_context_addref(ctx);
 		io_write_next_chunk(ctx);
 	}
-	/* encrypt next chunk if needed */
-	if ( (ctx->chunk_nocont == 0) && (ctx->encrypted < ctx->length) ) {
+
+	// encrypt next chunk if needed
+	if (ctx->discontinuous == FALSE && ctx->encrypted < ctx->length)
+	{
 		io_context_addref(ctx);
 		io_async_encrypt_chunk(ctx);
 	}
+
 	io_context_deref(ctx);
 }
 
 static void io_async_encrypt_chunk(io_context *ctx)
 {
-	char *in_buf, *out_buf;
-	u32   length;
-	u64   offset;
+	PUCHAR    in_buf, out_buf;
+	ULONGLONG offset;
 			
-	io_async_make_chunk(ctx, 0);
+	io_async_make_chunk(ctx, FALSE);
 	
 	out_buf = ctx->new_buff + ctx->encrypted;
 	in_buf = ctx->buff + ctx->encrypted;
-	length = ctx->chunk_length;
 	offset = ctx->chunk_diskof;
 		
 	if (ctx->chunk_key != NULL)
 	{
-		if (ctx->hook->flags & F_NO_REDIRECT) {
-			offset -= ctx->hook->head_len;
+		if (ctx->hook->flags & F_NO_REDIRECT)
+		{
+			offset -= ctx->hook->head_len; // XTS offset is calculated from the beginning of the volume data
+				                           // if redirection not used, substract the header length
 		}
-		/* enqueue encryption of this chunk */
-		cp_parallelized_crypt(
-			1, ctx->chunk_key, io_chunk_encrypt_complete, ctx, in_buf, out_buf, length, offset);
+		cp_parallelized_crypt(1, ctx->chunk_key, io_chunk_encrypt_complete, ctx, in_buf, out_buf, ctx->chunk_length, offset);
 	} else {
-		memcpy(out_buf, in_buf, length);
+		memcpy(out_buf, in_buf, ctx->chunk_length);
 		io_chunk_encrypt_complete(ctx);
 	}
 }
 
-NTSTATUS io_encrypted_irp_io(dev_hook *hook, PIRP irp, int is_sync)
+NTSTATUS io_encrypted_irp_io(dev_hook *hook, PIRP irp, BOOLEAN is_sync)
 {
 	PIO_STACK_LOCATION irp_sp = IoGetCurrentIrpStackLocation(irp);
 	NTSTATUS           status = STATUS_PENDING;
-	io_context        *ctx;
+	io_context*        ctx;
+	int                i;
 
-	/* allocate IO context */
-	if ( (ctx = ExAllocateFromNPagedLookasideList(&io_context_mem)) == NULL ) {
+	// allocate the IO context
+	if ( (ctx = (io_context*)ExAllocateFromNPagedLookasideList(&g_io_contexts_list)) == NULL )
+	{
 		return dc_release_irp(hook, irp, STATUS_INSUFFICIENT_RESOURCES);
 	}
+
+	// initialize new IO context
 	memset(ctx, 0, sizeof(io_context));
-	
+
 	ctx->orig_irp = irp;
 	ctx->hook = hook;
 	ctx->refs = 1;
-	lock_inc(&hook->io_depth);
 
-	if (ctx->is_sync = is_sync) {
+	// increment hook IO queue depth
+	InterlockedIncrement(&hook->io_depth);
+
+	if (ctx->is_sync = is_sync)
+	{
 		KeInitializeEvent(&ctx->done_event, NotificationEvent, FALSE);
 	}
+
 	if (irp_sp->MajorFunction == IRP_MJ_READ) {
 		ctx->offset = irp_sp->Parameters.Read.ByteOffset.QuadPart;
 		ctx->length = irp_sp->Parameters.Read.Length;
@@ -438,100 +469,149 @@ NTSTATUS io_encrypted_irp_io(dev_hook *hook, PIRP irp, int is_sync)
 		ctx->offset = irp_sp->Parameters.Write.ByteOffset.QuadPart;
 		ctx->length = irp_sp->Parameters.Write.Length;
 
+		// writing to redirection area must be blocked for preventing file system corruption
 		if ( !(hook->flags & F_NO_REDIRECT) && 
 			  (is_intersect(ctx->offset, ctx->length, hook->stor_off, hook->head_len) != 0) )
 		{
-			status = STATUS_ACCESS_DENIED; goto on_fail;
+			status = STATUS_ACCESS_DENIED;
+			goto on_fail;
 		}
 	}
+	
+	// IO operations must be within the volume data range and be SECTOR_SIZE aligned
 	if ( (ctx->length == 0) || 
 		 (ctx->length & (SECTOR_SIZE - 1)) || (ctx->offset + ctx->length > hook->use_size) )
 	{
-		status = STATUS_INVALID_PARAMETER; goto on_fail;
+		status = STATUS_INVALID_PARAMETER;
+		goto on_fail;
 	}
-	if (lock_xchg64(&hook->expect_off, ctx->offset + ctx->length) == ctx->offset) {
-		ctx->expected = 1;
+
+	// detect expected sequential IO operations
+	if (InterlockedExchange64(&hook->expect_off, ctx->offset + ctx->length) == ctx->offset)
+	{
+		ctx->expected = TRUE;
 	}
-	if (hook->flags & F_NO_REDIRECT) {
-		ctx->offset += hook->head_len;
+
+	// if redirection not used, volume data shifted by volume header length
+	if (hook->flags & F_NO_REDIRECT)
+	{
+		ctx->offset += hook->head_len; // add the volume header length
+		                               // to get the offset of the data on the storage device
 	}
-	ctx->new_irp = mm_allocate_irp_success(hook->orig_dev->StackSize);
-	ctx->buff    = mm_map_mdl_success(irp->MdlAddress);
+
+	// allocate resources for processing request
+	if ( (ctx->new_irp = mm_allocate_irp_success(hook->orig_dev->StackSize)) == NULL ||
+		 (ctx->buff = (PUCHAR)mm_map_mdl_success(irp->MdlAddress)) == NULL )
+	{
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto on_fail;
+	}
 	
-	if ( (ctx->new_irp == NULL) || (ctx->buff == NULL) ) {
-		status = STATUS_INSUFFICIENT_RESOURCES; goto on_fail;
-	}
+	// copy original IRP source to new IRP
+	ctx->new_irp->Tail.Overlay.Thread = irp->Tail.Overlay.Thread;
+	ctx->new_irp->Tail.Overlay.OriginalFileObject = irp->Tail.Overlay.OriginalFileObject;
+
+	// marg original IRP as pending
 	IoMarkIrpPending(irp);
 
-	if (irp_sp->MajorFunction == IRP_MJ_READ) {
-		io_async_read_chunk(ctx);
-	} else 
+	if (irp_sp->MajorFunction == IRP_MJ_WRITE)
 	{
-		if ( (ctx->new_buff = mm_alloc(ctx->length, MEM_FAST | MEM_SUCCESS)) == NULL ) {
-			status = STATUS_INSUFFICIENT_RESOURCES; goto on_fail;
+		// allocate memory from temporary buffer lookaside list
+		for (i = 0; i < sizeof(g_temp_buff_lists) / sizeof(g_temp_buff_lists[0]); i++)
+		{
+			if ( (ctx->length <= (512u << i)) &&
+				 (ctx->new_buff = (PUCHAR)ExAllocateFromNPagedLookasideList(&g_temp_buff_lists[i])) != NULL )
+			{
+				ctx->new_buff_index = i;
+				break;
+			}
 		}
+
+		// if memory not allocated from lookaside, allocate from pool
+		if (ctx->new_buff == NULL)
+		{
+			if ( (ctx->new_buff = (PUCHAR)mm_alloc_success(NonPagedPool, ctx->length, '7_cd')) == NULL )
+			{
+				status = STATUS_INSUFFICIENT_RESOURCES;
+				goto on_fail;
+			}
+			ctx->new_buff_index = -1;
+		}
+
 		KeInitializeSpinLock(&ctx->write_lock);
 		io_async_encrypt_chunk(ctx);
+	} else {
+		// IRP_MJ_READ does not require memory allocation, start reading now
+		io_async_read_chunk(ctx);
 	}
 
-do_exit:
-	if (is_sync != 0) 
+cleanup:
+	if (is_sync)
 	{
 		KeWaitForSingleObject(&ctx->done_event, Executive, KernelMode, FALSE, NULL);
-		status = ctx->status;		
-		ExFreeToNPagedLookasideList(&io_context_mem, ctx);
+		status = ctx->status;
+		ExFreeToNPagedLookasideList(&g_io_contexts_list, ctx);
 	}
 	return status;
 
 on_fail:
 	io_set_status(ctx, status);
-	io_context_deref(ctx); 
-	goto do_exit;
+	io_context_deref(ctx);
+	goto cleanup;
 }
 
 
 NTSTATUS io_read_write_irp(dev_hook *hook, PIRP irp)
 {
-	/* reseed RNG on first 1000 I/O operations for collect initial entropy */
-	if (lock_inc(&dc_io_count) < 1000) {
+	// reseed RNG on first 1000 I/O operations for collect initial entropy
+	if (InterlockedIncrement(&dc_io_count) < 1000) {
 		cp_rand_reseed();
 	}
+
 	if (hook->flags & (F_DISABLE | F_FORMATTING)) {
 		return dc_release_irp(hook, irp, STATUS_INVALID_DEVICE_STATE);
 	}
+
 	if (hook->flags & F_SYNC)
 	{
 		IoMarkIrpPending(irp);
-
-		ExInterlockedInsertTailList(
-			&hook->sync_irp_queue, &irp->Tail.Overlay.ListEntry, &hook->sync_req_lock);
-
+		ExInterlockedInsertTailList(&hook->sync_irp_queue, &irp->Tail.Overlay.ListEntry, &hook->sync_req_lock);
 		KeSetEvent(&hook->sync_req_event, IO_DISK_INCREMENT, FALSE);
-
 		return STATUS_PENDING;
 	}	
+	
 	if ((hook->flags & F_ENABLED) == 0)
 	{
-		/* probe for mount new volume */
-		if ( (hook->flags & (F_UNSUPRT | F_NO_AUTO_MOUNT)) || (hook->mnt_probed != 0) ) 
-		{
-			if (IS_DEVICE_BLOCKED(hook) != 0) {
-				return dc_release_irp(hook, irp, STATUS_ACCESS_DENIED);
-			}
+		// probe for mount new volume
+		if ( (hook->flags & (F_UNSUPRT | F_NO_AUTO_MOUNT)) || (hook->mnt_probed != 0) ) {
+			if (IS_DEVICE_BLOCKED(hook) != 0) return dc_release_irp(hook, irp, STATUS_ACCESS_DENIED);
 			return dc_forward_irp(hook, irp);
 		}
 		return dc_probe_mount(hook, irp);
 	}	
+
+	// start normal encrypted IO
 	return io_encrypted_irp_io(hook, irp, 0);
 }
 
 void io_init()
 {
-	ExInitializeNPagedLookasideList(
-		&io_context_mem, mm_alloc_success, NULL, 0, sizeof(io_context), '5_cd', 0);	
+	int i;
+
+	for (i = 0; i < sizeof(g_temp_buff_lists) / sizeof(g_temp_buff_lists[0]); i++)
+	{
+		ExInitializeNPagedLookasideList(&g_temp_buff_lists[i], NULL, NULL, 0, (512u << i), '2_cd', 0);
+	}
+	ExInitializeNPagedLookasideList(&g_io_contexts_list, mm_alloc_success, NULL, 0, sizeof(io_context), '5_cd', 0);	
 }
 
 void io_free()
 {
-	ExDeleteNPagedLookasideList(&io_context_mem);
+	int i;
+
+	for (i = 0; i < sizeof(g_temp_buff_lists) / sizeof(g_temp_buff_lists[0]); i++)
+	{
+		ExDeleteNPagedLookasideList(&g_temp_buff_lists[i]);
+	}
+	ExDeleteNPagedLookasideList(&g_io_contexts_list);
 }

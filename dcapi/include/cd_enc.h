@@ -5,12 +5,8 @@
 #include "volume_header.h"
 #include "dcapi.h"
 
-typedef int (cd_callback)(u64 iso_sz, u64 enc_sz, void *param);
+typedef BOOL (DC_CD_CALLBACK)(ULONGLONG isosize, ULONGLONG encsize, PVOID param);
 
-int dc_api 
-  dc_encrypt_cd(
-	  wchar_t *src_path, wchar_t *dst_path, dc_pass *pass, 
-	  int      cipher, cd_callback callback, void *param
-	  );
+DWORD dc_api dc_encrypt_iso_image(PCWSTR src_path, PCWSTR dst_path, dc_pass* password, int cipher, DC_CD_CALLBACK callback, PVOID param);
 
 #endif

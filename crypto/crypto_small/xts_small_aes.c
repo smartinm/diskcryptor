@@ -33,7 +33,7 @@ typedef void (*encrypt_p)(const unsigned char *in, unsigned char *out, void *key
 static encrypt_p aes_encrypt = (encrypt_p) aes256_encrypt;
 static encrypt_p aes_decrypt = (encrypt_p) aes256_decrypt;
 
-static void xts_process(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, encrypt_p crypt_p, xts_key *key)
+static void xts_process(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, encrypt_p crypt_p, xts_key *key)
 {
 	__declspec(align(16)) unsigned char tmp[XTS_BLOCK_SIZE];
 	__declspec(align(16)) m128 t, idx;
@@ -84,10 +84,10 @@ void xts_aes_set_key(const unsigned char *key, int alg, xts_key *skey) {
 	aes256_set_key(key, &skey->crypt_k);
 	aes256_set_key(key + XTS_KEY_SIZE, &skey->tweak_k);
 }
-void xts_aes_encrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key) {
+void xts_aes_encrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key) {
 	xts_process(in, out, len, offset, aes_encrypt, key);
 }
-void xts_aes_decrypt(const unsigned char *in, unsigned char *out, size_t len, unsigned __int64 offset, xts_key *key) {
+void xts_aes_decrypt(const unsigned char *in, unsigned char *out, unsigned long len, unsigned __int64 offset, xts_key *key) {
 	xts_process(in, out, len, offset, aes_decrypt, key);
 }
 

@@ -1,7 +1,7 @@
 ﻿/*
     *
     * DiskCryptor - open source partition encryption tool
-	* Copyright (c) 2009
+	* Copyright (c) 2009-2013
 	* ntldr <ntldr@diskcryptor.net> PGP key ID - 0xC48251EB4F8E4E6E
     * 
 
@@ -19,207 +19,134 @@
 */
 
 #include <windows.h>
-#include "defines.h"
 #include "cd_enc.h"
-#include "drv_ioctl.h"
 #include "xts_fast.h"
-#include "pkcs5.h"
+#include "sha512_pkcs5_2.h"
 #include "crc32.h"
 #include "drvinst.h"
+#include "misc.h"
 
 #define CD_BUFSZ (1024 * 1024)
 
-static int alg_ok;
-
-static 
-int do_cd_encrypt(
-	  HANDLE h_src, HANDLE h_dst, u64 iso_sz, xts_key *v_key, cd_callback callback, void *param
-	  )
+DWORD dc_encrypt_iso_image(PCWSTR src_path, PCWSTR dst_path, dc_pass* password, int cipher, DC_CD_CALLBACK callback, PVOID param)
 {
-	void *buff;
-	u32   bytes, block;
-	u32   w_len;
-	int   resl;
-	u64   offset = 0;
-	u64   remain = iso_sz;
-
-	do
-	{
-		buff = VirtualAlloc(NULL, CD_BUFSZ, MEM_COMMIT+MEM_RESERVE, PAGE_READWRITE);
-
-		if (buff == NULL) {
-			resl = ST_NOMEM; break;
-		}
-
-		resl = ST_OK;
-		do
-		{
-			block = d32(min(remain, CD_BUFSZ));
-			w_len = _align(block, CD_SECTOR_SIZE);
-
-			if (ReadFile(h_src, buff, block, &bytes, NULL) == 0) {
-				resl = ST_IO_ERROR; break;
-			}			
-			xts_encrypt(buff, buff, w_len, offset, v_key);			
-
-			if (WriteFile(h_dst, buff, w_len, &bytes, NULL) == 0) {
-				resl = ST_IO_ERROR; break;
-			}
-			remain -= block, offset += w_len;
-
-			if (callback != NULL) {
-				resl = callback(iso_sz, offset, param);
-			}
-		} while ( (remain != 0) && (resl == ST_OK) );
-	} while (0);
-
-	if (buff != NULL) {
-		VirtualFree(buff, 0, MEM_RELEASE);
-	}
-
-	return resl;
-}
-
-
-int dc_encrypt_cd(
-	  wchar_t *src_path, wchar_t *dst_path, dc_pass *pass, 
-	  int      cipher, cd_callback callback, void *param
-	  )
-{
-	dc_conf_data conf;
-	HANDLE       h_src = NULL;
-	HANDLE       h_dst = NULL;
-	xts_key     *v_key = NULL;
-	xts_key     *h_key = NULL;
-	dc_header    head;
-	int          resl;
-	u64          iso_sz;
-	u32          bytes;
-	u8           salt[PKCS5_SALT_SIZE];
-	u8           dk[DISKKEY_SIZE];
+	dc_conf_data  conf;
+	HANDLE        h_src = INVALID_HANDLE_VALUE;
+	HANDLE        h_dst = INVALID_HANDLE_VALUE;
+	LARGE_INTEGER isosize, encsize;
+	xts_key*      header_key = NULL;
+	xts_key*      volume_key = NULL;
+	dc_header*    header = NULL;
+	PUCHAR        buffer = NULL;
+	UCHAR         salt[PKCS5_SALT_SIZE], *dk = NULL;
+	DWORD         status, bytes, blocklen, writelen;
 	
-	if (alg_ok == 0) 
+	if (dc_load_config(&conf) == NO_ERROR) {
+		xts_init(conf.conf_flags & CONF_HW_CRYPTO);
+	} else {
+		xts_init(0);
+	}
+
+	// open source file and get file size
+	if ( (h_src = CreateFile(src_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, 0)) == INVALID_HANDLE_VALUE ||
+		 (GetFileSizeEx(h_src, &isosize) == FALSE) )
 	{
-		if (dc_load_conf(&conf) == ST_OK) {
-			xts_init(conf.conf_flags & CONF_HW_CRYPTO);
-		} else {
-			xts_init(0);
-		}
-		alg_ok = 1;
+		status = GetLastError();
+		goto cleanup;
 	}
 
-	do
+	// create destination file
+	if ( (h_dst = CreateFile(dst_path, GENERIC_WRITE, 0, NULL, CREATE_NEW, 0, 0)) == INVALID_HANDLE_VALUE )
 	{
-		if ( (resl = dc_lock_memory(dk, sizeof(dk))) != ST_OK ) {
-			break;
-		}
-		if ( (resl = dc_lock_memory(&head, sizeof(head))) != ST_OK ) {
-			break;
-		}
-
-		h_src = CreateFile(
-			src_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, 0);
-
-		if (h_src == INVALID_HANDLE_VALUE) {
-			h_src = NULL; resl = ST_NO_OPEN_FILE; break;
-		}
-
-		h_dst = CreateFile(
-			dst_path, GENERIC_WRITE, 0, NULL, CREATE_NEW, 0, 0);
-
-		if (h_dst == INVALID_HANDLE_VALUE) {
-			h_dst = NULL; resl = ST_NO_CREATE_FILE; break;
-		}
-
-		if (GetFileSizeEx(h_src, pv(&iso_sz)) == 0) {
-			resl = ST_IO_ERROR; break;
-		}
-
-		v_key = VirtualAlloc(NULL, sizeof(xts_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		h_key = VirtualAlloc(NULL, sizeof(xts_key), MEM_COMMIT+MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		
-		if ( (v_key == NULL) || (h_key == NULL) ) {
-			resl = ST_NOMEM; break;
-		}
-
-		/* lock keys in memory */
-		if ( (resl = dc_lock_memory(v_key, sizeof(xts_key))) != ST_OK ) {
-			break;
-		}
-		if ( (resl = dc_lock_memory(h_key, sizeof(xts_key))) != ST_OK ) {
-			break;
-		}
-
-		/* create volume header */
-		memset(&head, 0, sizeof(dc_header));
-
-		dc_get_random(pv(salt),          PKCS5_SALT_SIZE);
-		dc_get_random(pv(&head.disk_id), sizeof(u32));
-		dc_get_random(pv(head.key_1),    DISKKEY_SIZE);
-
-		head.sign     = DC_VOLUME_SIGN;
-		head.version  = DC_HDR_VERSION;
-		head.flags    = VF_NO_REDIR;
-		head.alg_1    = cipher;
-		head.data_off = sizeof(dc_header);
-		head.hdr_crc  = crc32(pv(&head.version), DC_CRC_AREA_SIZE);
-
-		/* initialize volume key */
-		xts_set_key(head.key_1, cipher, v_key);
-
-		/* initialize header key */
-		sha512_pkcs5_2(
-			1000, pass->pass, 
-			pass->size, salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
-
-		xts_set_key(dk, cipher, h_key);
-
-		/* encrypt volume header */
-		xts_encrypt(pv(&head), pv(&head), sizeof(dc_header), 0, h_key);
-
-		/* save salt */
-		memcpy(head.salt, salt, PKCS5_SALT_SIZE);
-
-		/* write volume header to file */
-		if (WriteFile(h_dst, &head, sizeof(head), &bytes, NULL) == 0) {
-			resl = ST_IO_ERROR; break;
-		}
-
-		resl = do_cd_encrypt(h_src, h_dst, iso_sz, v_key, callback, param);
-	} while (0);
-
-	/* prevent leaks */
-	burn(dk, sizeof(dk));
-	burn(&head, sizeof(head));
-	dc_unlock_memory(dk);
-	dc_unlock_memory(&head);
-
-	if (v_key != NULL) {
-		burn(v_key, sizeof(xts_key));
-		dc_unlock_memory(v_key);
-		VirtualFree(v_key, 0, MEM_RELEASE);
+		status = GetLastError();
+		goto cleanup;
 	}
-
-	if (h_key != NULL) {
-		burn(h_key, sizeof(xts_key));
-		dc_unlock_memory(h_key);
-		VirtualFree(h_key, 0, MEM_RELEASE);
-	}
-
-	if (h_src != NULL) {
-		CloseHandle(h_src);
-	}
-
-	if (h_dst != NULL) 
+	
+	// allocate required memory
+	if ( (header_key = (xts_key*)secure_alloc(sizeof(xts_key))) == NULL ||
+		 (volume_key = (xts_key*)secure_alloc(sizeof(xts_key))) == NULL ||
+		 (dk = (PUCHAR)secure_alloc(DISKKEY_SIZE)) == NULL ||
+		 (header = (dc_header*)secure_alloc(sizeof(dc_header))) == NULL ||
+		 (buffer = (PUCHAR)VirtualAlloc(NULL, CD_BUFSZ, MEM_COMMIT+MEM_RESERVE, PAGE_READWRITE)) == NULL )
 	{
+		status = ERROR_NOT_ENOUGH_MEMORY;
+		goto cleanup;
+	}
+
+	// create the volume header
+	memset(header, 0, sizeof(dc_header));
+	
+	if ( (status = dc_device_control(DC_CTL_GET_RAND, NULL, 0, salt, PKCS5_SALT_SIZE)) != NO_ERROR ) goto cleanup;
+	if ( (status = dc_device_control(DC_CTL_GET_RAND, NULL, 0, &header->disk_id, sizeof(header->disk_id))) != NO_ERROR ) goto cleanup;
+	if ( (status = dc_device_control(DC_CTL_GET_RAND, NULL, 0, header->key_1, sizeof(header->key_1))) != NO_ERROR ) goto cleanup;
+
+	header->sign     = DC_VOLUME_SIGN;
+	header->version  = DC_HDR_VERSION;
+	header->flags    = VF_NO_REDIR;
+	header->alg_1    = cipher;
+	header->data_off = sizeof(dc_header);
+	header->hdr_crc  = crc32((const unsigned char*)&header->version, DC_CRC_AREA_SIZE);
+
+	// derive the header key
+	sha512_pkcs5_2(1000, password->pass, password->size, salt, PKCS5_SALT_SIZE, dk, PKCS_DERIVE_MAX);
+
+	// initialize encryption keys
+	xts_set_key(header->key_1, cipher, volume_key);
+	xts_set_key(dk, cipher, header_key);
+
+	// encrypt the volume header
+	xts_encrypt((const unsigned char*)header, (unsigned char*)header, sizeof(dc_header), 0, header_key);
+
+	// save salt
+	memcpy(header->salt, salt, PKCS5_SALT_SIZE);
+
+	// write volume header to output file
+	if (WriteFile(h_dst, header, sizeof(dc_header), &bytes, NULL) == 0)
+	{
+		status = GetLastError();
+		goto cleanup;
+	}
+
+	// encryption loop
+	for (encsize.QuadPart = 0; encsize.QuadPart < isosize.QuadPart; )
+	{
+		blocklen = (DWORD)(min(isosize.QuadPart - encsize.QuadPart, CD_BUFSZ));
+		writelen = _align(blocklen, CD_SECTOR_SIZE);
+
+		if (ReadFile(h_src, buffer, blocklen, &bytes, NULL) == FALSE || bytes < blocklen)
+		{
+			status = GetLastError();
+			goto cleanup;
+		}
+		xts_encrypt(buffer, buffer, writelen, encsize.QuadPart, volume_key);
+
+		if (WriteFile(h_dst, buffer, writelen, &bytes, NULL) == FALSE || bytes < writelen)
+		{
+			status = GetLastError();
+			goto cleanup;
+		}
+
+		if (callback(isosize.QuadPart, (encsize.QuadPart += writelen), param) == FALSE)
+		{
+			status = ERROR_OPERATION_ABORTED;
+			goto cleanup;
+		}
+	}
+	status = NO_ERROR;
+
+cleanup:
+	if (buffer != NULL) VirtualFree(buffer, 0, MEM_RELEASE);
+	if (header != NULL) secure_free(header);
+	if (dk != NULL) secure_free(dk);
+	if (volume_key != NULL) secure_free(volume_key);
+	if (header_key != NULL) secure_free(header_key);
+	if (h_src != INVALID_HANDLE_VALUE) CloseHandle(h_src);
+
+	if (h_dst != INVALID_HANDLE_VALUE) {
 		CloseHandle(h_dst);
-
-		if (resl != ST_OK) {
-			DeleteFile(dst_path);
-		}	
+		if (status != NO_ERROR) DeleteFile(dst_path);
 	}
-
-	return resl;
+	return status;
 }
 
  

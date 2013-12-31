@@ -1,11 +1,5 @@
-#ifndef _DUMP_HOOK_
-#define _DUMP_HOOK_
-
-#include "devhook.h"
-
-int  dump_hook_init(PDRIVER_OBJECT drv_obj);
-void dump_usage_notify(dev_hook *hook, DEVICE_USAGE_NOTIFICATION_TYPE type);
-int  dump_is_pverent_hibernate();
+#ifndef _DUMP_HOOK_H_
+#define _DUMP_HOOK_H_
 
 typedef struct _LDR_DATA_TABLE_ENTRY {
     LIST_ENTRY InLoadOrderLinks;
@@ -129,5 +123,7 @@ typedef struct _DUMP_STACK_CONTEXT {
     PVOID                       FileObject;
     enum _DEVICE_USAGE_NOTIFICATION_TYPE    UsageType;
 } DUMP_STACK_CONTEXT, *PDUMP_STACK_CONTEXT;
+
+NTSTATUS dump_hook_init(PDRIVER_OBJECT DriverObject);
 
 #endif

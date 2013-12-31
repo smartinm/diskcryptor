@@ -1,13 +1,7 @@
 #ifndef _MISC_MEM_H_
 #define _MISC_MEM_H_
 
-#define MEM_SECURE  0x01  /* memory block contain private data */
-#define MEM_ZEROED  0x02  /* allocated block can be zeroed     */
-#define MEM_SUCCESS 0x04  /* block must be allocated anymore   */
-#define MEM_FAST    0x08  /* allocate from lookasize list      */
-#define MEM_PAGED   0x10  /* allocate from paged pool */
-
-/* function types declaration */
+// function types declaration
 ALLOCATE_FUNCTION mm_alloc_success;
 
 void *mm_map_mdl_success(PMDL mdl);
@@ -15,8 +9,15 @@ PMDL  mm_allocate_mdl_success(void *data, u32 size);
 PIRP  mm_allocate_irp_success(CCHAR StackSize);
 void *mm_alloc_success(POOL_TYPE pool, SIZE_T bytes, u32 tag);
 
-void *mm_alloc(size_t size, int flags);
-void  mm_free(void *mem);
+PVOID mm_secure_alloc(size_t length);
+void  mm_secure_free(PVOID ptr);
+
+NTSTATUS mm_lock_user_memory(HANDLE process_id, PVOID ptr, ULONG length);
+NTSTATUS mm_unlock_user_memory(HANDLE process_id, PVOID ptr);
+void     mm_clean_secure_memory();
+
+#define mm_pool_alloc(_length) ExAllocatePoolWithTag(NonPagedPool, _length, 'P_CD')
+#define mm_pool_free(_ptr)     ExFreePoolWithTag(_ptr, 'P_CD');
 
 void mm_init();
 void mm_uninit();

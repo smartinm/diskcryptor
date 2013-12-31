@@ -96,7 +96,7 @@ static HHOOK kbd_hook;
 static void seed_send()
 {
 	/* send seed to driver */
-	dc_add_seed(seed_buff, seed_size);
+	dc_device_control(DC_CTL_ADD_SEED, seed_buff, seed_size, NULL, 0);
 
 	/* prevent leaks */
 	burn(seed_buff, SEED_MAX);

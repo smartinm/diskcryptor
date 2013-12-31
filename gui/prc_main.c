@@ -563,7 +563,7 @@ _main_dialog_proc(
 				if ( __msg_q( __dlg, L"Remove DiskCryptor driver?") )
 				{
 					int rlt;
-					if ( (rlt = _drv_action(DA_REMOVE, 0)) != ST_OK )
+					if ( (rlt = _drv_action(DA_REMOVE, 0)) != NO_ERROR )
 					{
 						__error_s( __dlg, L"Error remove DiskCryptor driver", rlt );
 					} else {
@@ -684,7 +684,7 @@ _main_dialog_proc(
 				break;
 
 				case 1 : dc_unmount_all( ); break;
-				case 2 : dc_clean_pass_cache( ); break;
+				case 2 : dc_device_control(DC_CTL_CLEAR_PASS, NULL, 0, NULL, 0); break;
 				case 3 : dc_get_bsod( ); break;
 			}
 			return 1L;
@@ -701,7 +701,7 @@ _main_dialog_proc(
 				}
 				if ( __config.conf_flags & CONF_WIPEPAS_LOGOFF ) 
 				{
-					dc_clean_pass_cache( );
+					dc_device_control(DC_CTL_CLEAR_PASS, NULL, 0, NULL, 0);
 				}
 			}
 		}
